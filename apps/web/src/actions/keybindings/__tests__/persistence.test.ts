@@ -222,3 +222,24 @@ describe("v8 to v9 migration", () => {
 		);
 	});
 });
+
+describe("v9 to v10 migration", () => {
+	test("adds C as a split shortcut unless taken", () => {
+		const added = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { s: "split" }, isCustomized: true },
+				fromVersion: 9,
+			}),
+		});
+		expect(added?.keybindings.get("c")).toBe("split");
+		expect(added?.keybindings.get("s")).toBe("split");
+
+		const kept = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { c: "undo" }, isCustomized: true },
+				fromVersion: 9,
+			}),
+		});
+		expect(kept?.keybindings.get("c")).toBe("undo");
+	});
+});
