@@ -194,7 +194,7 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["jump-backward", ["shift+left"]],
 	["goto-start", ["home", "enter"]],
 	["goto-end", ["end"]],
-	["split", ["s"]],
+	["split", ["c", "s"]],
 	["split-left", ["q"]],
 	["split-right", ["w"]],
 	["delete-selected", ["backspace", "delete"]],

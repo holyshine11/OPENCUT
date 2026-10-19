@@ -1,11 +1,6 @@
 import { useEditor } from "@/editor/use-editor";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
-import {
-	TooltipProvider,
-	Tooltip,
-	TooltipTrigger,
-	TooltipContent,
-} from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
 	SplitButton,
@@ -20,6 +15,7 @@ import { sliderToZoom, zoomToSlider } from "@/timeline/zoom-utils";
 import { ScenesView } from "@/components/editor/scenes-view";
 import { type TActionWithOptionalArgs, invokeAction } from "@/actions";
 import { useActionHandler } from "@/actions/use-action-handler";
+import { ActionTooltip } from "@/actions/components/action-tooltip";
 import {
 	canToggleSourceAudio,
 	getSourceAudioActionLabel,
@@ -159,18 +155,21 @@ function ToolbarLeftSection() {
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={ScissorIcon} />}
 					tooltip={m.timeline.splitElement}
+					action="split"
 					onClick={({ event }) => handleAction({ action: "split", event })}
 				/>
 
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={AlignLeftIcon} />}
 					tooltip={m.timeline.splitLeft}
+					action="split-left"
 					onClick={({ event }) => handleAction({ action: "split-left", event })}
 				/>
 
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={AlignRightIcon} />}
 					tooltip={m.timeline.splitRight}
+					action="split-right"
 					onClick={({ event }) =>
 						handleAction({ action: "split-right", event })
 					}
@@ -183,6 +182,7 @@ function ToolbarLeftSection() {
 						/>
 					}
 					tooltip={sourceAudioLabel}
+					action="toggle-source-audio"
 					disabled={!canToggleSelectedSourceAudio}
 					onClick={({ event }) =>
 						handleAction({ action: "toggle-source-audio", event })
@@ -192,6 +192,7 @@ function ToolbarLeftSection() {
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={Copy01Icon} />}
 					tooltip={m.timeline.duplicateElement}
+					action="duplicate-selected"
 					onClick={({ event }) =>
 						handleAction({ action: "duplicate-selected", event })
 					}
@@ -207,6 +208,7 @@ function ToolbarLeftSection() {
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={Delete02Icon} />}
 					tooltip={m.timeline.deleteElement}
+					action="delete-selected"
 					onClick={({ event }) =>
 						handleAction({ action: "delete-selected", event })
 					}
@@ -223,6 +225,7 @@ function ToolbarLeftSection() {
 								? m.timeline.removeBookmark
 								: m.timeline.addBookmark
 						}
+						action="toggle-bookmark"
 						onClick={({ event }) =>
 							handleAction({ action: "toggle-bookmark", event })
 						}
@@ -311,6 +314,7 @@ function ToolbarRightSection({
 					icon={<HugeiconsIcon icon={MagnetIcon} />}
 					isActive={snappingEnabled}
 					tooltip={m.timeline.autoSnapping}
+					action="toggle-snapping"
 					onClick={() => toggleSnapping()}
 				/>
 
@@ -318,6 +322,7 @@ function ToolbarRightSection({
 					icon={<OcRippleIcon size={24} className="scale-110" />}
 					isActive={rippleEditingEnabled}
 					tooltip={m.timeline.rippleEditing}
+					action="toggle-ripple-editing"
 					onClick={() => toggleRippleEditing()}
 				/>
 			</TooltipProvider>
@@ -325,13 +330,18 @@ function ToolbarRightSection({
 			<div className="bg-border mx-1 h-6 w-px" />
 
 			<div className="flex items-center gap-1">
-				<Button
-					variant="text"
-					size="icon"
-					onClick={() => onZoom({ direction: "out" })}
+				<ActionTooltip
+					label={m.actions["timeline-zoom-out"]}
+					action="timeline-zoom-out"
 				>
-					<HugeiconsIcon icon={SearchMinusIcon} />
-				</Button>
+					<Button
+						variant="text"
+						size="icon"
+						onClick={() => onZoom({ direction: "out" })}
+					>
+						<HugeiconsIcon icon={SearchMinusIcon} />
+					</Button>
+				</ActionTooltip>
 				<Slider
 					className="w-28"
 					value={[zoomToSlider({ zoomLevel, minZoom })]}
@@ -342,13 +352,18 @@ function ToolbarRightSection({
 					max={1}
 					step={0.005}
 				/>
-				<Button
-					variant="text"
-					size="icon"
-					onClick={() => onZoom({ direction: "in" })}
+				<ActionTooltip
+					label={m.actions["timeline-zoom-in"]}
+					action="timeline-zoom-in"
 				>
-					<HugeiconsIcon icon={SearchAddIcon} />
-				</Button>
+					<Button
+						variant="text"
+						size="icon"
+						onClick={() => onZoom({ direction: "in" })}
+					>
+						<HugeiconsIcon icon={SearchAddIcon} />
+					</Button>
+				</ActionTooltip>
 			</div>
 		</div>
 	);
@@ -357,6 +372,7 @@ function ToolbarRightSection({
 function ToolbarButton({
 	icon,
 	tooltip,
+	action,
 	onClick,
 	disabled,
 	isActive,
@@ -364,6 +380,7 @@ function ToolbarButton({
 }: {
 	icon: React.ReactNode;
 	tooltip: string;
+	action?: TActionWithOptionalArgs;
 	onClick?: ({ event }: { event: React.MouseEvent }) => void;
 	disabled?: boolean;
 	isActive?: boolean;
@@ -392,9 +409,8 @@ function ToolbarButton({
 	);
 
 	return (
-		<Tooltip delayDuration={200}>
-			<TooltipTrigger asChild>{trigger}</TooltipTrigger>
-			<TooltipContent>{tooltip}</TooltipContent>
-		</Tooltip>
+		<ActionTooltip label={tooltip} action={action}>
+			{trigger}
+		</ActionTooltip>
 	);
 }

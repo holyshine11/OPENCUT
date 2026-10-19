@@ -564,6 +564,7 @@ export const en = {
 		fit: "Fit",
 		fitToScreen: "Fit to screen",
 		fullScreen: "Full screen",
+		zoom: "Preview zoom",
 		saveSnapshot: "Save snapshot",
 		copySnapshot: "Copy snapshot",
 		canvas: "Preview canvas",

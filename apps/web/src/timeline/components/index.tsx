@@ -88,6 +88,8 @@ import { invokeAction } from "@/actions";
 import { resolveTimelineElementIntersections } from "./selection-hit-testing";
 import { cn } from "@/utils/ui";
 import { translateLabel, useMessages } from "@/i18n";
+import { ActionTooltip } from "@/actions/components/action-tooltip";
+import { DEFAULT_TRACK_NAMES } from "@/timeline/tracks";
 
 const TRACKS_CONTAINER_MAX_HEIGHT = 800;
 const FALLBACK_CONTAINER_WIDTH = 1000;
@@ -613,6 +615,7 @@ function TrackLabelsPanel({
 	getTrackExpansionHeight: (trackIndex: number) => number;
 }) {
 	const editor = useEditor();
+	const m = useMessages();
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const tracks = useMemo<TimelineTrack[]>(
 		() =>
@@ -675,6 +678,11 @@ function TrackLabelsPanel({
 											{canTrackHaveAudio(track) && (
 												<TrackToggleIcon
 													isOff={track.muted}
+													label={
+														track.muted
+															? m.timeline.unmuteTrack
+															: m.timeline.muteTrack
+													}
 													icons={{
 														on: VolumeHighIcon,
 														off: VolumeOffIcon,
@@ -689,6 +697,11 @@ function TrackLabelsPanel({
 											{canTrackBeHidden(track) && (
 												<TrackToggleIcon
 													isOff={track.hidden}
+													label={
+														track.hidden
+															? m.timeline.showTrack
+															: m.timeline.hideTrack
+													}
 													icons={{
 														on: ViewIcon,
 														off: ViewOffSlashIcon,
@@ -903,15 +916,27 @@ function TimelineGutter({
 }
 
 function TrackIcon({ track }: { track: TimelineTrack }) {
-	return <>{TRACK_ICONS[track.type]}</>;
+	const m = useMessages();
+	return (
+		<ActionTooltip
+			label={translateLabel({
+				messages: m,
+				label: DEFAULT_TRACK_NAMES[track.type],
+			})}
+		>
+			<span className="inline-flex">{TRACK_ICONS[track.type]}</span>
+		</ActionTooltip>
+	);
 }
 
 function TrackToggleIcon({
 	isOff,
+	label,
 	icons,
 	onClick,
 }: {
 	isOff: boolean;
+	label: string;
 	icons: {
 		on: IconSvgElement;
 		off: IconSvgElement;
@@ -919,21 +944,23 @@ function TrackToggleIcon({
 	onClick: () => void;
 }) {
 	return (
-		<>
-			{isOff ? (
-				<HugeiconsIcon
-					icon={icons.off}
-					className="text-destructive size-4 cursor-pointer"
-					onClick={onClick}
-				/>
-			) : (
-				<HugeiconsIcon
-					icon={icons.on}
-					className="text-muted-foreground size-4 cursor-pointer"
-					onClick={onClick}
-				/>
-			)}
-		</>
+		<ActionTooltip label={label}>
+			<span className="inline-flex">
+				{isOff ? (
+					<HugeiconsIcon
+						icon={icons.off}
+						className="text-destructive size-4 cursor-pointer"
+						onClick={onClick}
+					/>
+				) : (
+					<HugeiconsIcon
+						icon={icons.on}
+						className="text-muted-foreground size-4 cursor-pointer"
+						onClick={onClick}
+					/>
+				)}
+			</span>
+		</ActionTooltip>
 	);
 }
 

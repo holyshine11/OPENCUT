@@ -5,7 +5,9 @@ import { useKeybindingsStore } from "@/actions/keybindings-store";
 import { ACTIONS, type TActionWithOptionalArgs } from "@/actions";
 import {
 	getPlatformAlternateKey,
+	getPlatformShiftKey,
 	getPlatformSpecialKey,
+	isAppleDevice,
 } from "@/utils/platform";
 import { useMessages } from "@/i18n";
 
@@ -22,7 +24,7 @@ function formatKey({ key }: { key: string }): string {
 	return key
 		.replace("ctrl", getPlatformSpecialKey())
 		.replace("alt", getPlatformAlternateKey())
-		.replace("shift", "Shift")
+		.replace("shift", getPlatformShiftKey())
 		.replace("left", "←")
 		.replace("right", "→")
 		.replace("up", "↑")
@@ -34,6 +36,22 @@ function formatKey({ key }: { key: string }): string {
 		.replace("delete", "Delete")
 		.replace("backspace", "Backspace")
 		.replace("-", "+");
+}
+
+// 툴팁용 한 줄 표기. 현재 키바인딩의 첫 키를 쓰고, 맥은 ⌘⇧Z처럼 붙여 쓴다
+export function useShortcutLabel({
+	action,
+}: {
+	action: TActionWithOptionalArgs;
+}): string | null {
+	const key = useKeybindingsStore(
+		(state) => state.getKeybindingsForAction(action)[0],
+	);
+	if (!key) return null;
+	return formatKey({ key })
+		.split("+")
+		.map((part) => (part.length === 1 ? part.toUpperCase() : part))
+		.join(isAppleDevice() ? "" : "+");
 }
 
 export function useKeyboardShortcutsHelp() {

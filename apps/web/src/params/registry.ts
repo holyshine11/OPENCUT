@@ -194,7 +194,7 @@ const textElementParams: ElementParamDefinition[] = [
 		type: "number",
 		default: 15,
 		min: 1,
-		step: 1,
+		step: 0.25,
 	},
 	{
 		key: "color",
