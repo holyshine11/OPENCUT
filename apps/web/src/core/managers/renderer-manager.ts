@@ -1,3 +1,4 @@
+import { youtubeExportSize } from "@/export/defaults";
 import type { EditorCore } from "@/core";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import type { ExportOptions, ExportResult } from "@/export";
@@ -203,6 +204,7 @@ export class RendererManager {
 			const exporter = new SceneExporter({
 				width: canvasSize.width,
 				height: canvasSize.height,
+				outputSize: youtubeExportSize({ canvasSize }),
 				fps: exportFps,
 				format,
 				quality,

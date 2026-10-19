@@ -34,7 +34,11 @@ import {
 	SectionTitle,
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
-import { DEFAULT_EXPORT_OPTIONS, defaultExportFps } from "@/export/defaults";
+import {
+	DEFAULT_EXPORT_OPTIONS,
+	defaultExportFps,
+	youtubeExportSize,
+} from "@/export/defaults";
 import { useMessages } from "@/i18n";
 
 function isExportFormat(value: string): value is ExportFormat {
@@ -124,7 +128,9 @@ function ExportPopover({
 	const projectFps = activeProject.settings.fps;
 	const recommendedFps = defaultExportFps({ projectFps });
 	const exportFps = useProjectFps ? projectFps : recommendedFps;
-	const { width, height } = activeProject.settings.canvasSize;
+	const { width, height } = youtubeExportSize({
+		canvasSize: activeProject.settings.canvasSize,
+	});
 
 	const handleExport = async () => {
 		if (!activeProject) return;

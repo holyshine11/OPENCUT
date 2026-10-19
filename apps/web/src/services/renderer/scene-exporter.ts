@@ -18,11 +18,15 @@ import { TICKS_PER_SECOND } from "@/wasm";
 import { frameRateToFloat } from "@/fps/utils";
 import type { RootNode } from "./nodes/root-node";
 import type { ExportFormat, ExportQuality } from "@/export";
+import { fitInside } from "@/export/defaults";
+import type { TCanvasSize } from "@/project/types";
 import { CanvasRenderer } from "./canvas-renderer";
 
 type ExportParams = {
 	width: number;
 	height: number;
+	/** 캔버스와 다르면 비율을 지켜 이 크기에 맞추고 남는 곳은 검게 채운다 */
+	outputSize?: TCanvasSize;
 	fps: FrameRate;
 	format: ExportFormat;
 	quality: ExportQuality;
@@ -50,12 +54,14 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 	private quality: ExportQuality;
 	private shouldIncludeAudio: boolean;
 	private audioBuffer?: AudioBuffer;
+	private outputSize?: TCanvasSize;
 
 	private isCancelled = false;
 
 	constructor({
 		width,
 		height,
+		outputSize,
 		fps,
 		format,
 		quality,
@@ -73,6 +79,9 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 		this.quality = quality;
 		this.shouldIncludeAudio = shouldIncludeAudio ?? false;
 		this.audioBuffer = audioBuffer;
+		if (outputSize && (outputSize.width !== width || outputSize.height !== height)) {
+			this.outputSize = outputSize;
+		}
 	}
 
 	cancel(): void {
@@ -99,7 +108,19 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 			target: new BufferTarget(),
 		});
 
-		const videoSource = new CanvasSource(this.renderer.getOutputCanvas(), {
+		const rendered = this.renderer.getOutputCanvas();
+		const resized = this.outputSize
+			? new OffscreenCanvas(this.outputSize.width, this.outputSize.height)
+			: null;
+		const resizedContext = resized?.getContext("2d");
+		const fit =
+			resized &&
+			fitInside({
+				source: { width: this.renderer.width, height: this.renderer.height },
+				target: { width: resized.width, height: resized.height },
+			});
+
+		const videoSource = new CanvasSource(resized ?? rendered, {
 			codec: this.format === "webm" ? "vp9" : "avc",
 			bitrate: qualityMap[this.quality],
 		});
@@ -144,6 +165,12 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 			const timeTicks = i * ticksPerFrame;
 			const timeSeconds = mediaTimeToSeconds({ time: timeTicks });
 			await this.renderer.render({ node: rootNode, time: timeTicks });
+			if (resized && resizedContext && fit) {
+				resizedContext.fillStyle = "#000000";
+				resizedContext.fillRect(0, 0, resized.width, resized.height);
+				resizedContext.imageSmoothingQuality = "high";
+				resizedContext.drawImage(rendered, fit.x, fit.y, fit.width, fit.height);
+			}
 			await videoSource.add(timeSeconds, 1 / fpsFloat);
 
 			this.emit("progress", i / frameCount);
