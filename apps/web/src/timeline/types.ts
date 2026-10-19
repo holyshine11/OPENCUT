@@ -112,6 +112,8 @@ interface BaseTimelineElement {
 	sourceDuration?: MediaTime;
 	animations?: ElementAnimations;
 	params: ParamValues;
+	// ⌘G로 묶은 클립 그룹. 같은 값끼리 함께 선택·이동한다
+	groupId?: string;
 }
 
 export interface VideoElement extends BaseTimelineElement {

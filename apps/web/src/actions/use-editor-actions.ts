@@ -438,6 +438,22 @@ export function useEditorActions() {
 	);
 
 	useActionHandler(
+		"group-selected",
+		() => {
+			editor.timeline.groupElements({ elements: selectedElements });
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"ungroup-selected",
+		() => {
+			editor.timeline.ungroupElements({ elements: selectedElements });
+		},
+		undefined,
+	);
+
+	useActionHandler(
 		"toggle-elements-muted-selected",
 		() => {
 			editor.timeline.toggleElementsMuted({ elements: selectedElements });

@@ -205,6 +205,8 @@ function buildPastedElements({
 			...item.element,
 			id: newElementId,
 			startTime,
+			// 붙여넣은 클립은 원본 그룹에 넣지 않는다
+			groupId: undefined,
 			animations: cloneAnimations({
 				animations: item.element.animations,
 				shouldRegenerateKeyframeIds: true,

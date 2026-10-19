@@ -127,6 +127,8 @@ function buildDuplicateElement({
 		id,
 		name: `${element.name} (copy)`,
 		startTime,
+		// 복제본은 원본 그룹에 넣지 않는다
+		groupId: undefined,
 		animations: cloneAnimations({
 			animations: element.animations,
 			shouldRegenerateKeyframeIds: true,

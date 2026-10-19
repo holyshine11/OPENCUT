@@ -134,6 +134,14 @@ export const ACTIONS = {
 		description: "Duplicate selected element",
 		category: "selection",
 	},
+	"group-selected": {
+		description: "Group selected clips",
+		category: "editing",
+	},
+	"ungroup-selected": {
+		description: "Ungroup clips",
+		category: "editing",
+	},
 	"toggle-elements-muted-selected": {
 		description: "Mute/unmute selected elements",
 		category: "selection",
@@ -200,6 +208,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["select-all", ["ctrl+a"]],
 	["cancel-interaction", ["escape"]],
 	["duplicate-selected", ["ctrl+d"]],
+	["group-selected", ["ctrl+g"]],
+	["ungroup-selected", ["ctrl+shift+g"]],
 	["timeline-zoom-in", ["h"]],
 	["timeline-zoom-out", ["g"]],
 	["undo", ["ctrl+z"]],

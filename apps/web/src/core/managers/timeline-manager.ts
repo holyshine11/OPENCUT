@@ -7,6 +7,7 @@ import type {
 	TimelineTrack,
 	TimelineElement,
 	RetimeConfig,
+	ElementRef,
 } from "@/timeline";
 import { calculateTotalDuration } from "@/timeline";
 import { TimelineDragSource } from "@/timeline/drag-source";
@@ -17,6 +18,8 @@ import {
 	canElementHaveAudio,
 } from "@/timeline/element-utils";
 import { isElementMuted } from "@/timeline/audio-state";
+import { buildGroupUpdates, buildUngroupUpdates } from "@/timeline/clip-groups";
+import { generateUUID } from "@/utils/id";
 import type {
 	AnimationPath,
 	AnimationInterpolation,
@@ -862,6 +865,25 @@ export class TimelineManager {
 		});
 
 		this.updateElements({ updates: nextUpdates });
+	}
+
+	groupElements({ elements }: { elements: ElementRef[] }): void {
+		this.updateElements({
+			updates: buildGroupUpdates({
+				tracks: this.editor.scenes.getActiveScene().tracks,
+				elements,
+				groupId: generateUUID(),
+			}),
+		});
+	}
+
+	ungroupElements({ elements }: { elements: ElementRef[] }): void {
+		this.updateElements({
+			updates: buildUngroupUpdates({
+				tracks: this.editor.scenes.getActiveScene().tracks,
+				elements,
+			}),
+		});
 	}
 
 	toggleElementsMuted({

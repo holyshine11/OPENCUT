@@ -55,6 +55,7 @@ export interface ElementSelectionApi {
 	getSelected: () => readonly ElementRef[];
 	isSelected: (ref: ElementRef) => boolean;
 	select: (ref: ElementRef) => void;
+	getGroupOf: (ref: ElementRef) => ElementRef[];
 	handleClick: (args: ElementRef & { isMultiKey: boolean }) => void;
 	clearKeyframeSelection: () => void;
 }
@@ -378,7 +379,7 @@ export class ElementInteractionController {
 
 		const selectedElements = this.deps.selection.isSelected(ref)
 			? this.deps.selection.getSelected()
-			: [ref];
+			: this.deps.selection.getGroupOf(ref);
 
 		this.session = {
 			kind: "pending",

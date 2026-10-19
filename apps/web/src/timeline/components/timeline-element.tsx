@@ -74,6 +74,7 @@ import {
 	Exchange01Icon,
 	KeyframeIcon,
 	MagicWand05Icon,
+	Link01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "@/utils/string";
@@ -605,6 +606,13 @@ function ElementInner({
 						</div>
 						{expandedContent}
 					</button>
+					{element.groupId && (
+						<HugeiconsIcon
+							icon={Link01Icon}
+							aria-hidden
+							className="pointer-events-none absolute top-0.5 right-1 size-3 text-white"
+						/>
+					)}
 				</div>
 			</div>
 

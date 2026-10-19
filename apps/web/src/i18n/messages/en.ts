@@ -708,6 +708,8 @@ export const en = {
 		"cancel-interaction": "Cancel current interaction",
 		"deselect-all": "Deselect all elements",
 		"duplicate-selected": "Duplicate selected element",
+		"group-selected": "Group selected clips",
+		"ungroup-selected": "Ungroup clips",
 		"toggle-elements-muted-selected": "Mute/unmute selected elements",
 		"toggle-elements-visibility-selected": "Show/hide selected elements",
 		"toggle-bookmark": "Toggle bookmark at playhead",

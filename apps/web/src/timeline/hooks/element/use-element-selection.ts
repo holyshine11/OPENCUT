@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useEditor } from "@/editor/use-editor";
 import type { ElementRef } from "@/timeline/types";
+import { expandToGroups } from "@/timeline/clip-groups";
 
 export function useElementSelection() {
 	const editor = useEditor();
@@ -15,13 +16,21 @@ export function useElementSelection() {
 		[selectedElements],
 	);
 
-	const selectElement = useCallback(
-		({ trackId, elementId }: ElementRef) => {
-			editor.selection.setSelectedElements({
+	// 그룹에 든 클립이면 그룹 전체를 함께 고른다
+	const getGroupOf = useCallback(
+		({ trackId, elementId }: ElementRef) =>
+			expandToGroups({
+				tracks: editor.scenes.getActiveScene().tracks,
 				elements: [{ trackId, elementId }],
-			});
-		},
+			}),
 		[editor],
+	);
+
+	const selectElement = useCallback(
+		(ref: ElementRef) => {
+			editor.selection.setSelectedElements({ elements: getGroupOf(ref) });
+		},
+		[editor, getGroupOf],
 	);
 
 	const addElementToSelection = useCallback(
@@ -126,6 +135,7 @@ export function useElementSelection() {
 		selectedElements,
 		isElementSelected,
 		selectElement,
+		getGroupOf,
 		setElementSelection,
 		mergeElementsIntoSelection,
 		addElementToSelection,
