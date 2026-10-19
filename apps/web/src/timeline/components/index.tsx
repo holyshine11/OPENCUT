@@ -3,9 +3,11 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Delete02Icon,
+	LockIcon,
 	MagicWand05Icon,
 	PaintBoardIcon,
 	MusicNote03Icon,
+	SquareUnlock02Icon,
 	TaskAdd02Icon,
 	TextIcon,
 	ViewIcon,
@@ -60,7 +62,12 @@ import {
 	getCumulativeHeightBefore,
 	getTotalTracksHeight,
 } from "./track-layout";
-import { getTrackColor, SELECTED_TRACK_ROW_CLASS } from "./theme";
+import {
+	getTrackColor,
+	LOCKED_TRACK_OVERLAY_CLASS,
+	SELECTED_TRACK_ROW_CLASS,
+} from "./theme";
+import { TIMELINE_LAYERS } from "./layers";
 import {
 	computeTrackExpansionHeight,
 	getTrackExpandedRows,
@@ -706,6 +713,16 @@ function TrackLabelsPanel({
 													}
 												/>
 											)}
+											<TrackToggleIcon
+												isOff={track.locked === true}
+												icons={{
+													on: SquareUnlock02Icon,
+													off: LockIcon,
+												}}
+												onClick={() =>
+													editor.timeline.toggleTrackLock({ trackId: track.id })
+												}
+											/>
 											<TrackIcon track={track} />
 										</div>
 										{expandedRows.length > 0 && (
@@ -843,6 +860,15 @@ function TimelineTrackRows({
 										: null
 								}
 							/>
+							{track.locked && (
+								<div
+									className={cn(
+										"pointer-events-none absolute inset-0",
+										LOCKED_TRACK_OVERLAY_CLASS,
+									)}
+									style={{ zIndex: TIMELINE_LAYERS.trackLockOverlay }}
+								/>
+							)}
 							<AnchoredColorPopover
 								open={colorTrackId === track.id}
 								onOpenChange={(open) => setColorTrackId(open ? track.id : null)}
@@ -899,6 +925,19 @@ function TimelineTrackRows({
 							}}
 						>
 							{m.timeline.trackColor}
+						</ContextMenuItem>
+						<ContextMenuItem
+							icon={
+								<HugeiconsIcon
+									icon={track.locked ? SquareUnlock02Icon : LockIcon}
+								/>
+							}
+							onClick={(event: React.MouseEvent) => {
+								event.stopPropagation();
+								timeline.toggleTrackLock({ trackId: track.id });
+							}}
+						>
+							{track.locked ? m.timeline.unlockTrack : m.timeline.lockTrack}
 						</ContextMenuItem>
 						{track.id !== mainTrackId && (
 							<ContextMenuItem

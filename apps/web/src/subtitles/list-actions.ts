@@ -11,6 +11,7 @@ import {
 	subMediaTime,
 	type MediaTime,
 } from "@/wasm";
+import { isTrackLocked } from "@/timeline/track-capabilities";
 import type { SubtitleEntry } from "./groups";
 import {
 	clampCueTiming,
@@ -70,6 +71,9 @@ export function splitSubtitle({
 	at: number;
 	time?: number;
 }): boolean {
+	if (isTrackLocked(editor.timeline.getTrackById({ trackId: entry.trackId }))) {
+		return false;
+	}
 	const pieces = splitCue({ cue: { ...cueOf({ entry }), text }, at, time });
 	if (!pieces) return false;
 	const [first, second] = pieces;
@@ -114,6 +118,10 @@ export function mergeSubtitles({
 	second: SubtitleEntry;
 	text?: string;
 }): void {
+	const isLocked = [first, second].some(({ trackId }) =>
+		isTrackLocked(editor.timeline.getTrackById({ trackId })),
+	);
+	if (isLocked) return;
 	const merged = mergeCues({
 		first: { ...cueOf({ entry: first }), text },
 		second: cueOf({ entry: second }),

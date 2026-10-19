@@ -482,6 +482,8 @@ export const ko: Messages = {
 		clipColor: "클립 색",
 		customColor: "사용자 지정",
 		resetToTrackColor: "트랙 색으로 되돌리기",
+		lockTrack: "트랙 잠그기",
+		unlockTrack: "트랙 잠금 풀기",
 		selectTrack: ({ name }) => `${name} 트랙 선택`,
 		ruler: "타임라인 눈금자",
 		playhead: "재생 헤드",

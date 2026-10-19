@@ -3,8 +3,8 @@ import type { SceneTracks, TimelineTrack } from "@/timeline";
 import { EditorCore } from "@/core";
 import { updateTrackInSceneTracks } from "@/timeline";
 
-/** 트랙 공통 속성(색 등)을 바꾼다 */
-export type TrackPatch = Partial<Pick<TimelineTrack, "color">>;
+/** 트랙 공통 속성(색·잠금)을 바꾼다 */
+export type TrackPatch = Partial<Pick<TimelineTrack, "color" | "locked">>;
 
 export class UpdateTrackCommand extends Command {
 	private savedState: SceneTracks | null = null;

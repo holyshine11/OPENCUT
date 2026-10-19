@@ -42,6 +42,9 @@ export const TIMELINE_COLOR_PALETTE = [
 ] as const;
 
 export const SELECTED_TRACK_ROW_CLASS = "bg-accent/50";
+/** 잠긴 트랙 위에 덮는 빗금 */
+export const LOCKED_TRACK_OVERLAY_CLASS =
+	"bg-[repeating-linear-gradient(-45deg,transparent_0_6px,rgb(0_0_0/0.3)_6px_12px)]";
 export const DEFAULT_TIMELINE_BOOKMARK_COLOR = "#009dff";
 
 export function getTrackColor({

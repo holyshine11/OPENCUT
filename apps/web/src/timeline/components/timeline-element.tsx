@@ -385,7 +385,8 @@ export function TimelineElement({
 	return (
 		<PixelsPerSecondContext.Provider value={timelinePixelsPerSecond}>
 			<ContextMenu>
-				<ContextMenuTrigger asChild>
+				{/* 잠긴 트랙이면 클립 메뉴 대신 트랙 메뉴(잠금 풀기)가 열린다 */}
+				<ContextMenuTrigger asChild disabled={track.locked}>
 					<div
 						className="absolute top-0 select-none"
 						style={{

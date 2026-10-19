@@ -516,6 +516,8 @@ export const en = {
 		clipColor: "Clip color",
 		customColor: "Custom",
 		resetToTrackColor: "Reset to track color",
+		lockTrack: "Lock track",
+		unlockTrack: "Unlock track",
 		selectTrack: ({ name }: { name: string }) => `Select ${name} track`,
 		ruler: "Timeline ruler",
 		playhead: "Timeline playhead",

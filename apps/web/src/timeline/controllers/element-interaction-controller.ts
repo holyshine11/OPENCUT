@@ -20,6 +20,7 @@ import { TIMELINE_DRAG_THRESHOLD_PX } from "@/timeline/components/interaction";
 import type { FrameRate } from "opencut-wasm";
 import { computeDropTarget } from "@/timeline/components/drop-target";
 import { getMouseTimeFromClientX } from "@/timeline/drag-utils";
+import { isTrackLocked } from "@/timeline/track-capabilities";
 import { generateUUID } from "@/utils/id";
 import type { SnapPoint } from "@/timeline/snapping";
 import type {
@@ -358,6 +359,9 @@ export class ElementInteractionController {
 		element: TimelineElement;
 		track: TimelineTrack;
 	}): void => {
+		// 잠긴 트랙의 클립은 선택도 끌기도 시작하지 않는다
+		if (isTrackLocked(track)) return;
+
 		// Right-click must not stopPropagation — ContextMenu needs the bubble.
 		if (event.button === MOUSE_BUTTON_RIGHT) {
 			const ref = { trackId: track.id, elementId: element.id };
@@ -408,6 +412,7 @@ export class ElementInteractionController {
 		element: TimelineElement;
 		track: TimelineTrack;
 	}): void => {
+		if (isTrackLocked(track)) return;
 		event.stopPropagation();
 
 		if (this.lastGestureWasDrag) {

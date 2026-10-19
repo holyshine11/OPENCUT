@@ -33,6 +33,8 @@ interface BaseTrack {
 	name: string;
 	/** 트랙 색. 없으면 트랙 종류의 기본색 */
 	color?: string;
+	/** 잠긴 트랙의 클립은 선택·편집되지 않는다 */
+	locked?: boolean;
 }
 
 export interface VideoTrack extends BaseTrack {

@@ -7,6 +7,7 @@ import type {
 	SelectedMaskPointSelection,
 } from "@/selection/editor-selection";
 import type { ElementRef } from "@/timeline/types";
+import { excludeLockedElements } from "@/timeline/track-capabilities";
 
 export class SelectionManager {
 	private selectedElements: ElementRef[] = [];
@@ -15,9 +16,7 @@ export class SelectionManager {
 	private selectedMaskPoints: SelectedMaskPointSelection | null = null;
 	private listeners = new Set<() => void>();
 
-	constructor(editor: EditorCore) {
-		void editor;
-	}
+	constructor(private editor: EditorCore) {}
 
 	getSelectedElements(): ElementRef[] {
 		return this.selectedElements;
@@ -63,7 +62,7 @@ export class SelectionManager {
 	}
 
 	setSelectedElements({ elements }: { elements: ElementRef[] }): void {
-		this.selectedElements = elements;
+		this.selectedElements = this.excludeLocked(elements);
 		this.selectedKeyframes = [];
 		this.keyframeSelectionAnchor = null;
 		this.selectedMaskPoints = null;
@@ -149,7 +148,7 @@ export class SelectionManager {
 		patch: EditorSelectionPatch;
 	}): EditorSelectionSnapshot {
 		if (patch.selectedElements !== undefined) {
-			this.selectedElements = [...patch.selectedElements];
+			this.selectedElements = this.excludeLocked(patch.selectedElements);
 		}
 		if (patch.selectedKeyframes !== undefined) {
 			this.selectedKeyframes = [...patch.selectedKeyframes];
@@ -180,6 +179,12 @@ export class SelectionManager {
 				}
 			: null;
 		this.notify();
+	}
+
+	// 잠긴 트랙의 클립은 클릭·박스·전체 선택 어디로도 선택되지 않는다
+	private excludeLocked(elements: readonly ElementRef[]): ElementRef[] {
+		const tracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
+		return tracks ? excludeLockedElements({ tracks, elements }) : [...elements];
 	}
 
 	subscribe(listener: () => void): () => void {

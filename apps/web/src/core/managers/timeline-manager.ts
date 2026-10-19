@@ -8,7 +8,7 @@ import type {
 	TimelineElement,
 	RetimeConfig,
 } from "@/timeline";
-import { calculateTotalDuration } from "@/timeline";
+import { calculateTotalDuration, excludeLockedElements } from "@/timeline";
 import { TimelineDragSource } from "@/timeline/drag-source";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
 import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME } from "@/wasm";
@@ -198,6 +198,25 @@ export class TimelineManager {
 		this.editor.command.execute({ command });
 	}
 
+	toggleTrackLock({ trackId }: { trackId: string }): void {
+		const track = this.getTrackById({ trackId });
+		if (!track) return;
+
+		const command = new UpdateTrackCommand({
+			trackId,
+			patch: { locked: !track.locked },
+		});
+		this.editor.command.execute({ command });
+
+		// 방금 잠근 트랙의 클립이 선택돼 있으면 선택에서 뺀다
+		const selected = this.editor.selection.getSelectedElements();
+		const tracks = this.editor.scenes.getActiveScene().tracks;
+		const unlocked = excludeLockedElements({ tracks, elements: selected });
+		if (unlocked.length !== selected.length) {
+			this.editor.selection.setSelectedElements({ elements: unlocked });
+		}
+	}
+
 	/** color가 없으면 트랙 색을 따르게 되돌린다 */
 	setElementsColor({
 		elements,
@@ -224,8 +243,11 @@ export class TimelineManager {
 		splitTime: MediaTime;
 		retainSide?: "both" | "left" | "right";
 	}): { trackId: string; elementId: string }[] {
+		const splittable = this.excludeLocked({ elements });
+		if (splittable.length === 0) return [];
+
 		const command = new SplitElementsCommand({
-			elements,
+			elements: splittable,
 			splitTime,
 			retainSide,
 		});
@@ -285,6 +307,7 @@ export class TimelineManager {
 	}: {
 		elements: { trackId: string; elementId: string }[];
 	}): void {
+		// 잠금은 거르지 않는다. 미디어를 지울 때는 잠긴 트랙의 클립도 함께 지워야 한다
 		const command = new DeleteElementsCommand({ elements });
 		this.editor.command.execute({ command });
 	}
@@ -941,6 +964,15 @@ export class TimelineManager {
 		this.listeners.forEach((fn) => {
 			fn();
 		});
+	}
+
+	private excludeLocked<TRef extends { trackId: string }>({
+		elements,
+	}: {
+		elements: readonly TRef[];
+	}): TRef[] {
+		const tracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
+		return tracks ? excludeLockedElements({ tracks, elements }) : [];
 	}
 
 	private getElementByRef({
