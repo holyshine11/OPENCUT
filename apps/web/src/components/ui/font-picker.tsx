@@ -17,6 +17,7 @@ import {
 } from "@/fonts/local-fonts";
 import type { FontAtlas, FontAtlasEntry } from "@/fonts/types";
 import { useFontAtlas } from "@/fonts/use-font-atlas";
+import { isBundledFont } from "@/fonts/bundled-fonts";
 import { cn } from "@/utils/ui";
 import { ChevronDown, Search } from "lucide-react";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -262,8 +263,9 @@ function FontRow({
 	onFontSelect,
 }: RowComponentProps<FontRowProps>) {
 	const fontName = filteredFonts[index];
-	// System and installed fonts have no sprite; render the name in the font itself
-	const entry = atlas?.fonts[fontName];
+	// System, installed and bundled fonts have no sprite; render the name in the font itself
+	const isBundled = isBundledFont(fontName);
+	const entry = isBundled ? undefined : atlas?.fonts[fontName];
 	const isSelected = fontName === selectedFont;
 
 	return (
@@ -288,7 +290,7 @@ function FontRow({
 					<FontSpritePreview entry={entry} />
 				) : (
 					<span className="text-xl text-foreground/85" style={{ fontFamily: fontName }}>
-						{fontName}
+						{isBundled ? `${fontName} 가나다` : fontName}
 					</span>
 				)}
 			</div>

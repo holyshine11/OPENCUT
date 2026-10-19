@@ -42,7 +42,8 @@
   - 본문: Pretendard, Noto Sans KR, 나눔고딕, 나눔스퀘어라운드, 고운돋움
   - 강조: Black Han Sans, Do Hyeon, Jua
   - 손글씨: 나눔손글씨 펜
-- 자동 자막 기본 스타일을 Arial에서 Pretendard Bold로 바꾼다. 현재 기본값은 `subtitles/build-subtitle-text-element.ts`의 `resolveSubtitleStyle`에 하드코딩돼 있다.
+- 텍스트 테두리(색, 두께)를 추가한다. 원래 계획에 없었지만, 스타일 기억 항목에 테두리가 들어 있는데 기능 자체가 없어서 이 단계에서 넣었다.
+- 자동 자막 기본 스타일을 Arial에서 Pretendard Bold + 검은 테두리로 바꾼다. 현재 기본값은 `subtitles/build-subtitle-text-element.ts`의 `resolveSubtitleStyle`에 하드코딩돼 있다.
 - 마지막으로 쓴 텍스트 스타일을 기억해서 새 텍스트와 자동 생성 자막에 기본으로 적용한다. 모든 프로젝트에 공통이다. 스타일 항목은 폰트, 크기, 색, 테두리, 배경 박스, 그림자(5단계 이후), 위치다.
 - `⌘⌥C`로 스타일만 복사하고 `⌘⌥V`로 스타일만 붙여 넣는다. 여러 텍스트를 선택한 상태에서 붙여 넣으면 한꺼번에 적용된다.
 - 요소 전체 복사·붙여넣기 시 스타일이 유지되는 동작은 이미 있다(`commands/timeline/clipboard/paste.ts`). 깨지지 않게 유지만 한다.

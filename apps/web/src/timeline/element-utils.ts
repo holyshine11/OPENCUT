@@ -1,3 +1,4 @@
+import { getRememberedTextStyle } from "@/text/style-memory";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/timeline/creation";
 import {
 	MASKABLE_ELEMENT_TYPES,
@@ -117,6 +118,7 @@ export function buildTextElement({
 		params: {
 			...buildDefaultElementParams({ type: "text" }),
 			...(t.params ?? {}),
+			...getRememberedTextStyle({ slot: "text" }),
 		},
 	};
 }

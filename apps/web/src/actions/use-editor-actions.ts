@@ -26,6 +26,7 @@ import {
 	type ScopeEntry,
 } from "@/selection/scope";
 import { useCommittedRef } from "@/hooks/use-committed-ref";
+import { pickTextStyle, useTextStyleMemory } from "@/text/style-memory";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -457,6 +458,38 @@ export function useEditorActions() {
 		"paste-copied",
 		() => {
 			editor.clipboard.paste();
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"copy-style",
+		() => {
+			const text = editor.timeline
+				.getElementsWithTracks({ elements: selectedElements })
+				.find(({ element }) => element.type === "text");
+			if (!text) return;
+			useTextStyleMemory
+				.getState()
+				.setCopied(pickTextStyle({ params: text.element.params }));
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"paste-style",
+		() => {
+			const style = useTextStyleMemory.getState().copied;
+			if (!style) return;
+			const updates = editor.timeline
+				.getElementsWithTracks({ elements: selectedElements })
+				.filter(({ element }) => element.type === "text")
+				.map(({ track, element }) => ({
+					trackId: track.id,
+					elementId: element.id,
+					patch: { params: style },
+				}));
+			editor.timeline.updateElements({ updates });
 		},
 		undefined,
 	);

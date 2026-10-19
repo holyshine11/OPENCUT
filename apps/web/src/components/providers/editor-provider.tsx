@@ -10,6 +10,7 @@ import { useKeybindingsStore } from "@/actions/keybindings-store";
 import { useTimelineStore } from "@/timeline/timeline-store";
 import { useEditorActions } from "@/actions/use-editor-actions";
 import { loadFontAtlas } from "@/fonts/google-fonts";
+import { loadBundledFonts } from "@/fonts/bundled-fonts";
 import {
 	initializeGpuRenderer,
 	isGpuAvailable,
@@ -38,7 +39,7 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 		const loadProject = async () => {
 			try {
 				setIsLoading(true);
-				await initializeGpuRenderer();
+				await Promise.all([initializeGpuRenderer(), loadBundledFonts()]);
 				editor.renderer.setDegraded(!isGpuAvailable());
 				await editor.project.loadProject({ id: projectId });
 

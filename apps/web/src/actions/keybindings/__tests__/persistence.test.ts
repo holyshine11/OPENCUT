@@ -142,3 +142,18 @@ describe("parseImportedKeybindings", () => {
 		).toThrow(/not-an-action/);
 	});
 });
+
+describe("v7 to v8 migration", () => {
+	test("adds style copy/paste shortcuts without overriding user bindings", () => {
+		const migrated = migratePersistedKeybindingsState({
+			state: {
+				keybindings: { "ctrl+alt+v": "split" },
+				isCustomized: true,
+			},
+			fromVersion: 7,
+		});
+		const decoded = decodePersistedKeybindingsState({ state: migrated });
+		expect(decoded?.keybindings.get("ctrl+alt+c")).toBe("copy-style");
+		expect(decoded?.keybindings.get("ctrl+alt+v")).toBe("split");
+	});
+});

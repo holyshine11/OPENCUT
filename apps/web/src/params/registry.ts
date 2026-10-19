@@ -185,7 +185,7 @@ const textElementParams: ElementParamDefinition[] = [
 		key: "fontFamily",
 		label: "Font Family",
 		type: "font",
-		default: "Arial",
+		default: "Pretendard",
 		keyframable: false,
 	},
 	{
@@ -323,6 +323,32 @@ const textElementParams: ElementParamDefinition[] = [
 		min: -100_000,
 		step: 1,
 		dependencies: [{ param: "background.enabled", equals: true }],
+	},
+	{
+		key: "stroke.enabled",
+		label: "Outline",
+		type: "boolean",
+		default: DEFAULTS.text.stroke.enabled,
+		keyframable: false,
+	},
+	{
+		key: "stroke.color",
+		label: "Outline Color",
+		type: "color",
+		default: DEFAULTS.text.stroke.color,
+		keyframable: false,
+		dependencies: [{ param: "stroke.enabled", equals: true }],
+	},
+	{
+		key: "stroke.width",
+		label: "Outline Width",
+		type: "number",
+		default: DEFAULTS.text.stroke.width,
+		min: 0,
+		max: 50,
+		step: 1,
+		keyframable: false,
+		dependencies: [{ param: "stroke.enabled", equals: true }],
 	},
 ];
 

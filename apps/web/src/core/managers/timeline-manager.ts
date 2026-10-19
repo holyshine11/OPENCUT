@@ -29,6 +29,7 @@ import {
 } from "@/animation";
 import { resolveAnimationTarget } from "@/timeline/animation-targets";
 import { BatchCommand } from "@/commands";
+import { rememberTextStyles } from "@/text/style-memory";
 import {
 	AddTrackCommand,
 	RemoveTrackCommand,
@@ -295,6 +296,18 @@ export class TimelineManager {
 		} else {
 			command.execute();
 		}
+		this.rememberTextStylesOf({
+			elementIds: new Set(updates.map((update) => update.elementId)),
+		});
+	}
+
+	private rememberTextStylesOf({
+		elementIds,
+	}: {
+		elementIds: ReadonlySet<string>;
+	}): void {
+		const tracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
+		if (tracks) rememberTextStyles({ tracks, elementIds });
 	}
 
 	addClipEffect({
@@ -754,9 +767,11 @@ export class TimelineManager {
 			after: afterTracks,
 		});
 		this.editor.command.push({ command });
+		const elementIds = new Set(this.previewOverlay.keys());
 		this.previewOverlay.clear();
 		this.previewTracks = null;
 		this.updateTracks(afterTracks);
+		this.rememberTextStylesOf({ elementIds });
 	}
 
 	discardPreview(): void {

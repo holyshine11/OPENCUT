@@ -15,10 +15,22 @@ import type {
 	TextFontWeight,
 } from "@/text/primitives";
 import type { SubtitleCue, SubtitleStyleOverrides } from "./types";
+import type { ParamValues } from "@/params";
+import {
+	CAPTION_ELEMENT_NAME_PREFIX,
+	getRememberedTextStyle,
+	pickTextStyle,
+} from "@/text/style-memory";
 
 const SUBTITLE_MAX_WIDTH_RATIO = 0.8;
 const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.05;
 const SUBTITLE_FONT_SIZE = 5;
+// 자막은 영상 위에서 읽혀야 해서 기본으로 검은 테두리를 켠다
+const SUBTITLE_DEFAULT_STROKE = {
+	"stroke.enabled": true,
+	"stroke.color": DEFAULTS.text.stroke.color,
+	"stroke.width": DEFAULTS.text.stroke.width,
+};
 const MEASUREMENT_CANVAS_SIZE = 4096;
 
 function quoteFontFamily({ fontFamily }: { fontFamily: string }): string {
@@ -123,6 +135,25 @@ function measureWrappedTextBlock({
 	};
 }
 
+function rememberedStyleOverrides({
+	remembered,
+}: {
+	remembered: ParamValues;
+}): SubtitleStyleOverrides {
+	const { fontFamily, fontSize, fontWeight, fontStyle, letterSpacing, lineHeight } =
+		remembered;
+	return {
+		fontFamily: typeof fontFamily === "string" ? fontFamily : undefined,
+		fontSize: typeof fontSize === "number" ? fontSize : undefined,
+		fontWeight:
+			fontWeight === "bold" || fontWeight === "normal" ? fontWeight : undefined,
+		fontStyle:
+			fontStyle === "italic" || fontStyle === "normal" ? fontStyle : undefined,
+		letterSpacing: typeof letterSpacing === "number" ? letterSpacing : undefined,
+		lineHeight: typeof lineHeight === "number" ? lineHeight : undefined,
+	};
+}
+
 function resolveSubtitleStyle({
 	style,
 }: {
@@ -146,7 +177,7 @@ function resolveSubtitleStyle({
 			: (style?.fontSize ?? SUBTITLE_FONT_SIZE);
 
 	return {
-		fontFamily: style?.fontFamily ?? "Arial",
+		fontFamily: style?.fontFamily ?? "Pretendard",
 		fontSize,
 		color: style?.color ?? "#ffffff",
 		textAlign: style?.textAlign ?? "center",
@@ -262,8 +293,12 @@ export function buildSubtitleTextElement({
 	canvasSize: { width: number; height: number };
 }): CreateTextElement {
 	const ctx = createMeasurementContext();
+	// ASS 같은 파일에 스타일이 있으면 그걸 따르고, 없으면 마지막에 쓴 자막 스타일을 쓴다
+	const remembered = caption.style
+		? {}
+		: getRememberedTextStyle({ slot: "caption" });
 	const style = resolveSubtitleStyle({
-		style: caption.style,
+		style: caption.style ?? rememberedStyleOverrides({ remembered }),
 	});
 	const fontFamily = quoteFontFamily({
 		fontFamily: style.fontFamily,
@@ -314,7 +349,7 @@ export function buildSubtitleTextElement({
 
 	return {
 		...DEFAULTS.text.element,
-		name: `Caption ${index + 1}`,
+		name: `${CAPTION_ELEMENT_NAME_PREFIX}${index + 1}`,
 		duration: mediaTimeFromSeconds({ seconds: caption.duration }),
 		startTime: mediaTimeFromSeconds({ seconds: caption.startTime }),
 		params: {
@@ -343,6 +378,8 @@ export function buildSubtitleTextElement({
 				style.background.offsetY ?? DEFAULTS.text.background.offsetY,
 			"transform.positionX": positionX,
 			"transform.positionY": positionY,
+			...SUBTITLE_DEFAULT_STROKE,
+			...pickTextStyle({ params: remembered }),
 		},
 	};
 }

@@ -6,6 +6,7 @@ import {
 } from "@/fonts/google-fonts";
 import type { FontAtlas } from "@/fonts/types";
 import { SYSTEM_FONTS } from "@/fonts/system-fonts";
+import { BUNDLED_FONT_FAMILIES, isBundledFont } from "@/fonts/bundled-fonts";
 
 type Status = "idle" | "loading" | "error";
 
@@ -46,7 +47,10 @@ export function useFontAtlas({ open }: { open: boolean }) {
 
 	const fontNames = useMemo(() => {
 		if (!atlas) return [];
-		return [...Object.keys(atlas.fonts), ...SYSTEM_FONTS].sort();
+		const others = [...Object.keys(atlas.fonts), ...SYSTEM_FONTS]
+			.filter((name) => !isBundledFont(name))
+			.sort();
+		return [...BUNDLED_FONT_FAMILIES, ...others];
 	}, [atlas]);
 
 	return { atlas, status, fontNames, retry };

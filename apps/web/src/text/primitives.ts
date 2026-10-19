@@ -144,6 +144,7 @@ export function drawMeasuredTextLayout({
 	textColor,
 	background,
 	backgroundColor,
+	stroke,
 	textBaseline = "middle",
 }: {
 	ctx: TextCanvasContext;
@@ -151,6 +152,8 @@ export function drawMeasuredTextLayout({
 	textColor: string;
 	background?: ResolvedTextBackgroundLike | null;
 	backgroundColor?: string;
+	/** width is a percentage of the font size */
+	stroke?: { color: string; width: number } | null;
 	textBaseline?: CanvasTextBaseline;
 }): void {
 	ctx.font = layout.fontString;
@@ -199,6 +202,13 @@ export function drawMeasuredTextLayout({
 
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
+		if (stroke && stroke.width > 0) {
+			// stroke is centered on the glyph edge and the fill covers the inner half, so double it
+			ctx.strokeStyle = stroke.color;
+			ctx.lineWidth = ((layout.scaledFontSize * stroke.width) / 100) * 2;
+			ctx.lineJoin = "round";
+			ctx.strokeText(layout.lines[index], 0, lineY);
+		}
 		ctx.fillText(layout.lines[index], 0, lineY);
 		drawTextDecoration({
 			ctx,

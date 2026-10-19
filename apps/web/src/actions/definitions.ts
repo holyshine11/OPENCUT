@@ -90,6 +90,14 @@ export const ACTIONS = {
 		description: "Paste elements at playhead",
 		category: "editing",
 	},
+	"copy-style": {
+		description: "Copy text style",
+		category: "editing",
+	},
+	"paste-style": {
+		description: "Paste text style onto selected text",
+		category: "editing",
+	},
 	"toggle-snapping": {
 		description: "Toggle snapping",
 		category: "editing",
@@ -168,6 +176,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["delete-selected", ["backspace", "delete"]],
 	["copy-selected", ["ctrl+c"]],
 	["paste-copied", ["ctrl+v"]],
+	["copy-style", ["ctrl+alt+c"]],
+	["paste-style", ["ctrl+alt+v"]],
 	["toggle-snapping", ["n"]],
 	["select-all", ["ctrl+a"]],
 	["cancel-interaction", ["escape"]],

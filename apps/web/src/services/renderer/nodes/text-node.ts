@@ -4,6 +4,7 @@ import type { EffectPass } from "@/effects/types";
 import type { BlendMode, Transform } from "@/rendering";
 import { drawMeasuredTextLayout } from "@/text/primitives";
 import type { MeasuredTextElement } from "@/text/measure-element";
+import { DEFAULTS } from "@/timeline/defaults";
 
 export type TextNodeParams = TextElement & {
 	transform: Transform;
@@ -54,8 +55,27 @@ export function renderTextToContext({
 		textColor: resolved.textColor,
 		background: resolved.measuredText.resolvedBackground,
 		backgroundColor: resolved.backgroundColor,
+		stroke: resolveTextStroke({ params: node.params.params }),
 		textBaseline: baseline,
 	});
 
 	ctx.restore();
+}
+
+function resolveTextStroke({
+	params,
+}: {
+	params: TextElement["params"];
+}): { color: string; width: number } | null {
+	if (params["stroke.enabled"] !== true) return null;
+	return {
+		color:
+			typeof params["stroke.color"] === "string"
+				? params["stroke.color"]
+				: DEFAULTS.text.stroke.color,
+		width:
+			typeof params["stroke.width"] === "number"
+				? params["stroke.width"]
+				: DEFAULTS.text.stroke.width,
+	};
 }

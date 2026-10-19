@@ -28,6 +28,13 @@ const defaultTextBackground = {
 	offsetY: 0,
 };
 
+// width는 글자 크기 대비 %
+const defaultTextStroke = {
+	enabled: false,
+	color: "#000000",
+	width: 8,
+};
+
 const defaultTextElement: Omit<TextElement, "id"> = {
 	type: "text",
 	name: "Text",
@@ -38,7 +45,7 @@ const defaultTextElement: Omit<TextElement, "id"> = {
 	params: {
 		content: "Default text",
 		fontSize: 15,
-		fontFamily: "Arial",
+		fontFamily: "Pretendard",
 		color: "#ffffff",
 		textAlign: "center",
 		fontWeight: "normal",
@@ -53,6 +60,9 @@ const defaultTextElement: Omit<TextElement, "id"> = {
 		"background.paddingY": defaultTextBackground.paddingY,
 		"background.offsetX": defaultTextBackground.offsetX,
 		"background.offsetY": defaultTextBackground.offsetY,
+		"stroke.enabled": defaultTextStroke.enabled,
+		"stroke.color": defaultTextStroke.color,
+		"stroke.width": defaultTextStroke.width,
 		"transform.positionX": defaultTransform.position.x,
 		"transform.positionY": defaultTransform.position.y,
 		"transform.scaleX": defaultTransform.scaleX,
@@ -80,6 +90,7 @@ export const DEFAULTS = {
 		letterSpacing: defaultTextLetterSpacing,
 		lineHeight: defaultTextLineHeight,
 		background: defaultTextBackground,
+		stroke: defaultTextStroke,
 		element: defaultTextElement,
 	},
 	timeline: {
