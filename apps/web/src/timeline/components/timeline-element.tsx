@@ -92,7 +92,7 @@ import {
 } from "./expanded-layout";
 
 const KEYFRAME_INDICATOR_MIN_WIDTH_PX = 40;
-const ELEMENT_RING_WIDTH_PX = 1.5;
+const ELEMENT_RING_WIDTH_PX = 2;
 
 const PixelsPerSecondContext = createContext<number | null>(null);
 const THUMBNAIL_ASPECT_RATIO = 16 / 9;
@@ -564,8 +564,12 @@ function ElementInner({
 				right: `${ELEMENT_RING_WIDTH_PX}px`,
 			}}
 		>
+			{/* 선택 표시는 여기서만 정한다. 클립 색과 무관하게 보이도록 강조색 바깥 링 + 흰 안쪽 선 + 밝기 */}
 			<div
-				className="absolute inset-0 rounded-sm"
+				className={cn(
+					"absolute inset-0 rounded-sm",
+					isSelected && "brightness-110",
+				)}
 				style={
 					isSelected
 						? {
@@ -606,6 +610,9 @@ function ElementInner({
 						{expandedContent}
 					</button>
 				</div>
+				{isSelected && (
+					<div className="pointer-events-none absolute inset-0 rounded-sm ring-2 ring-inset ring-white/90" />
+				)}
 			</div>
 
 			{isSelected && (
