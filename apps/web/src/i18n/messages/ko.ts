@@ -218,6 +218,7 @@ export const ko: Messages = {
 		Ripple: "리플 편집",
 		"Main scene": "기본 장면",
 		"Main Track": "메인 트랙",
+		Main: "메인 트랙",
 		"Video track": "동영상 트랙",
 		"Text track": "텍스트 트랙",
 		"Audio track": "오디오 트랙",

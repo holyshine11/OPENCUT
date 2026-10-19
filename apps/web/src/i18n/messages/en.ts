@@ -238,6 +238,8 @@ export const en = {
 		Ripple: "Ripple",
 		"Main scene": "Main scene",
 		"Main Track": "Main track",
+		// 옛 프로젝트에서 넘어온 메인 트랙 이름
+		Main: "Main track",
 		"Video track": "Video track",
 		"Text track": "Text track",
 		"Audio track": "Audio track",
