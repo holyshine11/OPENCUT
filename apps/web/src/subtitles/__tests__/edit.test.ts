@@ -27,6 +27,39 @@ describe("splitCue", () => {
 		expect(splitCue({ cue, at: 0 })).toBeNull();
 		expect(splitCue({ cue, at: 2 })).toBeNull();
 	});
+
+	test("단어 시간이 있으면 나눈 단어가 실제로 시작한 때에서 가른다", () => {
+		expect(
+			splitCue({
+				cue: {
+					text: "국밥 맛집 오늘 최고",
+					start: 10,
+					end: 14,
+					wordStarts: [10, 10.4, 13, 13.5],
+				},
+				at: 5,
+			}),
+		).toEqual([
+			{ text: "국밥 맛집", start: 10, end: 13, wordStarts: [10, 10.4] },
+			{ text: "오늘 최고", start: 13, end: 14, wordStarts: [13, 13.5] },
+		]);
+	});
+
+	test("문구를 고쳐 단어 수가 달라졌거나 단어 중간에서 나누면 글자 비율로 나눈다", () => {
+		const wordStarts = [10, 10.4, 13, 13.5];
+		expect(
+			splitCue({
+				cue: { text: "국밥 맛집 최고", start: 10, end: 14, wordStarts },
+				at: 5,
+			})?.[0],
+		).toEqual({ text: "국밥 맛집", start: 10, end: 10 + (4 * 4) / 6 });
+		expect(
+			splitCue({
+				cue: { text: "국밥 맛집 오늘 최고", start: 10, end: 14, wordStarts },
+				at: 4,
+			})?.[0],
+		).toEqual({ text: "국밥 맛", start: 10, end: 11.5 });
+	});
 });
 
 describe("mergeCues", () => {
@@ -37,6 +70,21 @@ describe("mergeCues", () => {
 				second: { text: "국밥", start: 2.5, end: 3.5 },
 			}),
 		).toEqual({ text: "오늘은 국밥", start: 1, end: 3.5 });
+	});
+
+	test("둘 다 단어 시간이 있으면 이어 붙이고, 하나라도 없으면 버린다", () => {
+		expect(
+			mergeCues({
+				first: { text: "오늘은", start: 1, end: 2, wordStarts: [1] },
+				second: { text: "국밥", start: 2.5, end: 3.5, wordStarts: [2.5] },
+			}).wordStarts,
+		).toEqual([1, 2.5]);
+		expect(
+			mergeCues({
+				first: { text: "오늘은", start: 1, end: 2, wordStarts: [1] },
+				second: { text: "국밥", start: 2.5, end: 3.5 },
+			}).wordStarts,
+		).toBeUndefined();
 	});
 });
 

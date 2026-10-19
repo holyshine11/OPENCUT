@@ -30,6 +30,9 @@ export function insertCaptionChunksAsTextTrack({
 				element: {
 					...buildSubtitleTextElement({ index, caption, canvasSize }),
 					subtitleGroupId,
+					subtitleWordOffsets: caption.wordStarts?.map(
+						(start) => start - caption.startTime,
+					),
 				},
 			}),
 	);

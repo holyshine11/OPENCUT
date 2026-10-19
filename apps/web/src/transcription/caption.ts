@@ -12,18 +12,22 @@ export function buildCaptionChunks({
 	segments: TranscriptionSegment[];
 	layout: CaptionLayout;
 }): CaptionChunk[] {
+	// 단어 시간은 음성 인식이 실제로 준 것만 넘긴다. 글자 비율 추정값은 나눌 때 다시 계산된다
 	const groups = segments.flatMap((segment) =>
-		groupWords({ words: wordsOf({ segment }), layout }),
+		groupWords({ words: wordsOf({ segment }), layout }).map((lines) => ({
+			lines,
+			hasWordTimes: Boolean(segment.words?.length),
+		})),
 	);
 	const captions: CaptionChunk[] = [];
 	let previousEnd = 0;
 
-	for (const [index, lines] of groups.entries()) {
+	for (const [index, { lines, hasWordTimes }] of groups.entries()) {
 		const first = lines[0][0];
 		const last = lines[lines.length - 1].at(-1) ?? first;
 		const startTime = Math.max(first.start, previousEnd);
 		// 최소 표시 시간은 다음 자막이 시작하기 전까지만 채운다. 밀어내면 뒤 자막이 계속 늦어진다
-		const nextStart = groups[index + 1]?.[0][0].start ?? Infinity;
+		const nextStart = groups[index + 1]?.lines[0][0].start ?? Infinity;
 		const endTime = Math.min(
 			Math.max(last.end, Math.min(startTime + layout.minDuration, nextStart)),
 			startTime + layout.maxDuration,
@@ -32,6 +36,7 @@ export function buildCaptionChunks({
 			text: lines.map((line) => line.map((word) => word.text).join(" ")).join("\n"),
 			startTime,
 			duration: endTime - startTime,
+			wordStarts: hasWordTimes ? lines.flat().map((word) => word.start) : undefined,
 		});
 		previousEnd = endTime;
 	}

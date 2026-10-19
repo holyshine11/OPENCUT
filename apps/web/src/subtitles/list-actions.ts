@@ -25,18 +25,34 @@ const toTime = (value: number) => mediaTimeFromSeconds({ seconds: value });
 
 export function cueOf({ entry }: { entry: SubtitleEntry }): Cue {
 	const { element } = entry;
+	const start = seconds(element.startTime);
+	const origin = start - seconds(element.trimStart);
 	return {
 		text: String(element.params.content ?? ""),
-		start: seconds(element.startTime),
-		end: seconds(element.startTime) + seconds(element.duration),
+		start,
+		end: start + seconds(element.duration),
+		wordStarts: element.subtitleWordOffsets?.map((offset) => origin + offset),
 	};
 }
 
-function timingPatch({ start, end }: { start: number; end: number }) {
+/** 시간이 바뀌어도 단어 시각은 음성에 그대로 붙어 있도록 새 시작 기준으로 다시 잰다 */
+function timingPatch({
+	start,
+	end,
+	wordStarts,
+	trimStart,
+}: {
+	start: number;
+	end: number;
+	wordStarts?: number[];
+	trimStart: MediaTime;
+}) {
 	const startTime = toTime(start);
+	const origin = start - seconds(trimStart);
 	return {
 		startTime,
 		duration: subMediaTime({ a: toTime(end), b: startTime }),
+		subtitleWordOffsets: wordStarts?.map((wordStart) => wordStart - origin),
 	};
 }
 
@@ -64,7 +80,10 @@ export function splitSubtitle({
 					{
 						trackId: entry.trackId,
 						elementId: entry.element.id,
-						patch: { ...timingPatch(first), params: { content: first.text } },
+						patch: {
+							...timingPatch({ ...first, trimStart: element.trimStart }),
+							params: { content: first.text },
+						},
 					},
 				],
 			}),
@@ -72,7 +91,7 @@ export function splitSubtitle({
 				placement: { mode: "explicit", trackId: entry.trackId },
 				element: {
 					...element,
-					...timingPatch(second),
+					...timingPatch({ ...second, trimStart: element.trimStart }),
 					params: { ...element.params, content: second.text },
 				},
 			}),
@@ -105,7 +124,10 @@ export function mergeSubtitles({
 					{
 						trackId: first.trackId,
 						elementId: first.element.id,
-						patch: { ...timingPatch(merged), params: { content: merged.text } },
+						patch: {
+							...timingPatch({ ...merged, trimStart: first.element.trimStart }),
+							params: { content: merged.text },
+						},
 					},
 				],
 			}),
@@ -143,7 +165,11 @@ export function retimeSubtitle({
 			{
 				trackId: entry.trackId,
 				elementId: entry.element.id,
-				patch: timingPatch(timing),
+				patch: timingPatch({
+					...timing,
+					wordStarts: current.wordStarts,
+					trimStart: entry.element.trimStart,
+				}),
 			},
 		],
 	});

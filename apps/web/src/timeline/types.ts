@@ -138,6 +138,11 @@ export interface TextElement extends BaseTimelineElement {
 	effects?: Effect[];
 	/** 자동 자막이나 자막 파일 가져오기로 한 번에 만든 자막 묶음. 자막 목록 패널이 이 값으로 모은다 */
 	subtitleGroupId?: string;
+	/**
+	 * 음성 인식 자막의 단어별 시작 시각(초). 기준은 startTime - trimStart라서 타임라인에서
+	 * 앞을 자르거나 나눠도 그대로 맞는다. 자막을 단어 경계에서 나눌 때 쓴다
+	 */
+	subtitleWordOffsets?: number[];
 }
 
 export interface StickerElement extends BaseTimelineElement {

@@ -38,6 +38,8 @@ export interface CaptionChunk {
 	text: string;
 	startTime: number;
 	duration: number;
+	/** 단어마다 시작한 시각(초). text를 공백으로 나눈 단어와 순서·개수가 같다 */
+	wordStarts?: number[];
 }
 
 /** 자막 한 개를 만드는 기준. 숏폼·롱폼 권장값은 `settings.json`의 `captionLayout`에 있다 */

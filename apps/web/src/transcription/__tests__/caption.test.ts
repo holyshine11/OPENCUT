@@ -72,7 +72,7 @@ describe("buildCaptionChunks", () => {
 			segments: [segmentOf(words)],
 			layout: SHORT,
 		});
-		expect(captions).toEqual([
+		expect(captions).toMatchObject([
 			{ text: "아 그", startTime: 0, duration: 2.4 },
 			{ text: "럼 요", startTime: 2.4, duration: 2.4 },
 		]);
@@ -109,6 +109,18 @@ describe("buildCaptionChunks", () => {
 		expect(captions.map((caption) => caption.startTime)).toEqual(
 			words.map((word) => word.start),
 		);
+	});
+
+	test("자막마다 단어가 시작한 시각을 함께 넘긴다", () => {
+		const words = timedWords(["저는", "오늘", "국밥", "먹어요", "돼지국밥이요"]);
+		const captions = buildCaptionChunks({
+			segments: [segmentOf(words)],
+			layout: SHORT,
+		});
+		expect(captions.map((caption) => caption.wordStarts)).toEqual([
+			[0, 0.4, 0.8, 1.2000000000000002],
+			[1.6],
+		]);
 	});
 
 	test("숏폼은 마침표·쉼표를 지우고 물음표는 남긴다. 문장이 끝나면 자막을 나눈다", () => {

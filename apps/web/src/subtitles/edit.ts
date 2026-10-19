@@ -3,11 +3,42 @@ export interface Cue {
 	text: string;
 	start: number;
 	end: number;
+	/** 단어마다 시작한 시각. 문구를 고쳐 단어 수가 달라지면 쓰지 않는다 */
+	wordStarts?: number[];
 }
 
 const visibleLength = (text: string) => text.replace(/\s/g, "").length;
+const wordsOf = (text: string) => text.split(/\s+/).filter(Boolean);
 
-/** 커서 위치(at, 글자 인덱스)에서 둘로 나눈다. 시간은 공백을 뺀 글자 수 비율로 나눈다 */
+function usableWordStarts({ cue }: { cue: Cue }): number[] | undefined {
+	return cue.wordStarts?.length === wordsOf(cue.text).length
+		? cue.wordStarts
+		: undefined;
+}
+
+/** 단어 사이에서 나눌 때 뒤 단어가 시작한 시각. 쓸 수 없으면 null */
+function wordSplit({
+	cue,
+	before,
+	after,
+}: {
+	cue: Cue;
+	before: string;
+	after: string;
+}): { time: number; index: number } | null {
+	const wordStarts = usableWordStarts({ cue });
+	const index = wordsOf(before).length;
+	if (!wordStarts || index + wordsOf(after).length !== wordStarts.length) {
+		return null;
+	}
+	const time = wordStarts[index];
+	return time > cue.start && time < cue.end ? { time, index } : null;
+}
+
+/**
+ * 커서 위치(at, 글자 인덱스)에서 둘로 나눈다. 단어 사이를 나누고 단어 시간이 있으면
+ * 뒤 단어가 시작한 때에서, 아니면 공백을 뺀 글자 수 비율로 시간을 나눈다
+ */
 export function splitCue({
 	cue,
 	at,
@@ -19,6 +50,25 @@ export function splitCue({
 	const after = cue.text.slice(at).trim();
 	if (!before || !after) return null;
 
+	const byWord = wordSplit({ cue, before, after });
+	if (byWord) {
+		const { time, index } = byWord;
+		return [
+			{
+				text: before,
+				start: cue.start,
+				end: time,
+				wordStarts: cue.wordStarts?.slice(0, index),
+			},
+			{
+				text: after,
+				start: time,
+				end: cue.end,
+				wordStarts: cue.wordStarts?.slice(index),
+			},
+		];
+	}
+
 	const ratio =
 		visibleLength(before) / (visibleLength(before) + visibleLength(after));
 	const splitTime = cue.start + (cue.end - cue.start) * ratio;
@@ -29,10 +79,14 @@ export function splitCue({
 }
 
 export function mergeCues({ first, second }: { first: Cue; second: Cue }): Cue {
+	const firstWords = usableWordStarts({ cue: first });
+	const secondWords = usableWordStarts({ cue: second });
 	return {
 		text: `${first.text.trim()} ${second.text.trim()}`,
 		start: first.start,
 		end: Math.max(first.end, second.end),
+		wordStarts:
+			firstWords && secondWords ? [...firstWords, ...secondWords] : undefined,
 	};
 }
 
