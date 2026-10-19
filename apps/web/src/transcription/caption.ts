@@ -12,25 +12,28 @@ export function buildCaptionChunks({
 	segments: TranscriptionSegment[];
 	layout: CaptionLayout;
 }): CaptionChunk[] {
+	const groups = segments.flatMap((segment) =>
+		groupWords({ words: wordsOf({ segment }), layout }),
+	);
 	const captions: CaptionChunk[] = [];
 	let previousEnd = 0;
 
-	for (const segment of segments) {
-		for (const lines of groupWords({ words: wordsOf({ segment }), layout })) {
-			const first = lines[0][0];
-			const last = lines[lines.length - 1].at(-1) ?? first;
-			const startTime = Math.max(first.start, previousEnd);
-			const endTime = Math.min(
-				Math.max(last.end, startTime + layout.minDuration),
-				startTime + layout.maxDuration,
-			);
-			captions.push({
-				text: lines.map((line) => line.map((word) => word.text).join(" ")).join("\n"),
-				startTime,
-				duration: endTime - startTime,
-			});
-			previousEnd = endTime;
-		}
+	for (const [index, lines] of groups.entries()) {
+		const first = lines[0][0];
+		const last = lines[lines.length - 1].at(-1) ?? first;
+		const startTime = Math.max(first.start, previousEnd);
+		// 최소 표시 시간은 다음 자막이 시작하기 전까지만 채운다. 밀어내면 뒤 자막이 계속 늦어진다
+		const nextStart = groups[index + 1]?.[0][0].start ?? Infinity;
+		const endTime = Math.min(
+			Math.max(last.end, Math.min(startTime + layout.minDuration, nextStart)),
+			startTime + layout.maxDuration,
+		);
+		captions.push({
+			text: lines.map((line) => line.map((word) => word.text).join(" ")).join("\n"),
+			startTime,
+			duration: endTime - startTime,
+		});
+		previousEnd = endTime;
 	}
 
 	return captions;

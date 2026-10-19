@@ -7,7 +7,7 @@ describe("useTextStylePresets", () => {
 	test("저장한 순서대로 쌓이고 이름을 바꾸거나 지울 수 있다", () => {
 		const { add } = useTextStylePresets.getState();
 		const first = add({ name: "노란 자막", style: { color: "#ffff00" } });
-		add({ name: "", style: { color: "#ffffff" } });
+		add({ name: "Style 2", style: { color: "#ffffff" } });
 
 		useTextStylePresets.getState().rename({ id: first, name: "  예능 자막 " });
 		expect(

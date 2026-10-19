@@ -39,7 +39,12 @@ export function StylePresetsSection() {
 						selectedStyle &&
 						useTextStylePresets
 							.getState()
-							.add({ name: "", style: selectedStyle })
+							.add({
+								name: m.textPanel.defaultStyleName({
+									number: presets.length + 1,
+								}),
+								style: selectedStyle,
+							})
 					}
 				>
 					{m.textPanel.saveSelectedStyle}

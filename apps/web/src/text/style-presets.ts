@@ -23,13 +23,7 @@ export const useTextStylePresets = create<TextStylePresetsState>()(
 			presets: [],
 			add: ({ name, style }) => {
 				const id = generateUUID();
-				const presets = get().presets;
-				set({
-					presets: [
-						...presets,
-						{ id, name: name.trim() || `Style ${presets.length + 1}`, style },
-					],
-				});
+				set({ presets: [...get().presets, { id, name: name.trim(), style }] });
 				return id;
 			},
 			rename: ({ id, name }) => {

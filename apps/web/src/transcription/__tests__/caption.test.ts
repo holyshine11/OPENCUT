@@ -78,7 +78,7 @@ describe("buildCaptionChunks", () => {
 		]);
 	});
 
-	test("최소 표시 시간보다 짧으면 늘리고, 다음 자막은 그 뒤에서 시작한다", () => {
+	test("최소 표시 시간보다 짧으면 늘리되, 다음 자막이 시작하기 전까지만 늘린다", () => {
 		const words = [
 			{ text: "네", start: 1, end: 1.2 },
 			{ text: "좋아요", start: 1.3, end: 1.8 },
@@ -90,10 +90,25 @@ describe("buildCaptionChunks", () => {
 			],
 			layout: LONG,
 		});
-		expect(captions).toEqual([
-			{ text: "네", startTime: 1, duration: 1 },
-			{ text: "좋아요", startTime: 2, duration: 1 },
+		expect(captions.map(({ text, startTime, duration }) => ({
+			text,
+			startTime,
+			duration: Number(duration.toFixed(3)),
+		}))).toEqual([
+			{ text: "네", startTime: 1, duration: 0.3 },
+			{ text: "좋아요", startTime: 1.3, duration: 1 },
 		]);
+	});
+
+	test("짧은 자막이 이어져도 음성보다 늦어지지 않는다", () => {
+		const words = timedWords(["네", "네", "네", "네", "네", "네"], { step: 0.3 });
+		const captions = buildCaptionChunks({
+			segments: words.map((word) => segmentOf([word])),
+			layout: SHORT,
+		});
+		expect(captions.map((caption) => caption.startTime)).toEqual(
+			words.map((word) => word.start),
+		);
 	});
 
 	test("숏폼은 마침표·쉼표를 지우고 물음표는 남긴다. 문장이 끝나면 자막을 나눈다", () => {

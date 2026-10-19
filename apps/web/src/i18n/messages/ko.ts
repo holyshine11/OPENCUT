@@ -347,6 +347,7 @@ export const ko: Messages = {
 		selectToApplyHint:
 			"스타일을 적용할 텍스트나 자막을 타임라인에서 선택하세요.",
 		styleName: "스타일 이름",
+		defaultStyleName: ({ number }) => `스타일 ${number}`,
 		renameStyle: ({ name }) => `${name} 이름 바꾸기`,
 		deleteStyle: ({ name }) => `${name} 삭제`,
 	},

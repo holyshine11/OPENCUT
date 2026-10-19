@@ -367,6 +367,7 @@ export const en = {
 		selectToApplyHint:
 			"Select texts or captions on the timeline to apply a style.",
 		styleName: "Style name",
+		defaultStyleName: ({ number }: { number: number }) => `Style ${number}`,
 		renameStyle: ({ name }: { name: string }) => `Rename ${name}`,
 		deleteStyle: ({ name }: { name: string }) => `Delete ${name}`,
 	},

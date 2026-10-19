@@ -32,6 +32,7 @@ import { formatNumberForDisplay } from "@/utils/math";
 import { OcSquarePlusIcon } from "@/components/icons";
 import type { TCanvasSize } from "@/project/types";
 import { useMessages } from "@/i18n";
+import { LanguageSelect } from "@/i18n/language-select";
 
 type SettingsView = "project-info" | "background";
 
@@ -265,6 +266,12 @@ export function SettingsView() {
 									))}
 								</SelectContent>
 							</Select>
+						</SectionHeader>
+					</Section>
+					<Section showTopBorder={false}>
+						<SectionHeader className="justify-between">
+							<SectionTitle className="flex-1">{m.language.label}</SectionTitle>
+							<LanguageSelect className="h-auto w-fit border-none bg-transparent p-1" />
 						</SectionHeader>
 					</Section>
 					<Section
