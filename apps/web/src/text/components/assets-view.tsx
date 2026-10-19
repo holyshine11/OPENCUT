@@ -4,6 +4,7 @@ import { useEditor } from "@/editor/use-editor";
 import { DEFAULTS } from "@/timeline/defaults";
 import { buildTextElement } from "@/timeline/element-utils";
 import type { MediaTime } from "@/wasm";
+import { StylePresetsSection } from "./style-presets-section";
 
 export function TextView() {
 	const editor = useEditor();
@@ -42,6 +43,7 @@ export function TextView() {
 				onAddToTimeline={handleAddToTimeline}
 				shouldShowLabel={false}
 			/>
+			<StylePresetsSection />
 		</PanelView>
 	);
 }
