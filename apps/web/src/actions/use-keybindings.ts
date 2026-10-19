@@ -3,6 +3,7 @@ import { invokeAction } from "@/actions";
 import { useEditor } from "@/editor/use-editor";
 import { useKeybindingsStore } from "@/actions/keybindings-store";
 import { isTypableDOMElement } from "@/utils/browser";
+import { useTextStyleMemory } from "@/text/style-memory";
 
 /**
  * a composable that hooks to the caller component's
@@ -48,6 +49,13 @@ export function useKeybindingsListener() {
 				if (!editor.clipboard.hasEntry()) return;
 				ev.preventDefault();
 				invokeAction("paste-copied", undefined, "keypress");
+				return;
+			}
+			// 복사한 스타일이 없으면 브라우저 붙여넣기(미디어 붙여넣기)를 막지 않는다
+			if (
+				boundAction === "paste-style" &&
+				!useTextStyleMemory.getState().copied
+			) {
 				return;
 			}
 

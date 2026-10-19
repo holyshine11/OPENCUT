@@ -45,7 +45,7 @@ describe("keybinding persistence", () => {
 
 		expect(decoded.isCustomized).toBe(true);
 		expect(decoded.keybindings.get("s")).toBe("split");
-		expect(decoded.keybindings.get("ctrl+v")).toBe("paste-copied");
+		expect(decoded.keybindings.get("ctrl+v")).toBe("paste-style");
 		expect(decoded.keybindings.get("escape")).toBe("cancel-interaction");
 		expect(warnSpy).not.toHaveBeenCalled();
 	});
@@ -153,7 +153,7 @@ describe("v7 to v8 migration", () => {
 			fromVersion: 7,
 		});
 		const decoded = decodePersistedKeybindingsState({ state: migrated });
-		expect(decoded?.keybindings.get("ctrl+alt+c")).toBe("copy-style");
+		expect(decoded?.keybindings.get("ctrl+alt+c")).toBe("copy-selected");
 		expect(decoded?.keybindings.get("ctrl+alt+v")).toBe("split");
 	});
 });
@@ -170,5 +170,55 @@ describe("v8 to v9 migration", () => {
 		const decoded = decodePersistedKeybindingsState({ state: migrated });
 		expect(decoded?.keybindings.get("g")).toBe("split");
 		expect(decoded?.keybindings.get("h")).toBe("timeline-zoom-in");
+	});
+
+	test("swaps default element/style copy-paste shortcuts", () => {
+		const migrated = migratePersistedKeybindingsState({
+			state: {
+				keybindings: {
+					"ctrl+c": "copy-selected",
+					"ctrl+v": "paste-copied",
+					"ctrl+alt+c": "copy-style",
+					"ctrl+alt+v": "paste-style",
+				},
+				isCustomized: true,
+			},
+			fromVersion: 8,
+		});
+		const decoded = decodePersistedKeybindingsState({ state: migrated });
+		expect(decoded?.keybindings.get("ctrl+c")).toBe("copy-style");
+		expect(decoded?.keybindings.get("ctrl+v")).toBe("paste-style");
+		expect(decoded?.keybindings.get("ctrl+alt+c")).toBe("copy-selected");
+		expect(decoded?.keybindings.get("ctrl+alt+v")).toBe("paste-copied");
+	});
+
+	test("keeps customized copy-paste shortcuts", () => {
+		const migrated = migratePersistedKeybindingsState({
+			state: {
+				keybindings: { "ctrl+c": "split", "ctrl+alt+v": "undo" },
+				isCustomized: true,
+			},
+			fromVersion: 8,
+		});
+		const decoded = decodePersistedKeybindingsState({ state: migrated });
+		expect(decoded?.keybindings.get("ctrl+c")).toBe("split");
+		expect(decoded?.keybindings.get("ctrl+v")).toBe("paste-style");
+		expect(decoded?.keybindings.get("ctrl+alt+c")).toBe("copy-selected");
+		expect(decoded?.keybindings.get("ctrl+alt+v")).toBe("undo");
+	});
+
+	test("adds caption split/merge shortcuts unless taken", () => {
+		const migrated = migratePersistedKeybindingsState({
+			state: {
+				keybindings: { "shift+enter": "split" },
+				isCustomized: true,
+			},
+			fromVersion: 8,
+		});
+		const decoded = decodePersistedKeybindingsState({ state: migrated });
+		expect(decoded?.keybindings.get("shift+enter")).toBe("split");
+		expect(decoded?.keybindings.get("shift+backspace")).toBe(
+			"merge-caption-with-next",
+		);
 	});
 });
