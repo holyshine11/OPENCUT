@@ -1,3 +1,31 @@
+# OpenCut (개인 포크)
+
+[opencut-app/opencut-classic](https://github.com/opencut-app/opencut-classic)을 기반으로 한 로컬 전용 영상 편집기. 프로젝트와 미디어는 브라우저 저장소(IndexedDB/OPFS)에만 저장해서 서버 DB가 필요 없다.
+
+## Mac에서 실행 (M1 포함)
+
+```sh
+git clone https://github.com/holyshine11/OPENCUT.git
+```
+
+받은 폴더에서 `start-mac.command`를 더블클릭한다. 처음 실행할 때는 Bun 설치와 빌드로 몇 분 걸리고, 준비되면 브라우저가 `http://localhost:3000/projects`를 연다. 그 뒤로는 실행할 때마다 최신 코드를 받아서 바뀐 게 있을 때만 다시 빌드한다. 끄려면 터미널 창에서 `Ctrl+C`.
+
+`git`이 없으면 macOS가 Command Line Tools 설치 창을 띄운다. 설치하고 다시 실행하면 된다.
+
+## 개발
+
+```sh
+bun install
+cp apps/web/.env.example apps/web/.env.local   # 처음 한 번
+bun dev:web                                     # http://localhost:3000
+```
+
+로그인, 피드백, 효과음 검색(Freesound)은 Postgres/Redis와 API 키가 있어야 돌아간다. 편집 기능은 이것들 없이 동작한다.
+
+upstream 변경 받기: `git fetch upstream && git merge upstream/main`
+
+---
+
 # OpenCut (Legacy)
 
 This is the original OpenCut codebase. It's archived and no longer maintained.
