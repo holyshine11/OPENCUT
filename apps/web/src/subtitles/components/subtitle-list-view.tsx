@@ -356,8 +356,10 @@ function SubtitleRow({
 			ref={rowRef}
 			data-match={isMatch || undefined}
 			className={cn(
-				"flex flex-col gap-1 rounded-sm",
+				"flex flex-col gap-1 rounded-sm border border-transparent p-1",
 				isMatch && "bg-amber-500/10",
+				// 찾기 강조(노란색)와 겹쳐도 보이도록 선택 행은 강조색 테두리로 구분한다
+				isActive && "border-primary bg-primary/10",
 				isCurrentMatch && "ring-1 ring-amber-500",
 			)}
 		>
