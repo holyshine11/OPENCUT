@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { FrameRate } from "opencut-wasm";
 import { TransitionTopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -33,7 +34,7 @@ import {
 	SectionTitle,
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
-import { DEFAULT_EXPORT_OPTIONS } from "@/export/defaults";
+import { DEFAULT_EXPORT_OPTIONS, defaultExportFps } from "@/export/defaults";
 
 function isExportFormat(value: string): value is ExportFormat {
 	return EXPORT_FORMAT_VALUES.some((formatValue) => formatValue === value);
@@ -92,6 +93,10 @@ export function ExportButton() {
 	);
 }
 
+function formatFps({ fps }: { fps: FrameRate }): string {
+	return String(Number((fps.numerator / fps.denominator).toFixed(2)));
+}
+
 function ExportPopover({
 	onOpenChange,
 }: {
@@ -110,6 +115,11 @@ function ExportPopover({
 	const [shouldIncludeAudio, setShouldIncludeAudio] = useState<boolean>(
 		DEFAULT_EXPORT_OPTIONS.includeAudio ?? true,
 	);
+	const [useProjectFps, setUseProjectFps] = useState(false);
+	const projectFps = activeProject.settings.fps;
+	const recommendedFps = defaultExportFps({ projectFps });
+	const exportFps = useProjectFps ? projectFps : recommendedFps;
+	const { width, height } = activeProject.settings.canvasSize;
 
 	const handleExport = async () => {
 		if (!activeProject) return;
@@ -118,7 +128,7 @@ function ExportPopover({
 			options: {
 				format,
 				quality,
-				fps: activeProject.settings.fps,
+				fps: exportFps,
 				includeAudio: shouldIncludeAudio,
 			},
 		});
@@ -162,6 +172,11 @@ function ExportPopover({
 					<div className="flex flex-col gap-4">
 						{!isExporting && (
 							<>
+								<p className="text-muted-foreground px-3 pt-3 text-xs">
+									{`${width} × ${height} · ${formatFps({ fps: exportFps })} fps · ${
+										format === "mp4" ? "MP4 (H.264/AAC)" : "WebM (VP9/Opus)"
+									}`}
+								</p>
 								<div className="flex flex-col">
 									<Section
 										collapsible
@@ -230,6 +245,33 @@ function ExportPopover({
 											</RadioGroup>
 										</SectionContent>
 									</Section>
+
+									{formatFps({ fps: projectFps }) !== formatFps({ fps: recommendedFps }) && (
+										<Section collapsible defaultOpen={false}>
+											<SectionHeader>
+												<SectionTitle>Frame rate</SectionTitle>
+											</SectionHeader>
+											<SectionContent>
+												<RadioGroup
+													value={useProjectFps ? "project" : "recommended"}
+													onValueChange={(value) => setUseProjectFps(value === "project")}
+												>
+													<div className="flex items-center space-x-2">
+														<RadioGroupItem value="recommended" id="fps-recommended" />
+														<Label htmlFor="fps-recommended">
+															{`${formatFps({ fps: recommendedFps })} fps - Recommended`}
+														</Label>
+													</div>
+													<div className="flex items-center space-x-2">
+														<RadioGroupItem value="project" id="fps-project" />
+														<Label htmlFor="fps-project">
+															{`${formatFps({ fps: projectFps })} fps - Same as project, larger file`}
+														</Label>
+													</div>
+												</RadioGroup>
+											</SectionContent>
+										</Section>
+									)}
 
 									<Section collapsible defaultOpen={false}>
 										<SectionHeader>
