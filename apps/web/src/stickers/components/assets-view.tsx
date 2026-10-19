@@ -30,7 +30,9 @@ import {
 	HappyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMessages } from "@/i18n";
+import { translateLabel, useMessages } from "@/i18n";
+import { parseStickerId } from "@/stickers/sticker-id";
+import { FLAGS_PROVIDER_ID } from "@/stickers/providers/flags";
 
 export function StickersView() {
 	const m = useMessages();
@@ -357,6 +359,13 @@ function StickerItem({
 	}, [item.id]);
 
 	const displayName = item.name;
+	const localizedName = localizeStickerName({
+		provider: item.provider,
+		stickerId: item.id,
+		name: item.name,
+		locale: m.dateLocale,
+		translate: (label) => translateLabel({ messages: m, label }),
+	});
 	const shapePreset =
 		item.provider === "shapes" ? parseShapeStickerId({ stickerId: item.id }) : null;
 
@@ -405,12 +414,12 @@ function StickerItem({
 		<div className="flex size-full items-center justify-center p-3">
 			{hasImageError ? (
 				<span className="text-muted-foreground text-center text-xs break-all">
-					{displayName}
+					{localizedName}
 				</span>
 			) : (
 				<Image
 					src={item.previewUrl}
-					alt={displayName}
+					alt={localizedName}
 					width={64}
 					height={64}
 					className="size-full object-contain"
@@ -467,4 +476,27 @@ function StickerItem({
 			)}
 		</div>
 	);
+}
+
+/** 국기는 국가 코드로 브라우저 내장 국가 이름을, 나머지는 라벨 사전을 쓴다. 타임라인에 저장되는 이름은 그대로 둔다 */
+function localizeStickerName({
+	provider,
+	stickerId,
+	name,
+	locale,
+	translate,
+}: {
+	provider: string;
+	stickerId: string;
+	name: string;
+	locale: string;
+	translate: (label: string) => string;
+}): string {
+	if (provider !== FLAGS_PROVIDER_ID) return translate(name);
+	try {
+		const { providerValue } = parseStickerId({ stickerId });
+		return new Intl.DisplayNames([locale], { type: "region" }).of(providerValue) ?? name;
+	} catch {
+		return name;
+	}
 }

@@ -2,16 +2,19 @@
 
 import { useTheme } from "next-themes";
 import { Toaster as Sonner } from "sonner";
+import { useMessages } from "@/i18n";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
 	const { theme = "system" } = useTheme();
+	const m = useMessages();
 
 	return (
 		<Sonner
 			theme={theme as ToasterProps["theme"]}
 			className="toaster group"
+			containerAriaLabel={m.common.notifications}
 			position="bottom-right"
 			offset={20}
 			toastOptions={{

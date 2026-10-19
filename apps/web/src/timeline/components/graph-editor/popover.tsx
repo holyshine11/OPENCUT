@@ -315,6 +315,7 @@ function toThumbY({ value }: { value: number }) {
 }
 
 function CurveThumb({ value }: { value: NormalizedCubicBezier }) {
+	const m = useMessages();
 	const points: string[] = [];
 	for (let i = 0; i <= THUMB_SEGMENTS; i++) {
 		const progress = i / THUMB_SEGMENTS;
@@ -328,7 +329,7 @@ function CurveThumb({ value }: { value: NormalizedCubicBezier }) {
 			height={THUMB_HEIGHT}
 			viewBox={`0 0 ${THUMB_WIDTH} ${THUMB_HEIGHT}`}
 		>
-			<title>Curve preset preview</title>
+			<title>{m.ui.curvePreview}</title>
 			<path
 				d={`M${points.join("L")}`}
 				fill="none"

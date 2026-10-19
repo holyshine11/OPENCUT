@@ -1,5 +1,6 @@
 "use client";
 
+import { useMessages } from "@/i18n";
 import { Eye, EyeOff, X } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/utils/ui";
@@ -60,6 +61,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 		},
 		ref,
 	) => {
+		const m = useMessages();
 		const [isFocused, setIsFocused] = useState(false);
 
 		const isPassword = type === "password";
@@ -111,7 +113,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 							onClear?.();
 						}}
 						className="text-muted-foreground absolute top-0 right-0 h-full px-3 !opacity-100"
-						aria-label="Clear input"
+						aria-label={m.ui.clearInput}
 					>
 						<X className="!size-[0.85]" />
 					</Button>

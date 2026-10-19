@@ -1,5 +1,6 @@
 "use client";
 
+import { useMessages } from "@/i18n";
 import { useState, useMemo, useRef, useEffect, useCallback, type CSSProperties } from "react";
 import { List, type RowComponentProps } from "react-window";
 import {
@@ -47,6 +48,7 @@ export function FontPicker({
 	onValueChange,
 	className,
 }: FontPickerProps) {
+	const m = useMessages();
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState("");
 	const [activeTab, setActiveTab] = useState<FontTab>("all");
@@ -183,27 +185,27 @@ export function FontPicker({
 				)}
 				{isMyFonts && !localFontsError && !localFonts && (
 					<div className="py-8 text-center text-sm text-muted-foreground">
-						Loading installed fonts...
+						{m.ui.loadingInstalledFonts}
 					</div>
 				)}
 				{!isMyFonts && status === "loading" && (
 					<div className="py-8 text-center text-sm text-muted-foreground">
-						Loading fonts...
+						{m.ui.loadingFonts}
 					</div>
 				)}
 				{!isMyFonts && status === "error" && (
 					<div className="flex flex-col items-center gap-3 py-8 px-4">
 						<p className="text-sm text-muted-foreground text-center">
-							Failed to load font previews.
+							{m.ui.fontPreviewsFailed}
 						</p>
 						<Button variant="outline" size="sm" onClick={handleRetry}>
-							Retry
+							{m.ui.retry}
 						</Button>
 					</div>
 				)}
 				{tabFonts.length > 0 && filteredFonts.length === 0 && (
 					<div className="py-6 text-center text-sm text-muted-foreground">
-						No fonts found.
+						{m.ui.noFonts}
 					</div>
 				)}
 				{(isMyFonts || (status === "idle" && atlas)) && filteredFonts.length > 0 && (

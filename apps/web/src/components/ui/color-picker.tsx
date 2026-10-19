@@ -1,3 +1,4 @@
+import { useMessages } from "@/i18n";
 import { type ComponentProps, forwardRef, useEffect, useRef, useState } from "react";
 import { cn } from "@/utils/ui";
 import { Input } from "./input";
@@ -55,6 +56,7 @@ function ColorPickerContent({
 	side = "left",
 	align = "center",
 }: ColorPickerContentProps) {
+	const m = useMessages();
 	const [isDragging, setIsDragging] = useState<
 		"saturation" | "hue" | "opacity" | null
 	>(null);
@@ -291,11 +293,11 @@ function ColorPickerContent({
 			<header className="border-b flex justify-between items-center pb-2 px-2">
 				<Select defaultValue="custom">
 					<SelectTrigger variant="outline">
-						<SelectValue placeholder="Select a mode" />
+						<SelectValue placeholder={m.ui.colorMode} />
 					</SelectTrigger>
 					<SelectContent position="popper">
-						<SelectItem value="custom">Custom</SelectItem>
-						<SelectItem value="saved">Saved</SelectItem>
+						<SelectItem value="custom">{m.ui.customColors}</SelectItem>
+						<SelectItem value="saved">{m.ui.savedColors}</SelectItem>
 					</SelectContent>
 				</Select>
 				<div>

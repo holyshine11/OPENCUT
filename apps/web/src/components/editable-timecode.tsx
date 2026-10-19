@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMessages } from "@/i18n";
 import {
 	formatTimecode,
 	type FrameRate,
@@ -32,6 +33,7 @@ export function EditableTimecode({
 	className,
 	disabled = false,
 }: EditableTimecodeProps) {
+	const m = useMessages();
 	const [isEditing, setIsEditing] = useState(false);
 	const [inputValue, setInputValue] = useState("");
 	const [hasError, setHasError] = useState(false);
@@ -153,7 +155,7 @@ export function EditableTimecode({
 				disabled && "cursor-default hover:bg-transparent",
 				className,
 			)}
-			title={disabled ? undefined : "Click to edit time"}
+			title={disabled ? undefined : m.common.clickToEditTime}
 		>
 			{formattedTime}
 		</button>

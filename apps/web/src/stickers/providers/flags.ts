@@ -8,7 +8,7 @@ import type {
 import { REGIONS, REGION_GROUPS } from "./countries-data";
 import type { CountryRecord, RegionId } from "./countries-data";
 
-const FLAGS_PROVIDER_ID = "flags";
+export const FLAGS_PROVIDER_ID = "flags";
 const DEFAULT_SEARCH_LIMIT = 100;
 const DEFAULT_FLAGS_BASE_URL = "/flags";
 

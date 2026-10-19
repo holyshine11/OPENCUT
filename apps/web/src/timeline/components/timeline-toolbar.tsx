@@ -49,7 +49,7 @@ import { OcRippleIcon } from "@/components/icons";
 import { GraphEditorPopover } from "./graph-editor/popover";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { useGraphEditorController } from "./graph-editor/use-controller";
-import { useMessages } from "@/i18n";
+import { translateLabel, useMessages } from "@/i18n";
 
 export function TimelineToolbar({
 	zoomLevel,
@@ -260,7 +260,9 @@ function SceneSelector() {
 		<div>
 			<SplitButton className="border-foreground/10 border">
 				<SplitButtonLeft>
-					{currentScene?.name || m.timeline.noScene}
+					{currentScene
+						? translateLabel({ messages: m, label: currentScene.name })
+						: m.timeline.noScene}
 				</SplitButtonLeft>
 				<SplitButtonSeparator />
 				<ScenesView>

@@ -149,7 +149,7 @@ function ProjectsHeader() {
 		<header className="sticky top-0 z-20 px-8 bg-background flex flex-col gap-2">
 			<div className="flex items-center justify-between h-16 pt-2">
 				<div className="flex items-center gap-5">
-					<Breadcrumb>
+					<Breadcrumb aria-label={m.common.breadcrumb}>
 						<BreadcrumbList>
 							<BreadcrumbItem>
 								<BreadcrumbLink asChild>

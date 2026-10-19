@@ -24,7 +24,7 @@ import {
 import { canDeleteScene, getMainScene } from "@/timeline/scenes";
 import { toast } from "sonner";
 import { useEditor } from "@/editor/use-editor";
-import { useMessages } from "@/i18n";
+import { translateLabel, useMessages } from "@/i18n";
 
 export function ScenesView({ children }: { children: React.ReactNode }) {
 	const editor = useEditor();
@@ -159,7 +159,7 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 									)}
 									onClick={() => handleSceneSwitch(scene.id)}
 								>
-									<span>{scene.name}</span>
+									<span>{translateLabel({ messages: m, label: scene.name })}</span>
 									<div className="flex items-center gap-2">
 										{((isSelectMode && selectedScenes.has(scene.id)) ||
 											(!isSelectMode && currentScene?.id === scene.id)) && (
