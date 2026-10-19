@@ -11,6 +11,7 @@ import {
 	Settings01Icon,
 	SlidersHorizontalIcon,
 	ColorsIcon,
+	LeftToRightListDashIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
@@ -21,6 +22,7 @@ export const TAB_KEYS = [
 	"effects",
 	"transitions",
 	"captions",
+	"subtitles",
 	"adjustment",
 	"settings",
 ] as const;
@@ -57,6 +59,10 @@ export const tabs = {
 	captions: {
 		icon: createHugeiconsIcon({ icon: ClosedCaptionIcon }),
 		label: "Captions",
+	},
+	subtitles: {
+		icon: createHugeiconsIcon({ icon: LeftToRightListDashIcon }),
+		label: "Subtitle list",
 	},
 	adjustment: {
 		icon: createHugeiconsIcon({ icon: SlidersHorizontalIcon }),

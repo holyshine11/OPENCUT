@@ -136,6 +136,8 @@ export interface TextElement extends BaseTimelineElement {
 	type: "text";
 	hidden?: boolean;
 	effects?: Effect[];
+	/** 자동 자막이나 자막 파일 가져오기로 한 번에 만든 자막 묶음. 자막 목록 패널이 이 값으로 모은다 */
+	subtitleGroupId?: string;
 }
 
 export interface StickerElement extends BaseTimelineElement {

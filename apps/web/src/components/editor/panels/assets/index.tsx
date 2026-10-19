@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator";
 import { type Tab, useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
 import { TabBar } from "./tabbar";
 import { Captions } from "@/subtitles/components/assets-view";
+import { SubtitleListView } from "@/subtitles/components/subtitle-list-view";
 import { MediaView } from "./views/assets";
 import { SettingsView } from "./views/settings";
 import { StickersView } from "@/stickers/components/assets-view";
@@ -24,6 +25,7 @@ export function AssetsPanel() {
 			</div>
 		),
 		captions: <Captions />,
+		subtitles: <SubtitleListView />,
 		adjustment: (
 			<div className="text-muted-foreground p-4">
 				Adjustment view coming soon...

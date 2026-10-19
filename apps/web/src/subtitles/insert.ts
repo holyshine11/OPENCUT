@@ -6,6 +6,7 @@ import {
 } from "@/commands";
 import { buildSubtitleTextElement } from "./build-subtitle-text-element";
 import type { SubtitleCue } from "./types";
+import { generateUUID } from "@/utils/id";
 
 export function insertCaptionChunksAsTextTrack({
 	editor,
@@ -21,15 +22,15 @@ export function insertCaptionChunksAsTextTrack({
 	const addTrackCommand = new AddTrackCommand({ type: "text", index: 0 });
 	const trackId = addTrackCommand.getTrackId();
 	const canvasSize = editor.project.getActive().settings.canvasSize;
+	const subtitleGroupId = generateUUID();
 	const insertCommands = captions.map(
 		(caption, index) =>
 			new InsertElementCommand({
 				placement: { mode: "explicit", trackId },
-				element: buildSubtitleTextElement({
-					index,
-					caption,
-					canvasSize,
-				}),
+				element: {
+					...buildSubtitleTextElement({ index, caption, canvasSize }),
+					subtitleGroupId,
+				},
 			}),
 	);
 	editor.command.execute({
