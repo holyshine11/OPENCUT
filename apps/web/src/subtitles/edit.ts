@@ -18,8 +18,8 @@ function usableWordStarts({ cue }: { cue: Cue }): number[] | undefined {
 		: undefined;
 }
 
-/** 단어 사이에서 나눌 때 뒤 단어가 시작한 시각. 쓸 수 없으면 null */
-function wordSplit({
+/** 단어 사이에서 나눌 때 뒤 단어의 순번. 단어 시각을 쓸 수 없으면 null */
+function wordIndexOf({
 	cue,
 	before,
 	after,
@@ -27,57 +27,95 @@ function wordSplit({
 	cue: Cue;
 	before: string;
 	after: string;
-}): { time: number; index: number } | null {
+}): number | null {
 	const wordStarts = usableWordStarts({ cue });
 	const index = wordsOf(before).length;
-	if (!wordStarts || index + wordsOf(after).length !== wordStarts.length) {
-		return null;
-	}
-	const time = wordStarts[index];
-	return time > cue.start && time < cue.end ? { time, index } : null;
+	return wordStarts && index + wordsOf(after).length === wordStarts.length
+		? index
+		: null;
 }
 
 /**
- * 커서 위치(at, 글자 인덱스)에서 둘로 나눈다. 단어 사이를 나누고 단어 시간이 있으면
- * 뒤 단어가 시작한 때에서, 아니면 공백을 뺀 글자 수 비율로 시간을 나눈다
+ * 커서 위치(at, 글자 인덱스)에서 둘로 나눈다. 시간은 time이 있으면 그 시각에서,
+ * 없으면 단어 사이를 나누고 단어 시간이 있을 때 뒤 단어가 시작한 때에서, 아니면 공백을 뺀 글자 수 비율로 나눈다
  */
 export function splitCue({
 	cue,
 	at,
+	time,
 }: {
 	cue: Cue;
 	at: number;
+	time?: number;
 }): [Cue, Cue] | null {
 	const before = cue.text.slice(0, at).trim();
 	const after = cue.text.slice(at).trim();
 	if (!before || !after) return null;
 
-	const byWord = wordSplit({ cue, before, after });
-	if (byWord) {
-		const { time, index } = byWord;
-		return [
-			{
-				text: before,
-				start: cue.start,
-				end: time,
-				wordStarts: cue.wordStarts?.slice(0, index),
-			},
-			{
-				text: after,
-				start: time,
-				end: cue.end,
-				wordStarts: cue.wordStarts?.slice(index),
-			},
-		];
-	}
-
+	const isInside = (value: number) => value > cue.start && value < cue.end;
+	const index = wordIndexOf({ cue, before, after });
+	const wordTime = index === null ? undefined : cue.wordStarts?.[index];
+	const byWord = wordTime !== undefined && isInside(wordTime);
 	const ratio =
 		visibleLength(before) / (visibleLength(before) + visibleLength(after));
-	const splitTime = cue.start + (cue.end - cue.start) * ratio;
+	const splitTime =
+		time ?? (byWord ? wordTime : cue.start + (cue.end - cue.start) * ratio);
+	if (!isInside(splitTime)) return null;
+
+	// 정한 시각에서 나누면 단어 시각은 단어 경계대로 나눠 음성에 붙여 둔다
+	if (index === null || (time === undefined && !byWord)) {
+		return [
+			{ text: before, start: cue.start, end: splitTime },
+			{ text: after, start: splitTime, end: cue.end },
+		];
+	}
 	return [
-		{ text: before, start: cue.start, end: splitTime },
-		{ text: after, start: splitTime, end: cue.end },
+		{
+			text: before,
+			start: cue.start,
+			end: splitTime,
+			wordStarts: cue.wordStarts?.slice(0, index),
+		},
+		{
+			text: after,
+			start: splitTime,
+			end: cue.end,
+			wordStarts: cue.wordStarts?.slice(index),
+		},
 	];
+}
+
+/**
+ * time(초)에서 자막을 나눌 때 글자를 가를 위치. 단어 시각이 있으면 시작 시각이 가장 가까운 단어 앞,
+ * 없으면 공백을 뺀 글자 수 비율로 가장 가까운 단어 앞이다. 단어가 하나뿐이면 null
+ */
+export function splitIndexAtTime({
+	cue,
+	time,
+}: {
+	cue: Cue;
+	time: number;
+}): number | null {
+	const words = [...cue.text.matchAll(/\S+/g)];
+	if (words.length < 2) return null;
+	const wordStarts = usableWordStarts({ cue });
+	const target = wordStarts
+		? time
+		: ((time - cue.start) / (cue.end - cue.start)) * visibleLength(cue.text);
+	let best: { index: number; distance: number } | null = null;
+	let charsBefore = 0;
+	for (const [order, word] of words.entries()) {
+		if (order > 0) {
+			const distance = Math.abs(
+				(wordStarts ? wordStarts[order] : charsBefore) - target,
+			);
+			if (!best || distance < best.distance) {
+				best = { index: word.index, distance };
+			}
+		}
+		charsBefore += word[0].length;
+	}
+	return best?.index ?? null;
 }
 
 export function mergeCues({ first, second }: { first: Cue; second: Cue }): Cue {

@@ -56,19 +56,21 @@ function timingPatch({
 	};
 }
 
-/** 자막을 커서 위치에서 둘로 나눈다. 뒤쪽은 같은 스타일의 새 텍스트 요소가 된다 */
+/** 자막을 커서 위치에서 둘로 나눈다. 뒤쪽은 같은 스타일의 새 텍스트 요소가 된다. time(초)을 주면 시간은 거기서 나눈다 */
 export function splitSubtitle({
 	editor,
 	entry,
 	text,
 	at,
+	time,
 }: {
 	editor: EditorCore;
 	entry: SubtitleEntry;
 	text: string;
 	at: number;
+	time?: number;
 }): boolean {
-	const pieces = splitCue({ cue: { ...cueOf({ entry }), text }, at });
+	const pieces = splitCue({ cue: { ...cueOf({ entry }), text }, at, time });
 	if (!pieces) return false;
 	const [first, second] = pieces;
 	const { id: _id, ...element } = entry.element;
@@ -100,18 +102,20 @@ export function splitSubtitle({
 	return true;
 }
 
-/** 다음 자막을 이 자막에 합친다 */
+/** 다음 자막을 이 자막에 합친다. text를 주면 앞 자막 문구로 쓴다(아직 저장 안 한 입력) */
 export function mergeSubtitles({
 	editor,
 	first,
 	second,
+	text = cueOf({ entry: first }).text,
 }: {
 	editor: EditorCore;
 	first: SubtitleEntry;
 	second: SubtitleEntry;
+	text?: string;
 }): void {
 	const merged = mergeCues({
-		first: cueOf({ entry: first }),
+		first: { ...cueOf({ entry: first }), text },
 		second: cueOf({ entry: second }),
 	});
 	editor.command.execute({

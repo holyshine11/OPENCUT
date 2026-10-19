@@ -10,6 +10,7 @@ import {
 	maxMediaTime,
 	mediaTime,
 	mediaTimeFromSeconds,
+	mediaTimeToSeconds,
 	minMediaTime,
 	subMediaTime,
 	TICKS_PER_SECOND,
@@ -27,7 +28,13 @@ import {
 } from "@/selection/scope";
 import { useCommittedRef } from "@/hooks/use-committed-ref";
 import { useTextStyleMemory } from "@/text/style-memory";
-import { applyTextStyleToElements, getSelectedTextStyle } from "@/text/apply-style";
+import {
+	applyTextStyleToElements,
+	getSelectedTextStyle,
+} from "@/text/apply-style";
+import { findSubtitleEntry, listSubtitleGroups } from "@/subtitles/groups";
+import { splitIndexAtTime } from "@/subtitles/edit";
+import { cueOf, mergeSubtitles, splitSubtitle } from "@/subtitles/list-actions";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -59,6 +66,17 @@ export function useEditorActions() {
 			clearTimelineActiveSelectionRef.current();
 		},
 	}));
+
+	// 자막 하나만 골랐을 때 그 자막과 같은 묶음의 다음 자막
+	const selectedSubtitle = () =>
+		selectedElements.length === 1
+			? findSubtitleEntry({
+					groups: listSubtitleGroups({
+						tracks: editor.scenes.getActiveScene().tracks,
+					}),
+					elementId: selectedElements[0].elementId,
+				})
+			: null;
 
 	useEffect(() => {
 		if (!hasTimelineSelection) {
@@ -128,9 +146,7 @@ export function useEditorActions() {
 		() => {
 			const fps = editor.project.getActive().settings.fps;
 			const ticksPerFrame = mediaTime({
-				ticks: Math.round(
-					(TICKS_PER_SECOND * fps.denominator) / fps.numerator,
-				),
+				ticks: Math.round((TICKS_PER_SECOND * fps.denominator) / fps.numerator),
 			});
 			editor.playback.seek({
 				time: minMediaTime({
@@ -150,9 +166,7 @@ export function useEditorActions() {
 		() => {
 			const fps = editor.project.getActive().settings.fps;
 			const ticksPerFrame = mediaTime({
-				ticks: Math.round(
-					(TICKS_PER_SECOND * fps.denominator) / fps.numerator,
-				),
+				ticks: Math.round((TICKS_PER_SECOND * fps.denominator) / fps.numerator),
 			});
 			editor.playback.seek({
 				time: maxMediaTime({
@@ -466,7 +480,10 @@ export function useEditorActions() {
 	useActionHandler(
 		"copy-style",
 		() => {
-			const style = getSelectedTextStyle({ editor, elements: selectedElements });
+			const style = getSelectedTextStyle({
+				editor,
+				elements: selectedElements,
+			});
 			if (!style) return;
 			useTextStyleMemory.getState().setCopied(style);
 		},
@@ -479,6 +496,32 @@ export function useEditorActions() {
 			const style = useTextStyleMemory.getState().copied;
 			if (!style) return;
 			applyTextStyleToElements({ editor, elements: selectedElements, style });
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"split-caption-at-playhead",
+		() => {
+			const entry = selectedSubtitle()?.entry;
+			if (!entry) return;
+			const cue = cueOf({ entry });
+			const time = mediaTimeToSeconds({
+				time: editor.playback.getCurrentTime(),
+			});
+			const at = splitIndexAtTime({ cue, time });
+			if (at === null) return;
+			splitSubtitle({ editor, entry, text: cue.text, at, time });
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"merge-caption-with-next",
+		() => {
+			const found = selectedSubtitle();
+			if (!found?.next) return;
+			mergeSubtitles({ editor, first: found.entry, second: found.next });
 		},
 		undefined,
 	);
