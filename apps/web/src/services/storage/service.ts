@@ -22,6 +22,7 @@ import {
 } from "@/services/storage/migrations";
 import type { Bookmark, SceneTracks, TScene } from "@/timeline";
 import { roundMediaTime } from "@/wasm";
+import type { ProjectBackup } from "@/project/backup-format";
 
 function normalizeBookmarks({ raw }: { raw: unknown }): Bookmark[] {
 	if (!Array.isArray(raw)) return [];
@@ -274,6 +275,51 @@ class StorageService {
 		return metadata.sort(
 			(a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
 		);
+	}
+
+	/** 백업용. 저장된 형태 그대로의 프로젝트와 미디어 원본 */
+	async readProjectBackup({
+		id,
+	}: {
+		id: string;
+	}): Promise<ProjectBackup | null> {
+		await this.ensureMigrations();
+		const project = await this.projectsAdapter.get(id);
+		if (!project) return null;
+
+		const { mediaMetadataAdapter, mediaAssetsAdapter } =
+			this.getProjectMediaAdapters({ projectId: id });
+		const media: ProjectBackup["media"] = [];
+		for (const mediaId of await mediaMetadataAdapter.list()) {
+			const [metadata, file] = await Promise.all([
+				mediaMetadataAdapter.get(mediaId),
+				mediaAssetsAdapter.get(mediaId),
+			]);
+			if (metadata && file && !metadata.ephemeral)
+				media.push({ metadata, file });
+		}
+		return { project, media };
+	}
+
+	/** 백업 복원. 미디어를 먼저 쓰고 프로젝트를 마지막에 써서, 중간에 실패해도 목록에 반쪽 프로젝트가 보이지 않게 한다 */
+	async writeProjectBackup({ project, media }: ProjectBackup): Promise<void> {
+		const { mediaMetadataAdapter, mediaAssetsAdapter } =
+			this.getProjectMediaAdapters({ projectId: project.metadata.id });
+		for (const { metadata, file } of media) {
+			try {
+				await mediaAssetsAdapter.set({ key: metadata.id, value: file });
+				await mediaMetadataAdapter.set({ key: metadata.id, value: metadata });
+			} catch (error) {
+				if (this.isQuotaExceededError({ error })) {
+					throw new StorageQuotaExceededError({ requiredBytes: file.size });
+				}
+				throw error;
+			}
+		}
+		await this.projectsAdapter.set({
+			key: project.metadata.id,
+			value: project,
+		});
 	}
 
 	async deleteProject({ id }: { id: string }): Promise<void> {

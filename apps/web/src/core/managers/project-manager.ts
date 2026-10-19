@@ -11,6 +11,8 @@ import type { ExportOptions, ExportResult, ExportState } from "@/export";
 import { storageService } from "@/services/storage/service";
 import { toast } from "sonner";
 import { generateUUID } from "@/utils/id";
+import { readZip, writeZip } from "@/utils/zip";
+import { packBackup, renameIfTaken, unpackBackup } from "@/project/backup-format";
 import { UpdateProjectSettingsCommand } from "@/commands/project";
 import { DEFAULT_BACKGROUND_COLOR } from "@/background/color";
 import { DEFAULT_CANVAS_SIZE } from "@/canvas/sizes";
@@ -35,6 +37,14 @@ export interface MigrationState {
 	fromVersion: number | null;
 	toVersion: number | null;
 	projectName: string | null;
+}
+
+/** "(2) 국밥 영상" → { baseName: "국밥 영상", number: 2 } */
+function getDuplicateBaseName({ name }: { name: string }) {
+	const match = name.match(/^\((\d+)\)\s+(.+)$/);
+	const number = match ? Number.parseInt(match[1], 10) : null;
+	const baseName = match ? match[2] : name;
+	return { baseName, number };
 }
 
 export class ProjectManager {
@@ -273,6 +283,39 @@ export class ProjectManager {
 		}
 	}
 
+	/** 프로젝트 하나를 미디어까지 담은 .zip으로 만든다 */
+	async backupProject({ id }: { id: string }): Promise<Blob | null> {
+		await this.ensureStorageMigrations();
+		const backup = await storageService.readProjectBackup({ id });
+		return backup ? writeZip({ entries: packBackup(backup) }) : null;
+	}
+
+	/** 백업 .zip을 새 프로젝트로 불러온다. 같은 프로젝트가 있으면 "(n) 이름" 사본으로 만든다 */
+	async restoreProject({ file }: { file: Blob }): Promise<string> {
+		await this.ensureStorageMigrations();
+		const backup = await unpackBackup({ entries: await readZip({ file }) });
+		const { baseName } = getDuplicateBaseName({
+			name: backup.project.metadata.name,
+		});
+		const copyNumber =
+			Math.max(
+				0,
+				...this.savedProjects.map((saved) => {
+					const parsed = getDuplicateBaseName({ name: saved.name });
+					return parsed.baseName === baseName ? (parsed.number ?? 0) : 0;
+				}),
+			) + 1;
+		const project = renameIfTaken({
+			project: backup.project,
+			takenIds: new Set(this.savedProjects.map((saved) => saved.id)),
+			newId: generateUUID(),
+			copyName: `(${copyNumber}) ${baseName}`,
+		});
+		await storageService.writeProjectBackup({ project, media: backup.media });
+		await this.loadAllProjects();
+		return project.metadata.id;
+	}
+
 	async deleteProjects({ ids }: { ids: string[] }): Promise<void> {
 		const uniqueIds = Array.from(new Set(ids));
 		if (uniqueIds.length === 0) return;
@@ -362,13 +405,6 @@ export class ProjectManager {
 		if (uniqueIds.length === 0) return [];
 
 		try {
-			const getDuplicateBaseName = ({ name }: { name: string }) => {
-				const match = name.match(/^\((\d+)\)\s+(.+)$/);
-				const number = match ? Number.parseInt(match[1], 10) : null;
-				const baseName = match ? match[2] : name;
-				return { baseName, number };
-			};
-
 			const loadResults = await Promise.all(
 				uniqueIds.map(async (projectId) => {
 					const result = await storageService.loadProject({ id: projectId });

@@ -58,7 +58,17 @@ export function downloadBuffer({
 	filename: string;
 	mimeType: string;
 }): void {
-	const blob = new Blob([buffer], { type: mimeType });
+	downloadBlob({ blob: new Blob([buffer], { type: mimeType }), filename });
+}
+
+/** Saves a Blob without reading it into memory first (large backups stay lazy) */
+export function downloadBlob({
+	blob,
+	filename,
+}: {
+	blob: Blob;
+	filename: string;
+}): void {
 	const url = URL.createObjectURL(blob);
 	const downloadLink = document.createElement("a");
 	downloadLink.href = url;

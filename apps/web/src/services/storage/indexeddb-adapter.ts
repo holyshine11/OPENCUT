@@ -59,7 +59,8 @@ export class IndexedDBAdapter<T> implements StorageAdapter<T> {
 		const store = transaction.objectStore(this.storeName);
 
 		return new Promise((resolve, reject) => {
-			const request = store.put({ id: key, ...value });
+			// the key must win: a value read back from the store carries its old id
+			const request = store.put({ ...value, id: key });
 			request.onerror = () => reject(request.error);
 			request.onsuccess = () => resolve();
 		});

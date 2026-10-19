@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { EditorCore } from "@/core";
 import { MigrationDialog } from "@/project/components/migration-dialog";
@@ -43,7 +43,11 @@ import {
 	Edit03Icon,
 	ArrowDown02Icon,
 	InformationCircleIcon,
+	Archive02Icon,
+	FolderUploadIcon,
 } from "@hugeicons/core-free-icons";
+import { downloadBlob } from "@/export";
+import { StorageQuotaExceededError } from "@/services/storage/quota";
 import { OcVideoIcon } from "@/components/icons";
 import { Label } from "@/components/ui/label";
 import {
@@ -185,6 +189,7 @@ function ProjectsHeader() {
 
 				<div className="flex items-center gap-3 md:gap-4">
 					<LanguageSelect className="w-28" />
+					<RestoreBackupButton />
 					<SearchBar className="hidden md:block" />
 					<NewProjectButton />
 				</div>
@@ -506,6 +511,47 @@ function SortDropdown({ children }: { children: React.ReactNode }) {
 	);
 }
 
+function RestoreBackupButton() {
+	const editor = useEditor();
+	const m = useMessages();
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	const restore = ({ file }: { file: File }) =>
+		toast.promise(editor.project.restoreProject({ file }), {
+			loading: m.projects.restoring,
+			success: m.projects.restored,
+			error: (error) =>
+				error instanceof StorageQuotaExceededError
+					? m.projects.restoreNoSpace
+					: m.projects.restoreFailed,
+		});
+
+	return (
+		<>
+			<input
+				ref={inputRef}
+				type="file"
+				accept=".zip,application/zip"
+				className="hidden"
+				onChange={(event) => {
+					const file = event.target.files?.[0];
+					event.target.value = "";
+					if (file) restore({ file });
+				}}
+			/>
+			<Button
+				size="lg"
+				variant="outline"
+				className="hidden md:flex"
+				onClick={() => inputRef.current?.click()}
+			>
+				<HugeiconsIcon icon={FolderUploadIcon} />
+				{m.projects.restore}
+			</Button>
+		</>
+	);
+}
+
 function NewProjectButton() {
 	const editor = useEditor();
 	const router = useRouter();
@@ -566,6 +612,18 @@ function ProjectItem({
 	};
 	const handleDeleteClick = () => setIsDeleteDialogOpen(true);
 	const handleInfoClick = () => setIsInfoDialogOpen(true);
+	const handleBackup = () =>
+		toast.promise(
+			editor.project.backupProject({ id: project.id }).then((blob) => {
+				if (!blob) throw new Error(m.projects.backupFailed);
+				downloadBlob({ blob, filename: `${project.name}.zip` });
+			}),
+			{
+				loading: m.projects.backingUp,
+				success: m.projects.backedUp,
+				error: m.projects.backupFailed,
+			},
+		);
 	const handleDeleteConfirm = async () => {
 		await deleteProjects({ editor, ids: [project.id] });
 		setIsDeleteDialogOpen(false);
@@ -692,6 +750,7 @@ function ProjectItem({
 					onDuplicateClick={handleDuplicate}
 					onDeleteClick={handleDeleteClick}
 					onInfoClick={handleInfoClick}
+					onBackupClick={handleBackup}
 				/>
 			)}
 		</div>
@@ -733,6 +792,7 @@ function ProjectItem({
 										onDuplicateClick={handleDuplicate}
 										onDeleteClick={handleDeleteClick}
 										onInfoClick={handleInfoClick}
+										onBackupClick={handleBackup}
 									/>
 								)}
 							</>
@@ -746,6 +806,7 @@ function ProjectItem({
 					onDuplicateClick={handleDuplicate}
 					onDeleteClick={handleDeleteClick}
 					onInfoClick={handleInfoClick}
+					onBackupClick={handleBackup}
 				/>
 			</ContextMenu>
 
@@ -780,11 +841,13 @@ function ProjectContextMenuContent({
 	onDuplicateClick,
 	onDeleteClick,
 	onInfoClick,
+	onBackupClick,
 }: {
 	onRenameClick: () => void;
 	onDuplicateClick: () => void;
 	onDeleteClick: () => void;
 	onInfoClick: () => void;
+	onBackupClick: () => void;
 }) {
 	const m = useMessages();
 	return (
@@ -807,6 +870,12 @@ function ProjectContextMenuContent({
 			>
 				{m.projects.info}
 			</ContextMenuItem>
+			<ContextMenuItem
+				icon={<HugeiconsIcon icon={Archive02Icon} />}
+				onClick={onBackupClick}
+			>
+				{m.projects.backup}
+			</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuItem
 				variant="destructive"
@@ -827,6 +896,7 @@ function ProjectMenu({
 	onDuplicateClick,
 	onDeleteClick,
 	onInfoClick,
+	onBackupClick,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -835,6 +905,7 @@ function ProjectMenu({
 	onDuplicateClick: () => void;
 	onDeleteClick: () => void;
 	onInfoClick: () => void;
+	onBackupClick: () => void;
 }) {
 	const handleMenuClick = ({
 		event,
@@ -923,6 +994,15 @@ function ProjectMenu({
 				<DropdownMenuItem onClick={handleInfoClick}>
 					<HugeiconsIcon icon={InformationCircleIcon} />
 					{m.projects.info}
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onClick={() => {
+						onBackupClick();
+						onOpenChange(false);
+					}}
+				>
+					<HugeiconsIcon icon={Archive02Icon} />
+					{m.projects.backup}
 				</DropdownMenuItem>
 				<DropdownMenuItem variant="destructive" onClick={handleDeleteClick}>
 					<HugeiconsIcon icon={Delete02Icon} />
