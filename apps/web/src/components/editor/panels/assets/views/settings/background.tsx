@@ -20,6 +20,7 @@ import { syntaxUIGradients } from "@/data/colors/syntax-ui";
 import { useEditor } from "@/editor/use-editor";
 import { effectPreviewService } from "@/services/renderer/effect-preview";
 import { cn } from "@/utils/ui";
+import { translateLabel, useMessages } from "@/i18n";
 
 const BLUR_PREVIEW_UNIFORM_DIMENSIONS = {
 	width: 1920,
@@ -39,6 +40,8 @@ const BlurPreview = memo(
 		isSelected: boolean;
 		onSelect: () => void;
 	}) => {
+		const m = useMessages();
+		const blurLabel = translateLabel({ messages: m, label: blur.label });
 		const canvasRef = useRef<HTMLCanvasElement>(null);
 
 		useEffect(() => {
@@ -67,7 +70,7 @@ const BlurPreview = memo(
 				)}
 				onClick={onSelect}
 				type="button"
-				aria-label={`Select ${blur.label} blur`}
+				aria-label={m.settings.selectBlur({ name: blurLabel })}
 			>
 				<canvas
 					ref={canvasRef}
@@ -75,7 +78,7 @@ const BlurPreview = memo(
 				/>
 				<div className="absolute right-1 bottom-1 left-1 text-center">
 					<span className="rounded bg-black/50 px-1 text-xs text-white">
-						{blur.label}
+						{blurLabel}
 					</span>
 				</div>
 			</button>
@@ -99,6 +102,7 @@ const BackgroundPreviews = memo(
 		onSelect: (bg: string) => void;
 		useBackgroundColor?: boolean;
 	}) => {
+		const m = useMessages();
 		return useMemo(
 			() =>
 				backgrounds.map((bg) => (
@@ -122,10 +126,11 @@ const BackgroundPreviews = memo(
 						}
 						onClick={() => onSelect(bg)}
 						type="button"
-						aria-label={`Select background ${bg}`}
+						aria-label={m.settings.selectBackground({ value: bg })}
 					/>
 				)),
 			[
+				m,
 				backgrounds,
 				isColorBackground,
 				currentBackgroundColor,
@@ -149,6 +154,7 @@ function CustomColorPreview({
 	onPreview: (color: string) => void;
 	onCommit: (color: string) => void;
 }) {
+	const m = useMessages();
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
@@ -158,7 +164,7 @@ function CustomColorPreview({
 						isSelected && "border-primary border-2",
 					)}
 					type="button"
-					aria-label="Pick a custom background color"
+					aria-label={m.settings.pickCustomColor}
 				>
 					<span
 						className="absolute inset-0"
@@ -186,6 +192,7 @@ const COLOR_SECTIONS = [
 ] as const;
 
 export function BackgroundContent() {
+	const m = useMessages();
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 
@@ -263,7 +270,7 @@ export function BackgroundContent() {
 				showTopBorder={false}
 			>
 				<SectionHeader>
-					<SectionTitle>Blur</SectionTitle>
+					<SectionTitle>{m.settings.blur}</SectionTitle>
 				</SectionHeader>
 				<SectionContent>
 					<div className="flex flex-wrap gap-2">{blurPreviews}</div>
@@ -277,7 +284,9 @@ export function BackgroundContent() {
 					sectionKey={`settings:background-${section.id}`}
 				>
 					<SectionHeader>
-						<SectionTitle>{section.title}</SectionTitle>
+						<SectionTitle>
+							{translateLabel({ messages: m, label: section.title })}
+						</SectionTitle>
 					</SectionHeader>
 					<SectionContent>
 						<div className="flex flex-wrap gap-2">

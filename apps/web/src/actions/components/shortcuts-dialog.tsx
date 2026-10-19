@@ -16,6 +16,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { useMessages } from "@/i18n";
 
 export function ShortcutsDialog({
 	isOpen,
@@ -24,6 +25,7 @@ export function ShortcutsDialog({
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const m = useMessages();
 	const [recordingShortcut, setRecordingShortcut] =
 		useState<KeyboardShortcut | null>(null);
 
@@ -110,7 +112,7 @@ export function ShortcutsDialog({
 		<Dialog open={isOpen} onOpenChange={onOpenChange}>
 			<DialogContent className="flex max-h-[80vh] max-w-2xl flex-col p-0">
 				<DialogHeader>
-					<DialogTitle>Keyboard shortcuts</DialogTitle>
+					<DialogTitle>{m.shortcuts.title}</DialogTitle>
 				</DialogHeader>
 
 				<DialogBody className="scrollbar-thin grow overflow-y-auto">
@@ -140,7 +142,7 @@ export function ShortcutsDialog({
 				</DialogBody>
 				<DialogFooter>
 					<Button variant="destructive" onClick={resetToDefaults}>
-						Reset to default
+						{m.shortcuts.resetToDefault}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
@@ -157,6 +159,7 @@ function ShortcutItem({
 	isRecording: boolean;
 	onStartRecording: (params: { shortcut: KeyboardShortcut }) => void;
 }) {
+	const m = useMessages();
 	const displayKeys = shortcut.keys.filter((key: string) => {
 		if (
 			key.includes("Cmd") &&
@@ -193,7 +196,9 @@ function ShortcutItem({
 							})}
 						</div>
 						{index < displayKeys.length - 1 && (
-							<span className="text-muted-foreground text-xs">or</span>
+							<span className="text-muted-foreground text-xs">
+								{m.shortcuts.or}
+							</span>
 						)}
 					</div>
 				))}
@@ -211,6 +216,7 @@ function EditableShortcutKey({
 	isRecording: boolean;
 	onStartRecording: () => void;
 }) {
+	const m = useMessages();
 	const handleClick = (e: React.MouseEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -223,7 +229,7 @@ function EditableShortcutKey({
 			size="sm"
 			onClick={handleClick}
 			title={
-				isRecording ? "Press any key combination..." : "Click to edit shortcut"
+				isRecording ? m.shortcuts.pressKeys : m.shortcuts.clickToEdit
 			}
 		>
 			{children}

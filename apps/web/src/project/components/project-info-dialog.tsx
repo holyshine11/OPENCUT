@@ -10,6 +10,7 @@ import type { TProjectMetadata } from "@/project/types";
 import { formatDate } from "@/utils/date";
 import { formatTimecode, mediaTimeToSeconds } from "opencut-wasm";
 import { Button } from "@/components/ui/button";
+import { useMessages } from "@/i18n";
 
 function InfoRow({
 	label,
@@ -35,6 +36,7 @@ export function ProjectInfoDialog({
 	onOpenChange: (open: boolean) => void;
 	project: TProjectMetadata;
 }) {
+	const m = useMessages();
 	const durationSeconds = mediaTimeToSeconds({ time: project.duration });
 	const durationFormatted =
 		project.duration > 0
@@ -51,17 +53,17 @@ export function ProjectInfoDialog({
 				</DialogHeader>
 
 				<DialogBody className="flex flex-col">
-					<InfoRow label="Duration" value={durationFormatted} />
+					<InfoRow label={m.projects.sortBy.duration} value={durationFormatted} />
 					<InfoRow
-						label="Created"
+						label={m.projects.sortBy.createdAt}
 						value={formatDate({ date: project.createdAt })}
 					/>
 					<InfoRow
-						label="Modified"
+						label={m.projects.sortBy.updatedAt}
 						value={formatDate({ date: project.updatedAt })}
 					/>
 					<InfoRow
-						label="Project ID"
+						label={m.dialogs.projectInfo.projectId}
 						value={
 							<code className="text-xs bg-muted px-1.5 py-0.5 rounded">
 								{project.id.slice(0, 8)}
@@ -71,9 +73,11 @@ export function ProjectInfoDialog({
 				</DialogBody>
 				<DialogFooter>
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						Close
+						{m.dialogs.projectInfo.close}
 					</Button>
-					<Button onClick={() => onOpenChange(false)}>Done</Button>
+					<Button onClick={() => onOpenChange(false)}>
+						{m.dialogs.projectInfo.done}
+					</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

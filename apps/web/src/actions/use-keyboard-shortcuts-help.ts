@@ -7,6 +7,7 @@ import {
 	getPlatformAlternateKey,
 	getPlatformSpecialKey,
 } from "@/utils/platform";
+import { useMessages } from "@/i18n";
 
 export interface KeyboardShortcut {
 	id: string;
@@ -37,6 +38,7 @@ function formatKey({ key }: { key: string }): string {
 
 export function useKeyboardShortcutsHelp() {
 	const { keybindings } = useKeybindingsStore();
+	const m = useMessages();
 
 	const shortcuts = useMemo(() => {
 		const actionToKeys = new Map<TActionWithOptionalArgs, string[]>();
@@ -57,8 +59,8 @@ export function useKeyboardShortcutsHelp() {
 			result.push({
 				id: action,
 				keys,
-				description: actionDef.description,
-				category: actionDef.category,
+				description: m.actions[action],
+				category: m.shortcuts.categories[actionDef.category],
 				action,
 			});
 		}
@@ -69,7 +71,7 @@ export function useKeyboardShortcutsHelp() {
 			}
 			return a.description.localeCompare(b.description);
 		});
-	}, [keybindings]);
+	}, [keybindings, m]);
 
 	return {
 		shortcuts,

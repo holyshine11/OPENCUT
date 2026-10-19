@@ -35,6 +35,7 @@ import {
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
 import { DEFAULT_EXPORT_OPTIONS, defaultExportFps } from "@/export/defaults";
+import { useMessages } from "@/i18n";
 
 function isExportFormat(value: string): value is ExportFormat {
 	return EXPORT_FORMAT_VALUES.some((formatValue) => formatValue === value);
@@ -45,6 +46,7 @@ function isExportQuality(value: string): value is ExportQuality {
 }
 
 export function ExportButton() {
+	const m = useMessages();
 	const [isExportPopoverOpen, setIsExportPopoverOpen] = useState(false);
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActiveOrNull());
@@ -81,7 +83,9 @@ export function ExportButton() {
 				>
 					<div className="relative flex items-center gap-1.5 rounded-[0.6rem] bg-linear-270 from-[#2567EC] to-[#37B6F7] px-4 py-1 shadow-[0_1px_3px_0px_rgba(0,0,0,0.65)]">
 						<HugeiconsIcon icon={TransitionTopIcon} className="z-50 size-3.5" />
-						<span className="z-50 text-[0.875rem]">Export</span>
+						<span className="z-50 text-[0.875rem]">
+							{m.exportDialog.export}
+						</span>
 						<div className="absolute top-0 left-0 z-10 flex size-full items-center justify-center rounded-[0.6rem] bg-linear-to-t from-white/0 to-white/50">
 							<div className="absolute top-[0.08rem] z-50 h-[calc(100%-2px)] w-[calc(100%-2px)] rounded-[0.6rem] bg-linear-270 from-[#2567EC] to-[#37B6F7]"></div>
 						</div>
@@ -102,6 +106,7 @@ function ExportPopover({
 }: {
 	onOpenChange: (open: boolean) => void;
 }) {
+	const m = useMessages();
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 	const exportState = useEditor((e) => e.project.getExportState());
@@ -158,14 +163,16 @@ function ExportPopover({
 		<PopoverContent className="bg-background mr-4 flex w-80 flex-col p-0">
 			{exportResult && !exportResult.success ? (
 				<ExportError
-					error={exportResult.error || "Unknown error occurred"}
+					error={exportResult.error || m.exportDialog.unknownError}
 					onRetry={handleExport}
 				/>
 			) : (
 				<>
 					<div className="flex items-center justify-between p-3 border-b">
 						<h3 className="font-medium text-sm">
-							{isExporting ? "Exporting project" : "Export project"}
+							{isExporting
+								? m.exportDialog.exportingProject
+								: m.exportDialog.exportProject}
 						</h3>
 					</div>
 
@@ -184,7 +191,7 @@ function ExportPopover({
 										showTopBorder={false}
 									>
 										<SectionHeader>
-											<SectionTitle>Format</SectionTitle>
+											<SectionTitle>{m.exportDialog.format}</SectionTitle>
 										</SectionHeader>
 										<SectionContent>
 											<RadioGroup
@@ -198,13 +205,13 @@ function ExportPopover({
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="mp4" id="mp4" />
 													<Label htmlFor="mp4">
-														MP4 (H.264) - Better compatibility
+														{m.exportDialog.mp4}
 													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="webm" id="webm" />
 													<Label htmlFor="webm">
-														WebM (VP9) - Smaller file size
+														{m.exportDialog.webm}
 													</Label>
 												</div>
 											</RadioGroup>
@@ -213,7 +220,7 @@ function ExportPopover({
 
 									<Section collapsible defaultOpen={false}>
 										<SectionHeader>
-											<SectionTitle>Quality</SectionTitle>
+											<SectionTitle>{m.exportDialog.quality}</SectionTitle>
 										</SectionHeader>
 										<SectionContent>
 											<RadioGroup
@@ -226,20 +233,26 @@ function ExportPopover({
 											>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="low" id="low" />
-													<Label htmlFor="low">Low - Smallest file size</Label>
+													<Label htmlFor="low">
+														{m.exportDialog.qualityLow}
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="medium" id="medium" />
-													<Label htmlFor="medium">Medium - Balanced</Label>
+													<Label htmlFor="medium">
+														{m.exportDialog.qualityMedium}
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="high" id="high" />
-													<Label htmlFor="high">High - Recommended</Label>
+													<Label htmlFor="high">
+														{m.exportDialog.qualityHigh}
+													</Label>
 												</div>
 												<div className="flex items-center space-x-2">
 													<RadioGroupItem value="very_high" id="very_high" />
 													<Label htmlFor="very_high">
-														Very high - Largest file size
+														{m.exportDialog.qualityVeryHigh}
 													</Label>
 												</div>
 											</RadioGroup>
@@ -249,7 +262,7 @@ function ExportPopover({
 									{formatFps({ fps: projectFps }) !== formatFps({ fps: recommendedFps }) && (
 										<Section collapsible defaultOpen={false}>
 											<SectionHeader>
-												<SectionTitle>Frame rate</SectionTitle>
+												<SectionTitle>{m.exportDialog.frameRate}</SectionTitle>
 											</SectionHeader>
 											<SectionContent>
 												<RadioGroup
@@ -259,13 +272,17 @@ function ExportPopover({
 													<div className="flex items-center space-x-2">
 														<RadioGroupItem value="recommended" id="fps-recommended" />
 														<Label htmlFor="fps-recommended">
-															{`${formatFps({ fps: recommendedFps })} fps - Recommended`}
+															{m.exportDialog.fpsRecommended({
+															fps: formatFps({ fps: recommendedFps }),
+														})}
 														</Label>
 													</div>
 													<div className="flex items-center space-x-2">
 														<RadioGroupItem value="project" id="fps-project" />
 														<Label htmlFor="fps-project">
-															{`${formatFps({ fps: projectFps })} fps - Same as project, larger file`}
+															{m.exportDialog.fpsProject({
+															fps: formatFps({ fps: projectFps }),
+														})}
 														</Label>
 													</div>
 												</RadioGroup>
@@ -275,7 +292,7 @@ function ExportPopover({
 
 									<Section collapsible defaultOpen={false}>
 										<SectionHeader>
-											<SectionTitle>Audio</SectionTitle>
+											<SectionTitle>{m.exportDialog.audio}</SectionTitle>
 										</SectionHeader>
 										<SectionContent>
 											<div className="flex items-center space-x-2">
@@ -287,7 +304,7 @@ function ExportPopover({
 													}
 												/>
 												<Label htmlFor="include-audio">
-													Include audio in export
+													{m.exportDialog.includeAudio}
 												</Label>
 											</div>
 										</SectionContent>
@@ -297,7 +314,7 @@ function ExportPopover({
 								<div className="p-3 pt-0">
 									<Button onClick={handleExport} className="w-full gap-2">
 										<Download className="size-4" />
-										Export
+										{m.exportDialog.export}
 									</Button>
 								</div>
 							</>
@@ -320,7 +337,7 @@ function ExportPopover({
 									className="w-full rounded-md"
 									onClick={handleCancel}
 								>
-									Cancel
+									{m.exportDialog.cancel}
 								</Button>
 							</div>
 						)}
@@ -338,6 +355,7 @@ function ExportError({
 	error: string;
 	onRetry: () => void;
 }) {
+	const m = useMessages();
 	const [copied, setCopied] = useState(false);
 
 	const handleCopy = async () => {
@@ -349,7 +367,9 @@ function ExportError({
 	return (
 		<div className="space-y-4 p-3">
 			<div className="flex flex-col gap-1.5">
-				<p className="text-destructive text-sm font-medium">Export failed</p>
+				<p className="text-destructive text-sm font-medium">
+					{m.exportDialog.failed}
+				</p>
 				<p className="text-muted-foreground text-xs">{error}</p>
 			</div>
 
@@ -361,7 +381,7 @@ function ExportError({
 					onClick={handleCopy}
 				>
 					{copied ? <Check className="text-constructive" /> : <Copy />}
-					Copy
+					{m.exportDialog.copy}
 				</Button>
 				<Button
 					variant="outline"
@@ -370,7 +390,7 @@ function ExportError({
 					onClick={onRetry}
 				>
 					<RotateCcw />
-					Retry
+					{m.exportDialog.retry}
 				</Button>
 			</div>
 		</div>

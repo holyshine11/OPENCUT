@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
+import { useMessages } from "@/i18n";
 
 export function RenameProjectDialog({
 	isOpen,
@@ -22,6 +23,7 @@ export function RenameProjectDialog({
 	onConfirm: (newName: string) => void;
 	projectName: string;
 }) {
+	const m = useMessages();
 	const [name, setName] = useState(projectName);
 
 	const handleOpenChange = (open: boolean) => {
@@ -35,11 +37,11 @@ export function RenameProjectDialog({
 		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Rename project</DialogTitle>
+					<DialogTitle>{m.dialogs.renameProject.title}</DialogTitle>
 				</DialogHeader>
 
 				<DialogBody className="gap-3">
-					<Label>New name</Label>
+					<Label>{m.dialogs.renameProject.newName}</Label>
 					<Input
 						value={name}
 						onChange={(e) => setName(e.target.value)}
@@ -49,7 +51,7 @@ export function RenameProjectDialog({
 								onConfirm(name);
 							}
 						}}
-						placeholder="Enter a new name"
+						placeholder={m.dialogs.renameProject.placeholder}
 					/>
 				</DialogBody>
 
@@ -62,9 +64,9 @@ export function RenameProjectDialog({
 							onOpenChange(false);
 						}}
 					>
-						Cancel
+						{m.dialogs.cancel}
 					</Button>
-					<Button onClick={() => onConfirm(name)}>Rename</Button>
+					<Button onClick={() => onConfirm(name)}>{m.projects.rename}</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
