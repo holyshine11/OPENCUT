@@ -342,6 +342,7 @@ function StickerItem({
 	shouldCapSize = false,
 	containerClassName,
 }: StickerItemProps) {
+	const m = useMessages();
 	const editor = useEditor();
 	const { addToRecentStickers } = useStickersStore();
 	const [isAdding, setIsAdding] = useState(false);
@@ -394,7 +395,7 @@ function StickerItem({
 			addToRecentStickers({ stickerId: item.id });
 		} catch (error) {
 			console.error("Failed to add sticker:", error);
-			toast.error("Failed to add sticker to timeline");
+			toast.error(m.notices.media.stickerAddFailed);
 		} finally {
 			setIsAdding(false);
 		}

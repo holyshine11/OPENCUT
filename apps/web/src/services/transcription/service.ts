@@ -3,6 +3,7 @@ import type {
 	TranscriptionResult,
 	TranscriptionProgress,
 } from "@/transcription/types";
+import { getMessages } from "@/i18n";
 import type { WorkerMessage, WorkerResponse } from "./worker";
 
 type ProgressCallback = (progress: TranscriptionProgress) => void;
@@ -30,7 +31,7 @@ class TranscriptionService {
 		return new Promise((resolve, reject) => {
 			const worker = this.worker;
 			if (!worker) {
-				reject(new Error("Worker not initialized"));
+				reject(new Error(getMessages().notices.transcription.failed));
 				return;
 			}
 			this.rejectPending = reject;
@@ -59,7 +60,8 @@ class TranscriptionService {
 					case "transcribe-error":
 						worker.removeEventListener("message", handleMessage);
 						this.rejectPending = null;
-						reject(new Error(response.error));
+						console.error("Transcription failed:", response.error);
+						reject(new Error(getMessages().notices.transcription.failed));
 						break;
 				}
 			};
@@ -117,7 +119,10 @@ class TranscriptionService {
 					case "init-error":
 						worker.removeEventListener("message", handleMessage);
 						this.terminate();
-						reject(new Error(response.error));
+						console.error("Model load failed:", response.error);
+						reject(
+							new Error(getMessages().notices.transcription.modelLoadFailed),
+						);
 						break;
 				}
 			};

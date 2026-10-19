@@ -59,7 +59,10 @@ export function ShortcutsDialog({
 				});
 				if (conflict) {
 					toast.error(
-						`Key "${keyString}" is already bound to "${conflict.existingAction}"`,
+						m.notices.shortcuts.alreadyBound({
+							key: keyString,
+							action: m.actions[conflict.existingAction],
+						}),
 					);
 					setRecordingShortcut(null);
 					return;
@@ -101,6 +104,7 @@ export function ShortcutsDialog({
 		getKeybindingsForAction,
 		setIsRecording,
 		isRecording,
+		m,
 	]);
 
 	const handleStartRecording = (shortcut: KeyboardShortcut) => {

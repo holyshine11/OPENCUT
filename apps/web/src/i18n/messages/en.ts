@@ -660,6 +660,103 @@ export const en = {
 		"remove-media-asset": "Remove media asset",
 		"remove-media-assets": "Remove media assets",
 	},
+	/** Toasts, warnings and error messages */
+	notices: {
+		media: {
+			unsupportedFileType: ({ name }: { name: string }) =>
+				`Unsupported file type: ${name}`,
+			notEnoughStorageFor: ({ name }: { name: string }) =>
+				`Not enough browser storage for ${name}`,
+			cantPreview: ({ name }: { name: string }) => `Can't preview ${name}`,
+			couldNotProcess: ({ name }: { name: string }) =>
+				`Couldn't process ${name}`,
+			couldNotProcessVideo: "Could not process video",
+			processFailed: ({ name }: { name: string }) =>
+				`Failed to process ${name}`,
+			thisVideoCodec: "this video codec",
+			hevcUnsupported: ({ codec }: { codec: string }) =>
+				`${codec} cannot be decoded in this browser, so this clip may not preview correctly. Convert it to H.264 MP4 or try importing it in Safari.`,
+			codecUnsupported: ({ codec }: { codec: string }) =>
+				`${codec} cannot be decoded in this browser, so this clip may not preview correctly. Convert it to H.264 MP4 and reimport it.`,
+			uploading: ({ count }: { count: number }): string =>
+				count === 1 ? "Uploading media asset..." : "Uploading media assets...",
+			uploadedNamed: ({ name }: { name: string }) =>
+				`${name} has been uploaded`,
+			uploadedCount: ({ count }: { count: number }) =>
+				count === 1
+					? "1 media asset has been uploaded"
+					: `${count} media assets have been uploaded`,
+			noneUploaded: "No media assets were uploaded",
+			uploadFailed: ({ count }: { count: number }): string =>
+				count === 1
+					? "Failed to upload media asset"
+					: "Failed to upload media assets",
+			noActiveProject: "No active project",
+			stickerAddFailed: "Failed to add sticker to timeline",
+		},
+		storage: {
+			notEnough: "Not enough browser storage",
+			fileSize: ({ size }: { size: string }) => `File size is ${size}.`,
+			fileSizeOverAvailable: ({
+				size,
+				available,
+			}: {
+				size: string;
+				available: string;
+			}) =>
+				`File size is ${size}, but only ${available} is safely available in browser storage.`,
+			quotaExceeded: ({ size }: { size: string }) =>
+				`Not enough browser storage to save a ${size} file.`,
+		},
+		project: {
+			saveNewFailed: "Failed to save new project",
+			notFound: "Project not found",
+			someNotFound: "Projects not found",
+			someNotFoundHint: "Some projects could not be found",
+			renameFailed: "Failed to rename project",
+			deleteFailed: "Failed to delete project",
+			duplicateFailed: "Failed to duplicate projects",
+		},
+		scenes: {
+			cannotDeleteMain: "Cannot delete main scene",
+		},
+		snapshot: {
+			copyFailed: "Failed to copy snapshot",
+			saveFailed: "Failed to save snapshot",
+			clipboardUnsupported:
+				"Clipboard image copy is not supported in this browser",
+			nothingToCapture: "No project or scene to capture",
+			createImageFailed: "Failed to create image",
+		},
+		export: {
+			noActiveProject: "No active project",
+			projectEmpty: "Project is empty",
+			noOutput: "Export failed to produce a file",
+		},
+		shortcuts: {
+			alreadyBound: ({ key, action }: { key: string; action: string }) =>
+				`Key "${key}" is already bound to "${action}"`,
+		},
+		transcription: {
+			noAudio:
+				"No audio detected. Add a clip with audio to the timeline first.",
+			modelLoadFailed: "Failed to load the speech recognition model",
+			failed: "Transcription failed",
+		},
+		subtitles: {
+			unsupportedFormat: "Unsupported subtitle format",
+			strippedInlineTags: ({ count }: { count: number }) =>
+				`Stripped unsupported ASS inline override tags from ${count} subtitle cue(s).`,
+			ignoredEffects: ({ count }: { count: number }) =>
+				`Ignored ASS event effects in ${count} subtitle cue(s).`,
+			missingStyles: ({ count }: { count: number }) =>
+				`Fell back to default subtitle styling for ${count} cue(s) that referenced missing ASS styles.`,
+			ignoredNonDialogue: ({ count }: { count: number }) =>
+				`Ignored ${count} non-dialogue ASS event(s).`,
+			unsupportedStyles:
+				"Ignored unsupported ASS style features such as outline, shadow, rotation, or scaling.",
+		},
+	},
 };
 
 export type Messages = typeof en;

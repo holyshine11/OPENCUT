@@ -1,3 +1,4 @@
+import { getMessages } from "@/i18n";
 import { formatNumberForDisplay } from "@/utils/math";
 
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
@@ -118,7 +119,9 @@ export class StorageQuotaExceededError extends Error {
 
 	constructor({ requiredBytes }: { requiredBytes: number }) {
 		super(
-			`Not enough browser storage to save a ${formatStorageBytes({ bytes: requiredBytes })} file.`,
+			getMessages().notices.storage.quotaExceeded({
+				size: formatStorageBytes({ bytes: requiredBytes }),
+			}),
 		);
 
 		this.name = "StorageQuotaExceededError";

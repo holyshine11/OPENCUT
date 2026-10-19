@@ -71,9 +71,9 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 				continue;
 			}
 
-			const { canDelete, reason } = canDeleteScene({ scene });
-			if (!canDelete) {
-				toast.error(reason || "Failed to delete scene");
+			// 삭제를 막는 경우는 기본 장면뿐이다
+			if (!canDeleteScene({ scene }).canDelete) {
+				toast.error(m.notices.scenes.cannotDeleteMain);
 				continue;
 			}
 

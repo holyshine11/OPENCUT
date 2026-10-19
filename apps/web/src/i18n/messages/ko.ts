@@ -611,4 +611,84 @@ export const ko: Messages = {
 		"remove-media-asset": "미디어 삭제",
 		"remove-media-assets": "미디어 여러 개 삭제",
 	},
+	notices: {
+		media: {
+			unsupportedFileType: ({ name }) =>
+				`지원하지 않는 파일 형식입니다: ${name}`,
+			notEnoughStorageFor: ({ name }) =>
+				`브라우저 저장 공간이 부족해 ${name}을(를) 추가할 수 없습니다`,
+			cantPreview: ({ name }) => `${name}은(는) 미리 볼 수 없습니다`,
+			couldNotProcess: ({ name }) => `${name}을(를) 처리하지 못했습니다`,
+			couldNotProcessVideo: "동영상을 처리하지 못했습니다",
+			processFailed: ({ name }) => `${name}을(를) 처리하지 못했습니다`,
+			thisVideoCodec: "이 동영상 코덱",
+			hevcUnsupported: ({ codec }) =>
+				`이 브라우저는 ${codec}을(를) 디코딩할 수 없어 미리보기가 제대로 나오지 않을 수 있습니다. H.264 MP4로 변환하거나 Safari에서 가져와 보세요.`,
+			codecUnsupported: ({ codec }) =>
+				`이 브라우저는 ${codec}을(를) 디코딩할 수 없어 미리보기가 제대로 나오지 않을 수 있습니다. H.264 MP4로 변환한 뒤 다시 가져와 주세요.`,
+			uploading: () => "미디어를 업로드하는 중...",
+			uploadedNamed: ({ name }) => `${name}을(를) 업로드했습니다`,
+			uploadedCount: ({ count }) => `미디어 ${count}개를 업로드했습니다`,
+			noneUploaded: "업로드한 미디어가 없습니다",
+			uploadFailed: () => "미디어를 업로드하지 못했습니다",
+			noActiveProject: "열려 있는 프로젝트가 없습니다",
+			stickerAddFailed: "스티커를 타임라인에 추가하지 못했습니다",
+		},
+		storage: {
+			notEnough: "브라우저 저장 공간이 부족합니다",
+			fileSize: ({ size }) => `파일 크기는 ${size}입니다.`,
+			fileSizeOverAvailable: ({ size, available }) =>
+				`파일 크기는 ${size}인데 브라우저 저장 공간에 안전하게 쓸 수 있는 용량은 ${available}입니다.`,
+			quotaExceeded: ({ size }) =>
+				`브라우저 저장 공간이 부족해 ${size} 파일을 저장할 수 없습니다.`,
+		},
+		project: {
+			saveNewFailed: "새 프로젝트를 저장하지 못했습니다",
+			notFound: "프로젝트를 찾을 수 없습니다",
+			someNotFound: "프로젝트를 찾을 수 없습니다",
+			someNotFoundHint: "일부 프로젝트를 찾지 못했습니다",
+			renameFailed: "프로젝트 이름을 바꾸지 못했습니다",
+			deleteFailed: "프로젝트를 삭제하지 못했습니다",
+			duplicateFailed: "프로젝트를 복제하지 못했습니다",
+		},
+		scenes: {
+			cannotDeleteMain: "기본 장면은 삭제할 수 없습니다",
+		},
+		snapshot: {
+			copyFailed: "스냅샷을 복사하지 못했습니다",
+			saveFailed: "스냅샷을 저장하지 못했습니다",
+			clipboardUnsupported:
+				"이 브라우저는 이미지 클립보드 복사를 지원하지 않습니다",
+			nothingToCapture: "캡처할 프로젝트나 장면이 없습니다",
+			createImageFailed: "이미지를 만들지 못했습니다",
+		},
+		export: {
+			noActiveProject: "열려 있는 프로젝트가 없습니다",
+			projectEmpty: "프로젝트가 비어 있습니다",
+			noOutput: "내보낸 파일을 만들지 못했습니다",
+		},
+		shortcuts: {
+			alreadyBound: ({ key, action }) =>
+				`"${key}" 키는 이미 "${action}"에 지정되어 있습니다`,
+		},
+		transcription: {
+			noAudio:
+				"오디오가 없습니다. 먼저 소리가 있는 클립을 타임라인에 추가하세요.",
+			modelLoadFailed: "음성 인식 모델을 불러오지 못했습니다",
+			failed: "음성을 인식하지 못했습니다",
+		},
+		subtitles: {
+			unsupportedFormat: "지원하지 않는 자막 형식입니다",
+			strippedInlineTags: ({ count }) =>
+				`자막 ${count}개에서 지원하지 않는 ASS 인라인 태그를 뺐습니다.`,
+			ignoredEffects: ({ count }) =>
+				`자막 ${count}개의 ASS 이벤트 효과는 적용하지 않았습니다.`,
+			missingStyles: ({ count }) =>
+				`없는 ASS 스타일을 쓰는 자막 ${count}개는 기본 스타일로 표시합니다.`,
+			ignoredNonDialogue: ({ count }) =>
+				`대사가 아닌 ASS 이벤트 ${count}개는 건너뛰었습니다.`,
+			unsupportedStyles:
+				"외곽선, 그림자, 회전, 크기 조절 같은 ASS 스타일 기능은 지원하지 않아 적용하지 않았습니다.",
+		},
+	},
 };

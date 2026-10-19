@@ -82,7 +82,7 @@ export function MediaView() {
 	const processFiles = async ({ files }: { files: File[] }) => {
 		if (!files || files.length === 0) return;
 		if (!activeProject) {
-			toast.error("No active project");
+			toast.error(m.notices.media.noActiveProject);
 			return;
 		}
 

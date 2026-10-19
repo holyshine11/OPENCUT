@@ -79,9 +79,9 @@ function ProjectDropdown() {
 					name: newName.trim(),
 				});
 			} catch (error) {
-				toast.error("Failed to rename project", {
-					description:
-						error instanceof Error ? error.message : "Please try again",
+				console.error("Failed to rename project:", error);
+				toast.error(m.notices.project.renameFailed, {
+					description: m.projects.tryAgain,
 				});
 			} finally {
 				setOpenDialog(null);
@@ -97,9 +97,9 @@ function ProjectDropdown() {
 				});
 				router.push("/projects");
 			} catch (error) {
-				toast.error("Failed to delete project", {
-					description:
-						error instanceof Error ? error.message : "Please try again",
+				console.error("Failed to delete project:", error);
+				toast.error(m.notices.project.deleteFailed, {
+					description: m.projects.tryAgain,
 				});
 			} finally {
 				setOpenDialog(null);
@@ -171,6 +171,7 @@ function ProjectDropdown() {
 }
 
 function EditableProjectName() {
+	const m = useMessages();
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
 	const [isEditing, setIsEditing] = useState(false);
@@ -206,9 +207,9 @@ function EditableProjectName() {
 					name: newName,
 				});
 			} catch (error) {
-				toast.error("Failed to rename project", {
-					description:
-						error instanceof Error ? error.message : "Please try again",
+				console.error("Failed to rename project:", error);
+				toast.error(m.notices.project.renameFailed, {
+					description: m.projects.tryAgain,
 				});
 			}
 		}
