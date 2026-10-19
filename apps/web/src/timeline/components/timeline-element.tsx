@@ -23,7 +23,12 @@ import {
 	timelineTimeToSnappedPixels,
 } from "@/timeline";
 import { getTrackHeight } from "./track-layout";
-import { getTimelineElementClassName, TIMELINE_TRACK_THEME } from "./theme";
+import {
+	prefersDarkText,
+	resolveTimelineElementColor,
+	TIMELINE_TRACK_THEME,
+} from "./theme";
+import { AnchoredColorPopover } from "./timeline-color-popover";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -75,14 +80,14 @@ import {
 	KeyframeIcon,
 	MagicWand05Icon,
 	Link01Icon,
+	PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "@/utils/string";
-import { useMemo, type ComponentProps, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import type { SelectedKeyframeRef, ElementKeyframe } from "@/animation/types";
 import { cn } from "@/utils/ui";
 import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
-import { getTrackTypeForElementType } from "@/timeline/placement/compatibility";
 import { useTimelineStore } from "@/timeline/timeline-store";
 import { KEYFRAME_LANE_HEIGHT_PX } from "./layout";
 import { useMessages } from "@/i18n";
@@ -233,8 +238,10 @@ export function TimelineElement({
 	isDropTarget = false,
 }: TimelineElementProps) {
 	const m = useMessages();
+	const editor = useEditor();
 	const mediaAssets = useEditor((e) => e.media.getAssets());
 	const { selectedElements } = useElementSelection();
+	const [isColorPopoverOpen, setIsColorPopoverOpen] = useState(false);
 	const requestRevealMedia = useAssetsPanelStore((s) => s.requestRevealMedia);
 	const { renderElement } = useElementPreview({
 		trackId: track.id,
@@ -379,7 +386,8 @@ export function TimelineElement({
 	return (
 		<PixelsPerSecondContext.Provider value={timelinePixelsPerSecond}>
 			<ContextMenu>
-				<ContextMenuTrigger asChild>
+				{/* 잠긴 트랙이면 클립 메뉴 대신 트랙 메뉴(잠금 풀기)가 열린다 */}
+				<ContextMenuTrigger asChild disabled={track.locked}>
 					<div
 						className="absolute top-0 select-none"
 						style={{
@@ -408,6 +416,21 @@ export function TimelineElement({
 							onResizeStart={onResizeStart}
 							isDropTarget={isDropTarget}
 						/>
+						<AnchoredColorPopover
+							open={isColorPopoverOpen}
+							onOpenChange={setIsColorPopoverOpen}
+							color={resolveTimelineElementColor({ element, track })}
+							canReset={element.color !== undefined}
+							resetLabel={m.timeline.resetToTrackColor}
+							onColorChange={(color) =>
+								editor.timeline.setElementsColor({
+									elements: isCurrentElementSelected
+										? selectedElements
+										: [{ trackId: track.id, elementId: element.id }],
+									color,
+								})
+							}
+						/>
 						{isSelected && (
 							<div
 								className="pointer-events-none absolute inset-x-0 top-0 overflow-hidden"
@@ -426,7 +449,11 @@ export function TimelineElement({
 						)}
 					</div>
 				</ContextMenuTrigger>
-				<ContextMenuContent className="w-64">
+				<ContextMenuContent
+					className="w-64"
+					// 메뉴가 닫히며 포커스를 되돌리면 막 연 색 팝오버가 바로 닫힌다
+					onCloseAutoFocus={(event) => event.preventDefault()}
+				>
 					<ActionMenuItem
 						action="split"
 						icon={<HugeiconsIcon icon={ScissorIcon} />}
@@ -504,6 +531,15 @@ export function TimelineElement({
 							</ContextMenuItem>
 						</>
 					)}
+					<ContextMenuItem
+						icon={<HugeiconsIcon icon={PaintBoardIcon} />}
+						onClick={(event: React.MouseEvent) => {
+							event.stopPropagation();
+							setIsColorPopoverOpen(true);
+						}}
+					>
+						{m.timeline.clipColor}
+					</ContextMenuItem>
 					<ContextMenuSeparator />
 					<DeleteMenuItem
 						isMultipleSelected={selectedElements.length > 1}
@@ -557,6 +593,9 @@ function ElementInner({
 	const isReducedOpacity =
 		(canElementBeHidden(visibleElement) && visibleElement.hidden) ||
 		isDropTarget;
+	const color = resolveTimelineElementColor({ element, track });
+	// 영상·이미지는 썸네일이 배경을 덮으므로 색을 위쪽 띠로 보여 준다
+	const isThumbnailClip = element.type === "video" || element.type === "image";
 	return (
 		<div
 			className="absolute top-0 bottom-0"
@@ -595,19 +634,27 @@ function ElementInner({
 						<div
 							className={cn(
 								"flex shrink-0 items-center overflow-hidden",
-								getTimelineElementClassName({
-									type: getTrackTypeForElementType({
-										elementType: element.type,
-									}),
-								}),
+								color &&
+									!isThumbnailClip &&
+									prefersDarkText({ color }) &&
+									"[&_span]:text-black [&_svg]:text-black",
 								isReducedOpacity && "opacity-50",
 							)}
-							style={{ height: `${baseTrackHeight}px` }}
+							style={{
+								height: `${baseTrackHeight}px`,
+								backgroundColor: isThumbnailClip ? undefined : color,
+							}}
 						>
 							<div className="flex flex-1 min-h-0 h-full items-center overflow-hidden">
 								<ElementContent element={visibleElement} track={track} />
 							</div>
 						</div>
+						{isThumbnailClip && color && (
+							<div
+								className="pointer-events-none absolute inset-x-0 top-0 h-1"
+								style={{ backgroundColor: color }}
+							/>
+						)}
 						{expandedContent}
 					</button>
 					{element.groupId && (

@@ -3,8 +3,11 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Delete02Icon,
+	LockIcon,
 	MagicWand05Icon,
+	PaintBoardIcon,
 	MusicNote03Icon,
+	SquareUnlock02Icon,
 	TaskAdd02Icon,
 	TextIcon,
 	ViewIcon,
@@ -59,7 +62,12 @@ import {
 	getCumulativeHeightBefore,
 	getTotalTracksHeight,
 } from "./track-layout";
-import { SELECTED_TRACK_ROW_CLASS } from "./theme";
+import {
+	getTrackColor,
+	LOCKED_TRACK_OVERLAY_CLASS,
+	SELECTED_TRACK_ROW_CLASS,
+} from "./theme";
+import { TIMELINE_LAYERS } from "./layers";
 import {
 	computeTrackExpansionHeight,
 	getTrackExpandedRows,
@@ -68,6 +76,10 @@ import {
 } from "./expanded-layout";
 import { TIMELINE_HORIZONTAL_WHEEL_STEP_PX } from "./interaction";
 import { TimelineToolbar } from "./timeline-toolbar";
+import {
+	AnchoredColorPopover,
+	TrackColorStrip,
+} from "./timeline-color-popover";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
 import { useTimelineSeek } from "@/timeline/hooks/use-timeline-seek";
 import { useTimelineDragDrop } from "@/timeline/hooks/use-timeline-drag-drop";
@@ -663,7 +675,7 @@ function TrackLabelsPanel({
 									<div
 										key={track.id}
 										className={cn(
-											"group flex flex-col",
+											"group relative flex flex-col",
 											tracksWithSelection.has(track.id) &&
 												SELECTED_TRACK_ROW_CLASS,
 										)}
@@ -671,6 +683,7 @@ function TrackLabelsPanel({
 											height: `${baseHeight + getTrackExpansionHeight(index)}px`,
 										}}
 									>
+										<TrackColorStrip track={track} />
 										<div
 											className="flex shrink-0 items-center justify-end gap-2 px-3"
 											style={{ height: `${baseHeight}px` }}
@@ -713,6 +726,16 @@ function TrackLabelsPanel({
 													}
 												/>
 											)}
+											<TrackToggleIcon
+												isOff={track.locked === true}
+												icons={{
+													on: SquareUnlock02Icon,
+													off: LockIcon,
+												}}
+												onClick={() =>
+													editor.timeline.toggleTrackLock({ trackId: track.id })
+												}
+											/>
 											<TrackIcon track={track} />
 										</div>
 										{expandedRows.length > 0 && (
@@ -768,6 +791,7 @@ function TimelineTrackRows({
 }) {
 	const m = useMessages();
 	const timeline = useEditor((e) => e.timeline);
+	const [colorTrackId, setColorTrackId] = useState<string | null>(null);
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const tracks = useMemo<TimelineTrack[]>(
 		() =>
@@ -849,9 +873,32 @@ function TimelineTrackRows({
 										: null
 								}
 							/>
+							{track.locked && (
+								<div
+									className={cn(
+										"pointer-events-none absolute inset-0",
+										LOCKED_TRACK_OVERLAY_CLASS,
+									)}
+									style={{ zIndex: TIMELINE_LAYERS.trackLockOverlay }}
+								/>
+							)}
+							<AnchoredColorPopover
+								open={colorTrackId === track.id}
+								onOpenChange={(open) => setColorTrackId(open ? track.id : null)}
+								color={getTrackColor({ track })}
+								canReset={track.color !== undefined}
+								resetLabel={m.timeline.resetColor}
+								onColorChange={(color) =>
+									timeline.setTrackColor({ trackId: track.id, color })
+								}
+							/>
 						</div>
 					</ContextMenuTrigger>
-					<ContextMenuContent className="w-40">
+					<ContextMenuContent
+						className="w-40"
+						// 메뉴가 닫히며 포커스를 되돌리면 막 연 색 팝오버가 바로 닫힌다
+						onCloseAutoFocus={(event) => event.preventDefault()}
+					>
 						<ContextMenuItem
 							icon={<HugeiconsIcon icon={TaskAdd02Icon} />}
 							onClick={(event: React.MouseEvent) => {
@@ -882,6 +929,28 @@ function TimelineTrackRows({
 							{canTrackBeHidden(track) && track.hidden
 								? m.timeline.showTrack
 								: m.timeline.hideTrack}
+						</ContextMenuItem>
+						<ContextMenuItem
+							icon={<HugeiconsIcon icon={PaintBoardIcon} />}
+							onClick={(event: React.MouseEvent) => {
+								event.stopPropagation();
+								setColorTrackId(track.id);
+							}}
+						>
+							{m.timeline.trackColor}
+						</ContextMenuItem>
+						<ContextMenuItem
+							icon={
+								<HugeiconsIcon
+									icon={track.locked ? SquareUnlock02Icon : LockIcon}
+								/>
+							}
+							onClick={(event: React.MouseEvent) => {
+								event.stopPropagation();
+								timeline.toggleTrackLock({ trackId: track.id });
+							}}
+						>
+							{track.locked ? m.timeline.unlockTrack : m.timeline.lockTrack}
 						</ContextMenuItem>
 						{track.id !== mainTrackId && (
 							<ContextMenuItem

@@ -459,6 +459,7 @@ function canApplyMovesToExistingTracks({
 		if (
 			!canPlaceTimeSpansOnTrack({
 				track: {
+					locked: targetTrack.locked,
 					elements: targetTrack.elements.filter(
 						(element) => !movingElementIds.has(element.id),
 					),

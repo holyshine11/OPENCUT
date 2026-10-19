@@ -31,6 +31,10 @@ export type TrackType = "video" | "text" | "audio" | "graphic" | "effect";
 interface BaseTrack {
 	id: string;
 	name: string;
+	/** 트랙 색. 없으면 트랙 종류의 기본색 */
+	color?: string;
+	/** 잠긴 트랙의 클립은 선택·편집되지 않는다 */
+	locked?: boolean;
 }
 
 export interface VideoTrack extends BaseTrack {
@@ -114,6 +118,8 @@ interface BaseTimelineElement {
 	params: ParamValues;
 	// ⌘G로 묶은 클립 그룹. 같은 값끼리 함께 선택·이동한다
 	groupId?: string;
+	/** 클립 색. 없으면 트랙 색을 따른다 */
+	color?: string;
 }
 
 export interface VideoElement extends BaseTimelineElement {
