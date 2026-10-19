@@ -1,7 +1,11 @@
 import type { FrameRate } from "opencut-wasm";
 import type { ExportOptions } from "./index";
 import type { TCanvasSize } from "@/project/types";
-import { captionFormOf, type CaptionForm } from "@/transcription/caption-layout-store";
+import { frameRateToFloat } from "@/fps/utils";
+import {
+	captionFormOf,
+	type CaptionForm,
+} from "@/transcription/caption-layout-store";
 
 export const DEFAULT_EXPORT_OPTIONS = {
 	format: "mp4",
@@ -15,14 +19,12 @@ export const MAX_DEFAULT_EXPORT_FPS: FrameRate = {
 	denominator: 1,
 };
 
-const toFloat = (fps: FrameRate) => fps.numerator / fps.denominator;
-
 export function defaultExportFps({
 	projectFps,
 }: {
 	projectFps: FrameRate;
 }): FrameRate {
-	return toFloat(projectFps) > toFloat(MAX_DEFAULT_EXPORT_FPS)
+	return frameRateToFloat(projectFps) > frameRateToFloat(MAX_DEFAULT_EXPORT_FPS)
 		? MAX_DEFAULT_EXPORT_FPS
 		: projectFps;
 }
@@ -49,7 +51,10 @@ export function fitInside({
 	source: TCanvasSize;
 	target: TCanvasSize;
 }): { x: number; y: number; width: number; height: number } {
-	const scale = Math.min(target.width / source.width, target.height / source.height);
+	const scale = Math.min(
+		target.width / source.width,
+		target.height / source.height,
+	);
 	const width = Math.round(source.width * scale);
 	const height = Math.round(source.height * scale);
 	return {

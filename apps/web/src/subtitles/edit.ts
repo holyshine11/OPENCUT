@@ -1,10 +1,12 @@
-/** 자막 목록에서 쓰는 시간 계산. 시간은 모두 초 단위다 */
-export interface Cue {
-	text: string;
+import type { CaptionChunk } from "@/transcription/types";
+
+/**
+ * 자막 목록에서 쓰는 자막. 만들 때 쓰는 CaptionChunk와 같은 내용을 시작·끝(초)으로 들고 있다.
+ * 나누기·합치기·겹침 계산이 끝 시각 기준이라 길이 대신 끝을 쓴다
+ */
+export interface Cue extends Pick<CaptionChunk, "text" | "wordStarts"> {
 	start: number;
 	end: number;
-	/** 단어마다 시작한 시각. 문구를 고쳐 단어 수가 달라지면 쓰지 않는다 */
-	wordStarts?: number[];
 }
 
 const visibleLength = (text: string) => text.replace(/\s/g, "").length;

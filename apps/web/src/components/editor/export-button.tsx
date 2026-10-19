@@ -34,6 +34,7 @@ import {
 	SectionTitle,
 } from "@/components/section";
 import { useEditor } from "@/editor/use-editor";
+import { frameRateToFloat } from "@/fps/utils";
 import {
 	DEFAULT_EXPORT_OPTIONS,
 	defaultExportFps,
@@ -102,7 +103,7 @@ export function ExportButton() {
 }
 
 function formatFps({ fps }: { fps: FrameRate }): string {
-	return String(Number((fps.numerator / fps.denominator).toFixed(2)));
+	return String(Number(frameRateToFloat(fps).toFixed(2)));
 }
 
 function ExportPopover({
