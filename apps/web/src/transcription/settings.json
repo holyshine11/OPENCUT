@@ -38,5 +38,21 @@
 			"thankyouforwatching",
 			"pleasesubscribe"
 		]
+	},
+	"captionLayout": {
+		"shortForm": {
+			"maxCharsPerLine": 14,
+			"maxLines": 1,
+			"minDuration": 0.6,
+			"maxDuration": 3,
+			"stripPunctuation": true
+		},
+		"longForm": {
+			"maxCharsPerLine": 22,
+			"maxLines": 2,
+			"minDuration": 1,
+			"maxDuration": 6,
+			"stripPunctuation": false
+		}
 	}
 }

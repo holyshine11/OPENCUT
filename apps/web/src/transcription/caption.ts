@@ -1,65 +1,107 @@
-import type { TranscriptionSegment, CaptionChunk } from "@/transcription/types";
-import {
-	DEFAULT_WORDS_PER_CAPTION,
-	MIN_CAPTION_DURATION_SECONDS,
-} from "@/transcription/caption-defaults";
+import type {
+	CaptionChunk,
+	CaptionLayout,
+	TranscriptionSegment,
+	TranscriptionWord,
+} from "@/transcription/types";
 
 export function buildCaptionChunks({
 	segments,
-	wordsPerChunk = DEFAULT_WORDS_PER_CAPTION,
-	minDuration = MIN_CAPTION_DURATION_SECONDS,
+	layout,
 }: {
 	segments: TranscriptionSegment[];
-	wordsPerChunk?: number;
-	minDuration?: number;
+	layout: CaptionLayout;
 }): CaptionChunk[] {
 	const captions: CaptionChunk[] = [];
-	let globalEndTime = 0;
+	let previousEnd = 0;
 
 	for (const segment of segments) {
-		// 단어 시간 정보가 있으면 실제 발화 시간에 맞춘다. 4단계에서 글자 수 기준 분할로 바뀐다
-		if (segment.words?.length) {
-			for (let i = 0; i < segment.words.length; i += wordsPerChunk) {
-				const chunkWords = segment.words.slice(i, i + wordsPerChunk);
-				const startTime = Math.max(chunkWords[0].start, globalEndTime);
-				const endTime = Math.max(chunkWords[chunkWords.length - 1].end, startTime + minDuration);
-				captions.push({
-					text: chunkWords.map((word) => word.text).join(" "),
-					startTime,
-					duration: endTime - startTime,
-				});
-				globalEndTime = endTime;
-			}
-			continue;
-		}
-
-		const words = segment.text.trim().split(/\s+/);
-		if (words.length === 0 || (words.length === 1 && words[0] === "")) continue;
-
-		const segmentDuration = segment.end - segment.start;
-		const wordsPerSecond = words.length / segmentDuration;
-
-		const chunks: string[] = [];
-		for (let i = 0; i < words.length; i += wordsPerChunk) {
-			chunks.push(words.slice(i, i + wordsPerChunk).join(" "));
-		}
-
-		let chunkStartTime = segment.start;
-		for (const chunk of chunks) {
-			const chunkWords = chunk.split(/\s+/).length;
-			const chunkDuration = Math.max(minDuration, chunkWords / wordsPerSecond);
-			const adjustedStartTime = Math.max(chunkStartTime, globalEndTime);
-
+		for (const lines of groupWords({ words: wordsOf({ segment }), layout })) {
+			const first = lines[0][0];
+			const last = lines[lines.length - 1].at(-1) ?? first;
+			const startTime = Math.max(first.start, previousEnd);
+			const endTime = Math.min(
+				Math.max(last.end, startTime + layout.minDuration),
+				startTime + layout.maxDuration,
+			);
 			captions.push({
-				text: chunk,
-				startTime: adjustedStartTime,
-				duration: chunkDuration,
+				text: lines.map((line) => line.map((word) => word.text).join(" ")).join("\n"),
+				startTime,
+				duration: endTime - startTime,
 			});
-
-			globalEndTime = adjustedStartTime + chunkDuration;
-			chunkStartTime += chunkDuration;
+			previousEnd = endTime;
 		}
 	}
+
+	return captions;
+}
+
+/** 단어 시간 정보가 없으면 구간 시간을 글자 수 비율로 나눠 단어 시간을 만든다 */
+function wordsOf({ segment }: { segment: TranscriptionSegment }): TranscriptionWord[] {
+	if (segment.words?.length) return segment.words;
+
+	const texts = segment.text.trim().split(/\s+/).filter(Boolean);
+	const totalChars = texts.reduce((sum, text) => sum + text.length, 0);
+	const secondsPerChar = (segment.end - segment.start) / Math.max(totalChars, 1);
+	let cursor = segment.start;
+	return texts.map((text) => {
+		const start = cursor;
+		cursor += text.length * secondsPerChar;
+		return { text, start, end: cursor };
+	});
+}
+
+/**
+ * 단어를 줄로, 줄을 자막으로 묶는다. 한 단어가 한 줄보다 길어도 단어 중간에서는 끊지 않는다.
+ * 문장이 끝나면(. ? !) 자막도 끝낸다
+ */
+function groupWords({
+	words,
+	layout,
+}: {
+	words: TranscriptionWord[];
+	layout: CaptionLayout;
+}): TranscriptionWord[][][] {
+	const captions: TranscriptionWord[][][] = [];
+	let lines: TranscriptionWord[][] = [];
+	let line: TranscriptionWord[] = [];
+	let lineLength = 0;
+
+	const flush = () => {
+		if (line.length) lines.push(line);
+		if (lines.length) captions.push(lines);
+		lines = [];
+		line = [];
+		lineLength = 0;
+	};
+
+	for (const rawWord of words) {
+		const text = layout.stripPunctuation ? rawWord.text.replace(/[.,]+$/, "") : rawWord.text;
+		const endsSentence = /[.?!]$/.test(rawWord.text);
+		const word = { ...rawWord, text };
+		if (!word.text) {
+			if (endsSentence) flush();
+			continue;
+		}
+		const captionStart = (lines[0] ?? line)[0]?.start;
+		if (captionStart !== undefined && word.end - captionStart > layout.maxDuration) {
+			flush();
+		}
+		const nextLength = line.length ? lineLength + 1 + word.text.length : word.text.length;
+		if (line.length && nextLength > layout.maxCharsPerLine) {
+			lines.push(line);
+			line = [];
+			lineLength = 0;
+			if (lines.length >= layout.maxLines) {
+				captions.push(lines);
+				lines = [];
+			}
+		}
+		line.push(word);
+		lineLength = line.length === 1 ? word.text.length : lineLength + 1 + word.text.length;
+		if (endsSentence) flush();
+	}
+	flush();
 
 	return captions;
 }

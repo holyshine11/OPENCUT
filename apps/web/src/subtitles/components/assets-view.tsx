@@ -27,6 +27,11 @@ import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "@/transcription/languages";
 import { parseTerms, useTranscriptionTerms } from "@/transcription/terms-store";
 import { decodeAudioToFloat32 } from "@/media/audio";
 import { buildCaptionChunks } from "@/transcription/caption";
+import {
+	captionFormOf,
+	useCaptionLayouts,
+} from "@/transcription/caption-layout-store";
+import { CaptionLayoutFields } from "./caption-layout-fields";
 import { insertCaptionChunksAsTextTrack } from "@/subtitles/insert";
 import { parseSubtitleFile } from "@/subtitles/parse";
 import { Spinner } from "@/components/ui/spinner";
@@ -101,6 +106,9 @@ export function Captions() {
 	const editor = useEditor();
 
 	const isProcessing = processing.status === "processing";
+	const captionForm = useEditor((e) =>
+		captionFormOf({ canvasSize: e.project.getActive().settings.canvasSize }),
+	);
 
 	const activeDiagnostics = useEditor((e) =>
 		e.diagnostics.getActive({ scope: TRANSCRIPTION_DIAGNOSTICS_SCOPE }),
@@ -152,7 +160,10 @@ export function Captions() {
 			});
 
 			dispatch({ type: "update_step", step: "Generating captions..." });
-			const captionChunks = buildCaptionChunks({ segments: result.segments });
+			const captionChunks = buildCaptionChunks({
+				segments: result.segments,
+				layout: useCaptionLayouts.getState().layouts[captionForm],
+			});
 
 			if (!insertCaptions({ captions: captionChunks })) {
 				dispatch({ type: "fail", error: "No captions were generated" });
@@ -334,6 +345,7 @@ export function Captions() {
 								}
 							/>
 						</SectionField>
+						<CaptionLayoutFields form={captionForm} disabled={isProcessing} />
 					</SectionFields>
 
 					<Button

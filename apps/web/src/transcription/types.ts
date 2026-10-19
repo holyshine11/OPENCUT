@@ -39,3 +39,12 @@ export interface CaptionChunk {
 	startTime: number;
 	duration: number;
 }
+
+/** 자막 한 개를 만드는 기준. 숏폼·롱폼 권장값은 `settings.json`의 `captionLayout`에 있다 */
+export interface CaptionLayout {
+	maxCharsPerLine: number;
+	maxLines: number;
+	minDuration: number;
+	maxDuration: number;
+	stripPunctuation: boolean;
+}
