@@ -34,6 +34,7 @@ import {
 	splitSubtitle,
 } from "@/subtitles/list-actions";
 import { useMessages } from "@/i18n";
+import type { ElementRef } from "@/timeline/types";
 
 /** 자막 그룹 하나를 시간순 목록으로 보여 주고, 텍스트 수정·분할·병합·시간 조정과 해당 시점 이동을 한다 */
 export function SubtitleListView() {
@@ -50,6 +51,26 @@ export function SubtitleListView() {
 	const [replacement, setReplacement] = useState("");
 	const [matchIndex, setMatchIndex] = useState(0);
 	const editor = useEditor();
+	const selectedElements = useEditor((e) => e.selection.getSelectedElements());
+	const [followedSelection, setFollowedSelection] = useState<
+		ElementRef[] | null
+	>(null);
+
+	// 타임라인에서 자막 하나를 고르면 그 묶음으로 바꾸고 그 행을 연다. 선택이 바뀔 때만 따르므로
+	// 목록에서 고른 행은 이미 같은 값이고, 자막을 고쳐도 찾기로 연 행이 되돌아가지 않는다
+	if (followedSelection !== selectedElements) {
+		setFollowedSelection(selectedElements);
+		const elementId =
+			selectedElements.length === 1 ? selectedElements[0].elementId : null;
+		const owner = groups.find((candidate) =>
+			candidate.entries.some((entry) => entry.element.id === elementId),
+		);
+		if (owner && elementId) {
+			setSelectedGroupId(owner.groupId);
+			setActiveId(elementId);
+		}
+	}
+
 	const group =
 		groups.find((candidate) => candidate.groupId === selectedGroupId) ??
 		groups.at(-1);
@@ -276,8 +297,10 @@ function SubtitleRow({
 	const rowRef = useRef<HTMLLIElement>(null);
 
 	useEffect(() => {
-		if (isCurrentMatch) rowRef.current?.scrollIntoView({ block: "nearest" });
-	}, [isCurrentMatch]);
+		if (isCurrentMatch || isActive) {
+			rowRef.current?.scrollIntoView({ block: "nearest" });
+		}
+	}, [isCurrentMatch, isActive]);
 
 	const commit = () => {
 		if (draft === null) return;
