@@ -96,3 +96,25 @@ function parseSrtTimestamp({ input }: { input: string }): number {
 		parsedMilliseconds / 1000
 	);
 }
+
+function formatSrtTimestamp({ seconds }: { seconds: number }): string {
+	const totalMs = Math.round(seconds * 1000);
+	const two = (value: number) => String(value).padStart(2, "0");
+	const hours = Math.floor(totalMs / 3_600_000);
+	const minutes = Math.floor(totalMs / 60_000) % 60;
+	const secs = Math.floor(totalMs / 1000) % 60;
+	return `${two(hours)}:${two(minutes)}:${two(secs)},${String(totalMs % 1000).padStart(3, "0")}`;
+}
+
+/** 자막을 SRT 텍스트로 만든다. 시작 시간순으로 번호를 붙인다 */
+export function formatSrt({ cues }: { cues: SubtitleCue[] }): string {
+	return [...cues]
+		.sort((a, b) => a.startTime - b.startTime)
+		.map(
+			(cue, index) =>
+				`${index + 1}\n${formatSrtTimestamp({ seconds: cue.startTime })} --> ${formatSrtTimestamp({
+					seconds: cue.startTime + cue.duration,
+				})}\n${cue.text.trim()}\n`,
+		)
+		.join("\n");
+}

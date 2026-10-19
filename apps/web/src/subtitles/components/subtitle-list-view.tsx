@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
 	ArrowDown01Icon,
 	ArrowUp01Icon,
+	Download01Icon,
 	GitMergeIcon,
 	ScissorIcon,
 	Search01Icon,
@@ -22,6 +23,8 @@ import { useEditor } from "@/editor/use-editor";
 import { cn } from "@/utils/ui";
 import { listSubtitleGroups, type SubtitleEntry } from "@/subtitles/groups";
 import { formatCueTime, parseCueTime } from "@/subtitles/edit";
+import { formatSrt } from "@/subtitles/srt";
+import { downloadBuffer } from "@/export";
 import {
 	cueOf,
 	mergeSubtitles,
@@ -46,13 +49,16 @@ export function SubtitleListView() {
 	const [matchIndex, setMatchIndex] = useState(0);
 	const editor = useEditor();
 	const group =
-		groups.find((candidate) => candidate.groupId === selectedGroupId) ?? groups.at(-1);
+		groups.find((candidate) => candidate.groupId === selectedGroupId) ??
+		groups.at(-1);
 
 	const matches =
 		isFinding && query && group
 			? group.entries.filter((entry) => cueOf({ entry }).text.includes(query))
 			: [];
-	const currentMatch = matches.length ? matches[matchIndex % matches.length] : undefined;
+	const currentMatch = matches.length
+		? matches[matchIndex % matches.length]
+		: undefined;
 
 	const goToMatch = (index: number) => {
 		const target = matches.at(index % matches.length);
@@ -67,16 +73,44 @@ export function SubtitleListView() {
 			title="Subtitle list"
 			actions={
 				group && (
-					<Button
-						type="button"
-						variant={isFinding ? "secondary" : "ghost"}
-						size="icon"
-						aria-label="Find and replace"
-						title="Find and replace"
-						onClick={() => setIsFinding(!isFinding)}
-					>
-						<HugeiconsIcon icon={Search01Icon} size={16} />
-					</Button>
+					<div className="flex items-center gap-1">
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label="Export SRT"
+							title="Export SRT"
+							onClick={() => {
+								const srt = formatSrt({
+									cues: group.entries.map((entry) => {
+										const cue = cueOf({ entry });
+										return {
+											text: cue.text,
+											startTime: cue.start,
+											duration: cue.end - cue.start,
+										};
+									}),
+								});
+								downloadBuffer({
+									buffer: new TextEncoder().encode(srt).buffer,
+									filename: `${editor.project.getActive().metadata.name}.srt`,
+									mimeType: "application/x-subrip",
+								});
+							}}
+						>
+							<HugeiconsIcon icon={Download01Icon} size={16} />
+						</Button>
+						<Button
+							type="button"
+							variant={isFinding ? "secondary" : "ghost"}
+							size="icon"
+							aria-label="Find and replace"
+							title="Find and replace"
+							onClick={() => setIsFinding(!isFinding)}
+						>
+							<HugeiconsIcon icon={Search01Icon} size={16} />
+						</Button>
+					</div>
 				)
 			}
 		>
@@ -113,13 +147,18 @@ export function SubtitleListView() {
 										setMatchIndex(0);
 									}}
 									onKeyDown={(event) => {
-										if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+										if (
+											event.key === "Enter" &&
+											!event.nativeEvent.isComposing
+										) {
 											goToMatch(matchIndex + (event.shiftKey ? -1 : 1));
 										}
 									}}
 								/>
 								<span className="text-muted-foreground w-12 shrink-0 text-center text-xs tabular-nums">
-									{query ? `${matches.length ? (matchIndex % matches.length) + 1 : 0}/${matches.length}` : ""}
+									{query
+										? `${matches.length ? (matchIndex % matches.length) + 1 : 0}/${matches.length}`
+										: ""}
 								</span>
 								<Button
 									type="button"
@@ -157,7 +196,12 @@ export function SubtitleListView() {
 									disabled={!currentMatch}
 									onClick={() =>
 										currentMatch &&
-										replaceInSubtitle({ editor, entry: currentMatch, query, replacement })
+										replaceInSubtitle({
+											editor,
+											entry: currentMatch,
+											query,
+											replacement,
+										})
 									}
 								>
 									Replace
@@ -168,7 +212,12 @@ export function SubtitleListView() {
 									size="sm"
 									disabled={!matches.length}
 									onClick={() =>
-										replaceAllInSubtitles({ editor, entries: group.entries, query, replacement })
+										replaceAllInSubtitles({
+											editor,
+											entries: group.entries,
+											query,
+											replacement,
+										})
 									}
 								>
 									All
@@ -228,7 +277,13 @@ function SubtitleRow({
 		if (draft === null) return;
 		if (draft !== cue.text) {
 			editor.timeline.updateElements({
-				updates: [{ trackId, elementId: element.id, patch: { params: { content: draft } } }],
+				updates: [
+					{
+						trackId,
+						elementId: element.id,
+						patch: { params: { content: draft } },
+					},
+				],
 			});
 		}
 		setDraft(null);
@@ -284,7 +339,11 @@ function SubtitleRow({
 					onChange={(event) => setDraft(event.target.value)}
 					onBlur={commit}
 					onKeyDown={(event) => {
-						if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+						if (
+							event.key === "Enter" &&
+							!event.shiftKey &&
+							!event.nativeEvent.isComposing
+						) {
 							event.preventDefault();
 							event.currentTarget.blur();
 						}
@@ -297,14 +356,28 @@ function SubtitleRow({
 						label="Start"
 						seconds={cue.start}
 						onCommit={(start) =>
-							retimeSubtitle({ editor, entry, start, end: cue.end, previous, next })
+							retimeSubtitle({
+								editor,
+								entry,
+								start,
+								end: cue.end,
+								previous,
+								next,
+							})
 						}
 					/>
 					<CueTimeInput
 						label="End"
 						seconds={cue.end}
 						onCommit={(end) =>
-							retimeSubtitle({ editor, entry, start: cue.start, end, previous, next })
+							retimeSubtitle({
+								editor,
+								entry,
+								start: cue.start,
+								end,
+								previous,
+								next,
+							})
 						}
 					/>
 					<Button
@@ -326,7 +399,9 @@ function SubtitleRow({
 						aria-label="Merge with next"
 						title="Merge with next"
 						disabled={!next}
-						onClick={() => next && mergeSubtitles({ editor, first: entry, second: next })}
+						onClick={() =>
+							next && mergeSubtitles({ editor, first: entry, second: next })
+						}
 					>
 						<HugeiconsIcon icon={GitMergeIcon} size={14} />
 					</Button>
