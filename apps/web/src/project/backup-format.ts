@@ -39,7 +39,17 @@ export async function unpackBackup({
 }: {
 	entries: ZipEntry[];
 }): Promise<ProjectBackup> {
-	const byName = new Map(entries.map((entry) => [entry.name, entry.data]));
+	// 압축을 풀었다가 폴더째 다시 압축하면 모든 이름 앞에 폴더가 붙고 macOS 부가 파일이 섞인다
+	const files = entries.filter(({ name }) => !name.startsWith("__MACOSX/"));
+	const manifestName = files.find(
+		({ name }) => name === MANIFEST || name.endsWith(`/${MANIFEST}`),
+	)?.name;
+	const prefix = manifestName?.slice(0, -MANIFEST.length) ?? "";
+	const byName = new Map(
+		files
+			.filter(({ name }) => name.startsWith(prefix))
+			.map((entry) => [entry.name.slice(prefix.length), entry.data]),
+	);
 	const manifest = byName.get(MANIFEST);
 	if (!manifest) throw new Error("Not an OpenCut project backup");
 	const { format, project } = JSON.parse(await manifest.text());

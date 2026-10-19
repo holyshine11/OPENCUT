@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { crc32, readZip, writeZip } from "../zip";
+
+const FINDER_REZIPPED_BACKUP = join(
+	import.meta.dir,
+	"fixtures",
+	"finder-rezipped-backup.zip",
+);
 
 describe("crc32", () => {
 	test("표준 검사값과 같다", async () => {
@@ -32,5 +39,13 @@ describe("writeZip / readZip", () => {
 
 	test("zip이 아닌 파일은 거부한다", async () => {
 		await expect(readZip({ file: new Blob(["not a zip"]) })).rejects.toThrow();
+	});
+
+	test("Finder(ditto)로 다시 압축한 zip의 압축 항목도 풀어서 읽는다", async () => {
+		const entries = await readZip({ file: Bun.file(FINDER_REZIPPED_BACKUP) });
+		const bin = entries.find((entry) => entry.name === "국밥 숏폼/media/m1.bin");
+		expect(new Uint8Array(await bin!.data.arrayBuffer())).toEqual(
+			new Uint8Array(3000).map((_, index) => index % 7),
+		);
 	});
 });

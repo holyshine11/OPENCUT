@@ -2,8 +2,9 @@
  * Store-only (uncompressed) ZIP with ZIP64 records, for project backups.
  * Media is already compressed, so storing keeps it fast, and building the
  * archive from Blob slices never loads whole videos into memory.
- * ponytail: always writes ZIP64 fields; readZip only reads store-only archives
- * (what writeZip produces), add inflate if other tools' archives must load.
+ * readZip also inflates deflated entries, so a backup re-zipped by Finder loads.
+ * ponytail: always writes ZIP64 fields; inflated entries become in-memory Blobs
+ * (Chrome spills large ones to disk), stream them if huge re-zipped media OOMs.
  */
 
 export interface ZipEntry {
@@ -22,6 +23,7 @@ const ZIP64_VERSION = 45;
 const MAX_32 = 0xffffffff;
 const MAX_16 = 0xffff;
 const STORE_METHOD = 0;
+const DEFLATE_METHOD = 8;
 const EOCD_SIZE = 22;
 const MAX_COMMENT = 0xffff;
 // ZIP64 end record size, counted after its signature and size fields
@@ -183,7 +185,13 @@ async function viewOf({
 	return new DataView(await file.slice(start, end).arrayBuffer());
 }
 
-/** Reads a store-only ZIP (with or without ZIP64). Entry data are lazy slices of the file */
+async function inflate({ data }: { data: Blob }): Promise<Blob> {
+	return new Response(
+		data.stream().pipeThrough(new DecompressionStream("deflate-raw")),
+	).blob();
+}
+
+/** Reads a ZIP (with or without ZIP64). Stored entries are lazy slices of the file */
 export async function readZip({ file }: { file: Blob }): Promise<ZipEntry[]> {
 	const tailStart = Math.max(0, file.size - EOCD_SIZE - MAX_COMMENT);
 	const tail = await viewOf({ file, start: tailStart, end: file.size });
@@ -228,8 +236,9 @@ export async function readZip({ file }: { file: Blob }): Promise<ZipEntry[]> {
 		if (central.getUint32(cursor, true) !== CENTRAL_HEADER) {
 			throw new Error("Broken ZIP central directory");
 		}
-		if (central.getUint16(cursor + 10, true) !== STORE_METHOD) {
-			throw new Error("Compressed ZIP entries are not supported");
+		const method = central.getUint16(cursor + 10, true);
+		if (method !== STORE_METHOD && method !== DEFLATE_METHOD) {
+			throw new Error(`Unsupported ZIP compression method ${method}`);
 		}
 		let size = central.getUint32(cursor + 20, true);
 		const uncompressedSize = central.getUint32(cursor + 24, true);
@@ -271,7 +280,11 @@ export async function readZip({ file }: { file: Blob }): Promise<ZipEntry[]> {
 		}
 		const dataStart =
 			localOffset + 30 + local.getUint16(26, true) + local.getUint16(28, true);
-		entries.push({ name, data: file.slice(dataStart, dataStart + size) });
+		const data = file.slice(dataStart, dataStart + size);
+		entries.push({
+			name,
+			data: method === DEFLATE_METHOD ? await inflate({ data }) : data,
+		});
 		cursor += 46 + nameLength + extraLength + commentLength;
 	}
 

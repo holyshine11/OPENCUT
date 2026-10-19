@@ -4,6 +4,13 @@ import type {
 	SerializedProject,
 } from "@/services/storage/types";
 import { packBackup, unpackBackup, renameIfTaken } from "../backup-format";
+import { readZip } from "@/utils/zip";
+import { join } from "node:path";
+
+const FINDER_REZIPPED_BACKUP = join(
+	import.meta.dir,
+	"../../utils/__tests__/fixtures/finder-rezipped-backup.zip",
+);
 
 // 테스트에 필요한 필드만 채운 직렬화 프로젝트
 // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- 일부 필드만 쓰는 고정 데이터
@@ -83,5 +90,17 @@ describe("renameIfTaken", () => {
 				copyName: "x",
 			}),
 		).toBe(project);
+	});
+});
+
+describe("다시 압축한 백업", () => {
+	test("폴더째 압축되고 __MACOSX가 섞여 있어도 프로젝트와 미디어를 찾는다", async () => {
+		const backup = await unpackBackup({
+			entries: await readZip({ file: Bun.file(FINDER_REZIPPED_BACKUP) }),
+		});
+		expect(backup.project.metadata.id).toBe("p1");
+		expect(backup.media.map(({ metadata, file }) => [metadata.id, file.size])).toEqual([
+			["m1", 3000],
+		]);
 	});
 });
