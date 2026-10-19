@@ -529,6 +529,7 @@ export const ko: Messages = {
 		fit: "맞춤",
 		fitToScreen: "화면에 맞추기",
 		fullScreen: "전체 화면",
+		zoom: "미리보기 배율",
 		saveSnapshot: "스냅샷 저장",
 		copySnapshot: "스냅샷 복사",
 		canvas: "미리보기 화면",

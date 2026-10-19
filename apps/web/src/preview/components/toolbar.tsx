@@ -26,12 +26,14 @@ import { GridPopover } from "./guide-popover";
 import { usePreviewStore } from "@/preview/preview-store";
 import type { MediaTime } from "@/wasm";
 import { useMessages } from "@/i18n";
+import { ActionTooltip } from "@/actions/components/action-tooltip";
 
 export function PreviewToolbar({
 	onToggleFullscreen,
 }: {
 	onToggleFullscreen: () => void;
 }) {
+	const m = useMessages();
 	return (
 		<div className="grid grid-cols-[1fr_auto_1fr] items-center pb-3 pt-5 px-5">
 			<TimecodeDisplay />
@@ -52,9 +54,15 @@ export function PreviewToolbar({
 						)}
 					</Button>
 				</GridPopover> */}
-				<Button variant="text" onClick={onToggleFullscreen}>
-					<HugeiconsIcon icon={FullScreenIcon} />
-				</Button>
+				<ActionTooltip label={m.preview.fullScreen}>
+					<Button
+						variant="text"
+						aria-label={m.preview.fullScreen}
+						onClick={onToggleFullscreen}
+					>
+						<HugeiconsIcon icon={FullScreenIcon} />
+					</Button>
+				</ActionTooltip>
 			</div>
 		</div>
 	);
@@ -119,7 +127,9 @@ function ZoomSelect() {
 			value={isAtFit ? "fit" : String(zoomPercent)}
 			onValueChange={onValueChange}
 		>
-			<SelectTrigger className="tabular-nums">{displayLabel}</SelectTrigger>
+			<ActionTooltip label={m.preview.zoom}>
+				<SelectTrigger className="tabular-nums">{displayLabel}</SelectTrigger>
+			</ActionTooltip>
 			<SelectContent>
 				<SelectItem value="fit">{m.preview.fit}</SelectItem>
 				<SelectSeparator />
@@ -134,15 +144,19 @@ function ZoomSelect() {
 }
 
 function PlayPauseButton() {
+	const m = useMessages();
 	const isPlaying = useEditor((e) => e.playback.getIsPlaying());
 
 	return (
-		<Button
-			variant="text"
-			size="icon"
-			onClick={() => invokeAction("toggle-play")}
-		>
-			<HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} />
-		</Button>
+		<ActionTooltip label={m.actions["toggle-play"]} action="toggle-play">
+			<Button
+				variant="text"
+				size="icon"
+				aria-label={m.actions["toggle-play"]}
+				onClick={() => invokeAction("toggle-play")}
+			>
+				<HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} />
+			</Button>
+		</ActionTooltip>
 	);
 }

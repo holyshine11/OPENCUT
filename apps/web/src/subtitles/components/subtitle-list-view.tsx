@@ -34,6 +34,7 @@ import {
 	splitSubtitle,
 } from "@/subtitles/list-actions";
 import { useMessages } from "@/i18n";
+import { ActionTooltip } from "@/actions/components/action-tooltip";
 import type { ElementRef } from "@/timeline/types";
 
 /** 자막 그룹 하나를 시간순 목록으로 보여 주고, 텍스트 수정·분할·병합·시간 조정과 해당 시점 이동을 한다 */
@@ -438,29 +439,37 @@ function SubtitleRow({
 							})
 						}
 					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						aria-label={m.subtitleList.splitAtCursor}
-						title={m.subtitleList.splitAtCursor}
-						// 텍스트 칸의 커서 위치를 잃지 않도록 포커스를 옮기지 않는다
-						onMouseDown={(event) => event.preventDefault()}
-						onClick={split}
+					<ActionTooltip
+						label={m.subtitleList.splitAtCursor}
+						action="split-caption-at-playhead"
 					>
-						<HugeiconsIcon icon={ScissorIcon} size={14} />
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon"
-						aria-label={m.subtitleList.mergeWithNext}
-						title={m.subtitleList.mergeWithNext}
-						disabled={!next}
-						onClick={merge}
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label={m.subtitleList.splitAtCursor}
+							// 텍스트 칸의 커서 위치를 잃지 않도록 포커스를 옮기지 않는다
+							onMouseDown={(event) => event.preventDefault()}
+							onClick={split}
+						>
+							<HugeiconsIcon icon={ScissorIcon} size={14} />
+						</Button>
+					</ActionTooltip>
+					<ActionTooltip
+						label={m.subtitleList.mergeWithNext}
+						action="merge-caption-with-next"
 					>
-						<HugeiconsIcon icon={GitMergeIcon} size={14} />
-					</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label={m.subtitleList.mergeWithNext}
+							disabled={!next}
+							onClick={merge}
+						>
+							<HugeiconsIcon icon={GitMergeIcon} size={14} />
+						</Button>
+					</ActionTooltip>
 				</div>
 			)}
 		</li>
