@@ -157,3 +157,18 @@ describe("v7 to v8 migration", () => {
 		expect(decoded?.keybindings.get("ctrl+alt+v")).toBe("split");
 	});
 });
+
+describe("v8 to v9 migration", () => {
+	test("adds timeline zoom shortcuts without overriding user bindings", () => {
+		const migrated = migratePersistedKeybindingsState({
+			state: {
+				keybindings: { g: "split" },
+				isCustomized: true,
+			},
+			fromVersion: 8,
+		});
+		const decoded = decodePersistedKeybindingsState({ state: migrated });
+		expect(decoded?.keybindings.get("g")).toBe("split");
+		expect(decoded?.keybindings.get("h")).toBe("timeline-zoom-in");
+	});
+});

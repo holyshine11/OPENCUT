@@ -698,6 +698,8 @@ export const en = {
 		"toggle-elements-muted-selected": "Mute/unmute selected elements",
 		"toggle-elements-visibility-selected": "Show/hide selected elements",
 		"toggle-bookmark": "Toggle bookmark at playhead",
+		"timeline-zoom-in": "Zoom in timeline",
+		"timeline-zoom-out": "Zoom out timeline",
 		undo: "Undo",
 		redo: "Redo",
 		"remove-media-asset": "Remove media asset",

@@ -138,6 +138,14 @@ export const ACTIONS = {
 		description: "Toggle bookmark at playhead",
 		category: "timeline",
 	},
+	"timeline-zoom-in": {
+		description: "Zoom in timeline",
+		category: "timeline",
+	},
+	"timeline-zoom-out": {
+		description: "Zoom out timeline",
+		category: "timeline",
+	},
 	undo: {
 		description: "Undo",
 		category: "history",
@@ -182,6 +190,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["select-all", ["ctrl+a"]],
 	["cancel-interaction", ["escape"]],
 	["duplicate-selected", ["ctrl+d"]],
+	["timeline-zoom-in", ["h"]],
+	["timeline-zoom-out", ["g"]],
 	["undo", ["ctrl+z"]],
 	["redo", ["ctrl+shift+z", "ctrl+y"]],
 ] as const satisfies ReadonlyArray<

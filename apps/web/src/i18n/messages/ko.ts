@@ -648,6 +648,8 @@ export const ko: Messages = {
 		"toggle-elements-muted-selected": "선택한 요소 음소거/해제",
 		"toggle-elements-visibility-selected": "선택한 요소 보이기/숨기기",
 		"toggle-bookmark": "재생 헤드 위치에 북마크 추가/삭제",
+		"timeline-zoom-in": "타임라인 확대",
+		"timeline-zoom-out": "타임라인 축소",
 		undo: "실행 취소",
 		redo: "다시 실행",
 		"remove-media-asset": "미디어 삭제",
