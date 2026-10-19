@@ -17,6 +17,22 @@ export function buildCaptionChunks({
 	let globalEndTime = 0;
 
 	for (const segment of segments) {
+		// 단어 시간 정보가 있으면 실제 발화 시간에 맞춘다. 4단계에서 글자 수 기준 분할로 바뀐다
+		if (segment.words?.length) {
+			for (let i = 0; i < segment.words.length; i += wordsPerChunk) {
+				const chunkWords = segment.words.slice(i, i + wordsPerChunk);
+				const startTime = Math.max(chunkWords[0].start, globalEndTime);
+				const endTime = Math.max(chunkWords[chunkWords.length - 1].end, startTime + minDuration);
+				captions.push({
+					text: chunkWords.map((word) => word.text).join(" "),
+					startTime,
+					duration: endTime - startTime,
+				});
+				globalEndTime = endTime;
+			}
+			continue;
+		}
+
 		const words = segment.text.trim().split(/\s+/);
 		if (words.length === 0 || (words.length === 1 && words[0] === "")) continue;
 

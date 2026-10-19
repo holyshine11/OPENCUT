@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import {
 	Select,
@@ -18,7 +19,12 @@ import type {
 	TranscriptionLanguage,
 	TranscriptionProgress,
 } from "@/transcription/types";
-import { transcriptionService } from "@/services/transcription/service";
+import {
+	TRANSCRIPTION_CANCELLED_MESSAGE,
+	transcriptionService,
+} from "@/services/transcription/service";
+import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "@/transcription/languages";
+import { parseTerms, useTranscriptionTerms } from "@/transcription/terms-store";
 import { decodeAudioToFloat32 } from "@/media/audio";
 import { buildCaptionChunks } from "@/transcription/caption";
 import { insertCaptionChunksAsTextTrack } from "@/subtitles/insert";
@@ -85,7 +91,10 @@ function processingReducer(
 
 export function Captions() {
 	const [selectedLanguage, setSelectedLanguage] =
-		useState<TranscriptionLanguage>("auto");
+		useState<TranscriptionLanguage>(DEFAULT_TRANSCRIPTION_LANGUAGE);
+	const [termsInput, setTermsInput] = useState(() =>
+		useTranscriptionTerms.getState().terms.join(", "),
+	);
 	const [processing, dispatch] = useReducer(processingReducer, IDLE_STATE);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,7 +113,10 @@ export function Captions() {
 				step: `Loading model ${Math.round(progress.progress)}%`,
 			});
 		} else if (progress.status === "transcribing") {
-			dispatch({ type: "update_step", step: "Transcribing..." });
+			dispatch({
+				type: "update_step",
+				step: `Transcribing ${Math.round(progress.progress)}%`,
+			});
 		}
 	};
 
@@ -134,7 +146,8 @@ export function Captions() {
 
 			const result = await transcriptionService.transcribe({
 				audioData: samples,
-				language: selectedLanguage === "auto" ? undefined : selectedLanguage,
+				language: selectedLanguage,
+				terms: useTranscriptionTerms.getState().terms,
 				onProgress: handleProgress,
 			});
 
@@ -148,6 +161,13 @@ export function Captions() {
 
 			dispatch({ type: "succeed", warnings: [] });
 		} catch (error) {
+			if (
+				error instanceof Error &&
+				error.message === TRANSCRIPTION_CANCELLED_MESSAGE
+			) {
+				dispatch({ type: "succeed", warnings: [] });
+				return;
+			}
 			console.error("Transcription failed:", error);
 			dispatch({
 				type: "fail",
@@ -222,11 +242,6 @@ export function Captions() {
 	};
 
 	const handleLanguageChange = ({ value }: { value: string }) => {
-		if (value === "auto") {
-			setSelectedLanguage("auto");
-			return;
-		}
-
 		const matchedLanguage = TRANSCRIPTION_LANGUAGES.find(
 			(language) => language.code === value,
 		);
@@ -298,7 +313,6 @@ export function Captions() {
 									<SelectValue placeholder="Select a language" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="auto">Auto detect</SelectItem>
 									{TRANSCRIPTION_LANGUAGES.map((language) => (
 										<SelectItem key={language.code} value={language.code}>
 											{language.name}
@@ -306,6 +320,19 @@ export function Captions() {
 									))}
 								</SelectContent>
 							</Select>
+						</SectionField>
+						<SectionField label="Names and terms">
+							<Textarea
+								value={termsInput}
+								placeholder="People, places, product names. Separate with commas."
+								disabled={isProcessing}
+								onChange={(event) => setTermsInput(event.target.value)}
+								onBlur={() =>
+									useTranscriptionTerms
+										.getState()
+										.setTerms(parseTerms({ input: termsInput }))
+								}
+							/>
 						</SectionField>
 					</SectionFields>
 
@@ -318,6 +345,16 @@ export function Captions() {
 						{isProcessing && <Spinner className="mr-1" />}
 						{isProcessing ? processing.step : "Generate transcript"}
 					</Button>
+					{isProcessing && (
+						<Button
+							type="button"
+							variant="outline"
+							className="w-full"
+							onClick={() => transcriptionService.cancel()}
+						>
+							Cancel
+						</Button>
+					)}
 					{error && (
 						<div className="bg-destructive/10 border-destructive/20 rounded-md border p-3">
 							<p className="text-destructive text-sm">{error}</p>

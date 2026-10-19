@@ -1,18 +1,15 @@
-import {
-	pipeline,
-	type AutomaticSpeechRecognitionPipeline,
-	type AutomaticSpeechRecognitionOutput,
-} from "@huggingface/transformers";
 import type { TranscriptionSegment } from "@/transcription/types";
-import {
-	DEFAULT_CHUNK_LENGTH_SECONDS,
-	DEFAULT_STRIDE_SECONDS,
-} from "@/transcription/audio";
+import { loadTranscriptionEngine, type TranscriptionEngine } from "./engine";
 
+// 취소는 service가 worker를 종료하는 방식이라 여기서는 처리하지 않는다
 export type WorkerMessage =
-	| { type: "init"; modelId: string }
-	| { type: "transcribe"; audio: Float32Array; language: string }
-	| { type: "cancel" };
+	| { type: "init" }
+	| {
+			type: "transcribe";
+			audio: Float32Array;
+			language: string;
+			terms: string[];
+	  };
 
 export type WorkerResponse =
 	| { type: "init-progress"; progress: number }
@@ -24,11 +21,9 @@ export type WorkerResponse =
 			text: string;
 			segments: TranscriptionSegment[];
 	  }
-	| { type: "transcribe-error"; error: string }
-	| { type: "cancelled" };
+	| { type: "transcribe-error"; error: string };
 
-let transcriber: AutomaticSpeechRecognitionPipeline | null = null;
-let cancelled = false;
+let engine: TranscriptionEngine | null = null;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
 
@@ -37,35 +32,35 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
 	switch (message.type) {
 		case "init":
-			await handleInit({ modelId: message.modelId });
+			await handleInit();
 			break;
 		case "transcribe":
-			await handleTranscribe({
-				audio: message.audio,
-				language: message.language,
-			});
-			break;
-		case "cancel":
-			cancelled = true;
-			self.postMessage({ type: "cancelled" } satisfies WorkerResponse);
+			await handleTranscribe(message);
 			break;
 	}
 };
 
-async function handleInit({ modelId }: { modelId: string }) {
+function reportProgress({
+	type,
+	fraction,
+}: {
+	type: "init-progress" | "transcribe-progress";
+	fraction: number;
+}) {
+	const roundedProgress = Math.floor(fraction * 100);
+	if (roundedProgress === lastReportedProgress) return;
+	lastReportedProgress = roundedProgress;
+	self.postMessage({ type, progress: roundedProgress } satisfies WorkerResponse);
+}
+
+async function handleInit() {
 	lastReportedProgress = -1;
 	fileBytes.clear();
 
 	try {
-		transcriber = (await pipeline("automatic-speech-recognition", modelId, {
-			dtype: "q4",
-			device: "auto",
-			progress_callback: (progressInfo: {
-				status?: string;
-				file?: string;
-				loaded?: number;
-				total?: number;
-			}) => {
+		engine = await loadTranscriptionEngine({
+			device: "gpu" in navigator ? "webgpu" : "wasm",
+			onProgress: (progressInfo) => {
 				const file = progressInfo.file;
 				if (!file) return;
 
@@ -93,19 +88,9 @@ async function handleInit({ modelId }: { modelId: string }) {
 				}
 
 				if (totalSize === 0) return;
-
-				const overallProgress = (totalLoaded / totalSize) * 100;
-				const roundedProgress = Math.floor(overallProgress);
-
-				if (roundedProgress !== lastReportedProgress) {
-					lastReportedProgress = roundedProgress;
-					self.postMessage({
-						type: "init-progress",
-						progress: roundedProgress,
-					} satisfies WorkerResponse);
-				}
+				reportProgress({ type: "init-progress", fraction: totalLoaded / totalSize });
 			},
-		})) as unknown as AutomaticSpeechRecognitionPipeline;
+		});
 
 		self.postMessage({ type: "init-complete" } satisfies WorkerResponse);
 	} catch (error) {
@@ -119,11 +104,13 @@ async function handleInit({ modelId }: { modelId: string }) {
 async function handleTranscribe({
 	audio,
 	language,
+	terms,
 }: {
 	audio: Float32Array;
 	language: string;
+	terms: string[];
 }) {
-	if (!transcriber) {
+	if (!engine) {
 		self.postMessage({
 			type: "transcribe-error",
 			error: "Model not initialized",
@@ -131,43 +118,21 @@ async function handleTranscribe({
 		return;
 	}
 
-	cancelled = false;
-
+	lastReportedProgress = -1;
 	try {
-		const rawResult = await transcriber(audio, {
-			chunk_length_s: DEFAULT_CHUNK_LENGTH_SECONDS,
-			stride_length_s: DEFAULT_STRIDE_SECONDS,
-			language: language === "auto" ? undefined : language,
-			return_timestamps: true,
+		const result = await engine.transcribe({
+			audio,
+			language,
+			terms,
+			onProgress: (fraction) =>
+				reportProgress({ type: "transcribe-progress", fraction }),
 		});
-
-		if (cancelled) return;
-
-		const result: AutomaticSpeechRecognitionOutput = Array.isArray(rawResult)
-			? rawResult[0]
-			: rawResult;
-
-		const segments: TranscriptionSegment[] = [];
-
-		if (result.chunks) {
-			for (const chunk of result.chunks) {
-				if (chunk.timestamp && chunk.timestamp.length >= 2) {
-					segments.push({
-						text: chunk.text,
-						start: chunk.timestamp[0] ?? 0,
-						end: chunk.timestamp[1] ?? chunk.timestamp[0] ?? 0,
-					});
-				}
-			}
-		}
-
 		self.postMessage({
 			type: "transcribe-complete",
 			text: result.text,
-			segments,
+			segments: result.segments,
 		} satisfies WorkerResponse);
 	} catch (error) {
-		if (cancelled) return;
 		self.postMessage({
 			type: "transcribe-error",
 			error: error instanceof Error ? error.message : "Transcription failed",

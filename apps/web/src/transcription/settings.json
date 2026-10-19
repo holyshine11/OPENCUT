@@ -1,0 +1,42 @@
+{
+	"model": {
+		"huggingFaceId": "onnx-community/whisper-large-v3-turbo_timestamped",
+		"dtype": {
+			"encoder_model": "fp16",
+			"decoder_model_merged": "fp16"
+		}
+	},
+	"vad": {
+		"huggingFaceId": "onnx-community/silero-vad",
+		"windowSamples": 512,
+		"contextSamples": 64,
+		"threshold": 0.5,
+		"minSilenceSeconds": 0.3,
+		"minSpeechSeconds": 0.25,
+		"speechPadSeconds": 0.2,
+		"maxGroupSeconds": 28,
+		"stateSize": 128
+	},
+	"prompt": {
+		"maxTokens": 200
+	},
+	"filter": {
+		"maxRepeats": 2,
+		"maxRepeatNgram": 4,
+		"minSpeechOverlap": 0.5,
+		"hallucinationPhrases": [
+			"시청해주셔서감사합니다",
+			"끝까지시청해주셔서감사합니다",
+			"구독과좋아요부탁드립니다",
+			"구독좋아요알림설정",
+			"다음영상에서만나요",
+			"자막제공",
+			"한국어자막",
+			"MBC뉴스",
+			"KBS뉴스",
+			"SBS뉴스",
+			"thankyouforwatching",
+			"pleasesubscribe"
+		]
+	}
+}

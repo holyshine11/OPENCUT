@@ -2,40 +2,38 @@ import type {
 	TranscriptionLanguage,
 	TranscriptionResult,
 	TranscriptionProgress,
-	TranscriptionModelId,
 } from "@/transcription/types";
-import {
-	DEFAULT_TRANSCRIPTION_MODEL,
-	TRANSCRIPTION_MODELS,
-} from "@/transcription/models";
 import type { WorkerMessage, WorkerResponse } from "./worker";
 
 type ProgressCallback = (progress: TranscriptionProgress) => void;
 
+export const TRANSCRIPTION_CANCELLED_MESSAGE = "Transcription cancelled";
+
 class TranscriptionService {
 	private worker: Worker | null = null;
-	private currentModelId: TranscriptionModelId | null = null;
-	private isInitialized = false;
-	private isInitializing = false;
+	private initPromise: Promise<void> | null = null;
+	private rejectPending: ((error: Error) => void) | null = null;
 
 	async transcribe({
 		audioData,
-		language = "auto",
-		modelId = DEFAULT_TRANSCRIPTION_MODEL,
+		language,
+		terms,
 		onProgress,
 	}: {
 		audioData: Float32Array;
-		language?: TranscriptionLanguage;
-		modelId?: TranscriptionModelId;
+		language: TranscriptionLanguage;
+		terms: string[];
 		onProgress?: ProgressCallback;
 	}): Promise<TranscriptionResult> {
-		await this.ensureWorker({ modelId, onProgress });
+		await this.ensureWorker({ onProgress });
 
 		return new Promise((resolve, reject) => {
-			if (!this.worker) {
+			const worker = this.worker;
+			if (!worker) {
 				reject(new Error("Worker not initialized"));
 				return;
 			}
+			this.rejectPending = reject;
 
 			const handleMessage = (event: MessageEvent<WorkerResponse>) => {
 				const response = event.data;
@@ -45,12 +43,12 @@ class TranscriptionService {
 						onProgress?.({
 							status: "transcribing",
 							progress: response.progress,
-							message: "Transcribing audio...",
 						});
 						break;
 
 					case "transcribe-complete":
-						this.worker?.removeEventListener("message", handleMessage);
+						worker.removeEventListener("message", handleMessage);
+						this.rejectPending = null;
 						resolve({
 							text: response.text,
 							segments: response.segments,
@@ -59,67 +57,45 @@ class TranscriptionService {
 						break;
 
 					case "transcribe-error":
-						this.worker?.removeEventListener("message", handleMessage);
+						worker.removeEventListener("message", handleMessage);
+						this.rejectPending = null;
 						reject(new Error(response.error));
-						break;
-
-					case "cancelled":
-						this.worker?.removeEventListener("message", handleMessage);
-						reject(new Error("Transcription cancelled"));
 						break;
 				}
 			};
 
-			this.worker.addEventListener("message", handleMessage);
+			worker.addEventListener("message", handleMessage);
 
-			this.worker.postMessage({
+			worker.postMessage({
 				type: "transcribe",
 				audio: audioData,
 				language,
+				terms,
 			} satisfies WorkerMessage);
 		});
 	}
 
+	/** worker를 종료해서 모델 로딩이나 인식을 즉시 멈춘다. 모델은 브라우저 캐시에 남아 다음에 빨리 다시 올라온다 */
 	cancel() {
-		this.worker?.postMessage({ type: "cancel" } satisfies WorkerMessage);
+		const reject = this.rejectPending;
+		this.terminate();
+		reject?.(new Error(TRANSCRIPTION_CANCELLED_MESSAGE));
 	}
 
-	private async ensureWorker({
-		modelId,
+	private ensureWorker({
 		onProgress,
 	}: {
-		modelId: TranscriptionModelId;
 		onProgress?: ProgressCallback;
 	}): Promise<void> {
-		const needsNewModel = this.currentModelId !== modelId;
+		if (this.initPromise) return this.initPromise;
 
-		if (this.worker && this.isInitialized && !needsNewModel) {
-			return;
-		}
-
-		if (this.isInitializing && !needsNewModel) {
-			await this.waitForInit();
-			return;
-		}
-
-		this.terminate();
-		this.isInitializing = true;
-		this.isInitialized = false;
-
-		const model = TRANSCRIPTION_MODELS.find((m) => m.id === modelId);
-		if (!model) {
-			throw new Error(`Unknown model: ${modelId}`);
-		}
-
-		this.worker = new Worker(new URL("./worker.ts", import.meta.url), {
+		const worker = new Worker(new URL("./worker.ts", import.meta.url), {
 			type: "module",
 		});
+		this.worker = worker;
 
-		return new Promise((resolve, reject) => {
-			if (!this.worker) {
-				reject(new Error("Failed to create worker"));
-				return;
-			}
+		this.initPromise = new Promise((resolve, reject) => {
+			this.rejectPending = reject;
 
 			const handleMessage = (event: MessageEvent<WorkerResponse>) => {
 				const response = event.data;
@@ -129,57 +105,34 @@ class TranscriptionService {
 						onProgress?.({
 							status: "loading-model",
 							progress: response.progress,
-							message: `Loading ${model.name} model...`,
 						});
 						break;
 
 					case "init-complete":
-						this.worker?.removeEventListener("message", handleMessage);
-						this.isInitialized = true;
-						this.isInitializing = false;
-						this.currentModelId = modelId;
+						worker.removeEventListener("message", handleMessage);
+						this.rejectPending = null;
 						resolve();
 						break;
 
 					case "init-error":
-						this.worker?.removeEventListener("message", handleMessage);
-						this.isInitializing = false;
+						worker.removeEventListener("message", handleMessage);
 						this.terminate();
 						reject(new Error(response.error));
 						break;
 				}
 			};
 
-			this.worker.addEventListener("message", handleMessage);
-
-			this.worker.postMessage({
-				type: "init",
-				modelId: model.huggingFaceId,
-			} satisfies WorkerMessage);
+			worker.addEventListener("message", handleMessage);
+			worker.postMessage({ type: "init" } satisfies WorkerMessage);
 		});
-	}
-
-	private waitForInit(): Promise<void> {
-		return new Promise((resolve) => {
-			const checkInit = () => {
-				if (this.isInitialized) {
-					resolve();
-				} else if (!this.isInitializing) {
-					resolve();
-				} else {
-					setTimeout(checkInit, 100);
-				}
-			};
-			checkInit();
-		});
+		return this.initPromise;
 	}
 
 	terminate() {
 		this.worker?.terminate();
 		this.worker = null;
-		this.isInitialized = false;
-		this.isInitializing = false;
-		this.currentModelId = null;
+		this.initPromise = null;
+		this.rejectPending = null;
 	}
 }
 
