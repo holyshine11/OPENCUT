@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "../components/ui/sonner";
 import { TooltipProvider } from "../components/ui/tooltip";
 import { baseMetaData } from "./metadata";
+import { LocaleSync } from "@/i18n";
 import { Inter } from "next/font/google";
 
 const siteFont = Inter({ subsets: ["latin"] });
@@ -16,7 +17,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning>
+		<html lang="ko" suppressHydrationWarning>
 			<head>
 				{process.env.NODE_ENV === "development" &&
 					process.env.NEXT_PUBLIC_REACT_SCAN === "true" && (
@@ -36,6 +37,7 @@ export default function RootLayout({
 					disableTransitionOnChange={true}
 				>
 					<TooltipProvider>
+						<LocaleSync />
 						<Toaster />
 						{children}
 					</TooltipProvider>

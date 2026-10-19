@@ -1,0 +1,45 @@
+import type { Messages } from "./en";
+
+export const ko: Messages = {
+	dateLocale: "ko-KR",
+	language: {
+		label: "언어",
+		ko: "한국어",
+		en: "English",
+	},
+	projects: {
+		home: "홈",
+		allProjects: "모든 프로젝트",
+		gridView: "격자 보기",
+		listView: "목록 보기",
+		selectAll: "모두 선택",
+		sortAscending: "오름차순 정렬",
+		sortDescending: "내림차순 정렬",
+		sortBy: {
+			createdAt: "만든 날짜",
+			updatedAt: "수정한 날짜",
+			name: "이름",
+			duration: "길이",
+		},
+		search: "검색...",
+		duplicate: "복제",
+		delete: "삭제",
+		rename: "이름 바꾸기",
+		info: "정보",
+		projectMenu: "프로젝트 메뉴",
+		newProject: "새 프로젝트",
+		newProjectShort: "새로 만들기",
+		defaultProjectName: "새 프로젝트",
+		thumbnailAlt: "프로젝트 미리보기",
+		createdOn: ({ date }) => `${date} 만듦`,
+		noResults: "검색 결과가 없습니다",
+		noResultsFor: ({ query }) => `"${query}"에 맞는 프로젝트가 없습니다.`,
+		clearSearch: "검색 지우기",
+		noProjects: "아직 프로젝트가 없습니다",
+		noProjectsHint:
+			"첫 프로젝트를 만들어 보세요. 영상을 가져와 편집하고 내보낼 수 있습니다. 모든 작업은 이 맥 안에서만 이루어집니다.",
+		createFirst: "첫 프로젝트 만들기",
+		createFailed: "프로젝트를 만들지 못했습니다",
+		tryAgain: "다시 시도해 주세요",
+	},
+};
