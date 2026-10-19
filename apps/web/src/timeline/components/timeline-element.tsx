@@ -56,12 +56,8 @@ import { buildWaveformGainSamples, isElementMuted } from "@/timeline/audio-state
 import { getTimelinePixelsPerSecond } from "@/timeline";
 import { buildWaveformSourceKey } from "@/media/waveform-summary";
 import { addMediaTime, type MediaTime, TICKS_PER_SECOND } from "@/wasm";
-import {
-	getActionDefinition,
-	type TAction,
-	type TActionWithOptionalArgs,
-	invokeAction,
-} from "@/actions";
+import { type TActionWithOptionalArgs, invokeAction } from "@/actions";
+import { useShortcutLabel } from "@/actions/use-keyboard-shortcuts-help";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
 import { resolveStickerId } from "@/stickers";
 import { buildGraphicPreviewUrl } from "@/graphics";
@@ -83,7 +79,6 @@ import {
 	PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { uppercase } from "@/utils/string";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import type { SelectedKeyframeRef, ElementKeyframe } from "@/animation/types";
 import { cn } from "@/utils/ui";
@@ -190,17 +185,6 @@ export function getKeyframeIndicators({
 	}
 
 	return [...keyframesByTime.values()].sort((a, b) => a.time - b.time);
-}
-
-export function getDisplayShortcut({ action }: { action: TAction }) {
-	const defaultShortcuts = getActionDefinition({ action }).defaultShortcuts;
-	if (!defaultShortcuts?.length) {
-		return "";
-	}
-
-	return uppercase({
-		string: defaultShortcuts[0].replace("+", " "),
-	});
 }
 
 interface TimelineElementProps {
@@ -1361,13 +1345,14 @@ function ActionMenuItem({
 	action: TActionWithOptionalArgs;
 	children: ReactNode;
 }) {
+	const shortcut = useShortcutLabel({ action });
 	return (
 		<ContextMenuItem
 			onClick={(event: React.MouseEvent) => {
 				event.stopPropagation();
 				invokeAction(action);
 			}}
-			textRight={getDisplayShortcut({ action })}
+			textRight={shortcut ?? ""}
 			{...props}
 		>
 			{children}

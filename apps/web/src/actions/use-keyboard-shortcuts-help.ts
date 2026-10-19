@@ -2,7 +2,11 @@
 
 import { useMemo } from "react";
 import { useKeybindingsStore } from "@/actions/keybindings-store";
-import { ACTIONS, type TActionWithOptionalArgs } from "@/actions";
+import {
+	ACTIONS,
+	getActionDefinition,
+	type TActionWithOptionalArgs,
+} from "@/actions";
 import {
 	getPlatformAlternateKey,
 	getPlatformShiftKey,
@@ -29,12 +33,13 @@ function formatKey({ key }: { key: string }): string {
 		.replace("right", "→")
 		.replace("up", "↑")
 		.replace("down", "↓")
-		.replace("space", "Space")
+		// backspace 안의 space는 건드리지 않는다
+		.replace(/\bspace\b/, "Space")
+		.replace("backspace", "Backspace")
 		.replace("home", "Home")
 		.replace("enter", "Enter")
 		.replace("end", "End")
 		.replace("delete", "Delete")
-		.replace("backspace", "Backspace")
 		.replace("-", "+");
 }
 
@@ -44,9 +49,12 @@ export function useShortcutLabel({
 }: {
 	action: TActionWithOptionalArgs;
 }): string | null {
-	const key = useKeybindingsStore(
-		(state) => state.getKeybindingsForAction(action)[0],
-	);
+	// 키가 여럿이면 기본 단축키 순서(예: 분할은 C 먼저)를 따른다
+	const key = useKeybindingsStore((state) => {
+		const keys = state.getKeybindingsForAction(action);
+		const preferred = getActionDefinition({ action }).defaultShortcuts ?? [];
+		return preferred.find((shortcut) => keys.includes(shortcut)) ?? keys[0];
+	});
 	if (!key) return null;
 	return formatKey({ key })
 		.split("+")
