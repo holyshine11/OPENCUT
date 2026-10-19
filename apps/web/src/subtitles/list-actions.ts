@@ -12,7 +12,13 @@ import {
 	type MediaTime,
 } from "@/wasm";
 import type { SubtitleEntry } from "./groups";
-import { clampCueTiming, mergeCues, planReplaceAll, splitCue, type Cue } from "./edit";
+import {
+	clampCueTiming,
+	mergeCues,
+	planReplaceAll,
+	splitCue,
+	type Cue,
+} from "./edit";
 
 const seconds = (time: MediaTime) => mediaTimeToSeconds({ time });
 const toTime = (value: number) => mediaTimeFromSeconds({ seconds: value });
@@ -28,7 +34,10 @@ export function cueOf({ entry }: { entry: SubtitleEntry }): Cue {
 
 function timingPatch({ start, end }: { start: number; end: number }) {
 	const startTime = toTime(start);
-	return { startTime, duration: subMediaTime({ a: toTime(end), b: startTime }) };
+	return {
+		startTime,
+		duration: subMediaTime({ a: toTime(end), b: startTime }),
+	};
 }
 
 /** 자막을 커서 위치에서 둘로 나눈다. 뒤쪽은 같은 스타일의 새 텍스트 요소가 된다 */
@@ -82,7 +91,10 @@ export function mergeSubtitles({
 	first: SubtitleEntry;
 	second: SubtitleEntry;
 }): void {
-	const merged = mergeCues({ first: cueOf({ entry: first }), second: cueOf({ entry: second }) });
+	const merged = mergeCues({
+		first: cueOf({ entry: first }),
+		second: cueOf({ entry: second }),
+	});
 	editor.command.execute({
 		command: new BatchCommand([
 			new DeleteElementsCommand({
@@ -124,9 +136,16 @@ export function retimeSubtitle({
 		previousEnd: previous ? cueOf({ entry: previous }).end : 0,
 		nextStart: next ? cueOf({ entry: next }).start : null,
 	});
-	if (!timing || (timing.start === current.start && timing.end === current.end)) return false;
+	if (!timing || (timing.start === current.start && timing.end === current.end))
+		return false;
 	editor.timeline.updateElements({
-		updates: [{ trackId: entry.trackId, elementId: entry.element.id, patch: timingPatch(timing) }],
+		updates: [
+			{
+				trackId: entry.trackId,
+				elementId: entry.element.id,
+				patch: timingPatch(timing),
+			},
+		],
 	});
 	return true;
 }
@@ -144,7 +163,10 @@ export function replaceAllInSubtitles({
 	replacement: string;
 }): number {
 	const plan = planReplaceAll({
-		cues: entries.map((entry) => ({ id: entry.element.id, text: cueOf({ entry }).text })),
+		cues: entries.map((entry) => ({
+			id: entry.element.id,
+			text: cueOf({ entry }).text,
+		})),
 		query,
 		replacement,
 	});
@@ -154,7 +176,13 @@ export function replaceAllInSubtitles({
 			const text = textById.get(entry.element.id);
 			return text === undefined
 				? []
-				: [{ trackId: entry.trackId, elementId: entry.element.id, patch: { params: { content: text } } }];
+				: [
+						{
+							trackId: entry.trackId,
+							elementId: entry.element.id,
+							patch: { params: { content: text } },
+						},
+					];
 		}),
 	});
 	return plan.length;

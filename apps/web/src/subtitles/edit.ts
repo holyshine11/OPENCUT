@@ -8,12 +8,19 @@ export interface Cue {
 const visibleLength = (text: string) => text.replace(/\s/g, "").length;
 
 /** 커서 위치(at, 글자 인덱스)에서 둘로 나눈다. 시간은 공백을 뺀 글자 수 비율로 나눈다 */
-export function splitCue({ cue, at }: { cue: Cue; at: number }): [Cue, Cue] | null {
+export function splitCue({
+	cue,
+	at,
+}: {
+	cue: Cue;
+	at: number;
+}): [Cue, Cue] | null {
 	const before = cue.text.slice(0, at).trim();
 	const after = cue.text.slice(at).trim();
 	if (!before || !after) return null;
 
-	const ratio = visibleLength(before) / (visibleLength(before) + visibleLength(after));
+	const ratio =
+		visibleLength(before) / (visibleLength(before) + visibleLength(after));
 	const splitTime = cue.start + (cue.end - cue.start) * ratio;
 	return [
 		{ text: before, start: cue.start, end: splitTime },
@@ -43,14 +50,20 @@ export function clampCueTiming({
 }): { start: number; end: number } | null {
 	const clampedStart = Math.max(start, previousEnd);
 	const clampedEnd = nextStart === null ? end : Math.min(end, nextStart);
-	return clampedEnd > clampedStart ? { start: clampedStart, end: clampedEnd } : null;
+	return clampedEnd > clampedStart
+		? { start: clampedStart, end: clampedEnd }
+		: null;
 }
 
 /** "1:02.5"(분:초) 또는 "62.5"(초)를 초로 읽는다. 초 자리는 두 자리여야 한다 */
 export function parseCueTime({ input }: { input: string }): number | null {
-	const match = input.trim().match(/^(?:(\d+):(\d{2}(?:\.\d+)?)|(\d+(?:\.\d+)?))$/);
+	const match = input
+		.trim()
+		.match(/^(?:(\d+):(\d{2}(?:\.\d+)?)|(\d+(?:\.\d+)?))$/);
 	if (!match) return null;
-	return match[3] !== undefined ? Number(match[3]) : Number(match[1]) * 60 + Number(match[2]);
+	return match[3] !== undefined
+		? Number(match[3])
+		: Number(match[1]) * 60 + Number(match[2]);
 }
 
 export function formatCueTime({ seconds }: { seconds: number }): string {
@@ -72,5 +85,8 @@ export function planReplaceAll({
 	if (!query) return [];
 	return cues
 		.filter((cue) => cue.text.includes(query))
-		.map((cue) => ({ id: cue.id, text: cue.text.split(query).join(replacement) }));
+		.map((cue) => ({
+			id: cue.id,
+			text: cue.text.split(query).join(replacement),
+		}));
 }

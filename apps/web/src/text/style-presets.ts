@@ -42,7 +42,9 @@ export const useTextStylePresets = create<TextStylePresetsState>()(
 				}));
 			},
 			remove: ({ id }) =>
-				set((state) => ({ presets: state.presets.filter((preset) => preset.id !== id) })),
+				set((state) => ({
+					presets: state.presets.filter((preset) => preset.id !== id),
+				})),
 		}),
 		{ name: "text-style-presets" },
 	),

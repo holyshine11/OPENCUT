@@ -11,7 +11,12 @@ import {
 describe("splitCue", () => {
 	test("커서 위치에서 나누고 시간은 공백을 뺀 글자 수 비율로 나눈다", () => {
 		// 앞 4글자, 뒤 4글자 → 절반씩
-		expect(splitCue({ cue: { text: "국밥 맛집 오늘 최고", start: 10, end: 14 }, at: 5 })).toEqual([
+		expect(
+			splitCue({
+				cue: { text: "국밥 맛집 오늘 최고", start: 10, end: 14 },
+				at: 5,
+			}),
+		).toEqual([
 			{ text: "국밥 맛집", start: 10, end: 12 },
 			{ text: "오늘 최고", start: 12, end: 14 },
 		]);
@@ -43,7 +48,9 @@ describe("clampCueTiming", () => {
 	});
 
 	test("끝이 시작보다 앞서면 고칠 수 없다", () => {
-		expect(clampCueTiming({ start: 3, end: 2, previousEnd: 0, nextStart: null })).toBeNull();
+		expect(
+			clampCueTiming({ start: 3, end: 2, previousEnd: 0, nextStart: null }),
+		).toBeNull();
 	});
 });
 
@@ -80,6 +87,12 @@ describe("planReplaceAll", () => {
 	});
 
 	test("빈 검색어는 아무것도 바꾸지 않는다", () => {
-		expect(planReplaceAll({ cues: [{ id: "a", text: "국밥" }], query: "", replacement: "x" })).toEqual([]);
+		expect(
+			planReplaceAll({
+				cues: [{ id: "a", text: "국밥" }],
+				query: "",
+				replacement: "x",
+			}),
+		).toEqual([]);
 	});
 });

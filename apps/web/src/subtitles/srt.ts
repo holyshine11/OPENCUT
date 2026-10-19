@@ -112,9 +112,11 @@ export function formatSrt({ cues }: { cues: SubtitleCue[] }): string {
 		.sort((a, b) => a.startTime - b.startTime)
 		.map(
 			(cue, index) =>
-				`${index + 1}\n${formatSrtTimestamp({ seconds: cue.startTime })} --> ${formatSrtTimestamp({
-					seconds: cue.startTime + cue.duration,
-				})}\n${cue.text.trim()}\n`,
+				`${index + 1}\n${formatSrtTimestamp({ seconds: cue.startTime })} --> ${formatSrtTimestamp(
+					{
+						seconds: cue.startTime + cue.duration,
+					},
+				)}\n${cue.text.trim()}\n`,
 		)
 		.join("\n");
 }

@@ -29,14 +29,27 @@ function textElement({
 	};
 }
 
-function textTrack({ id, elements }: { id: string; elements: TextElement[] }): TextTrack {
+function textTrack({
+	id,
+	elements,
+}: {
+	id: string;
+	elements: TextElement[];
+}): TextTrack {
 	return { id, type: "text", name: id, hidden: false, elements };
 }
 
 function sceneTracks({ overlay }: { overlay: TextTrack[] }): SceneTracks {
 	return {
 		overlay,
-		main: { id: "main", type: "video", name: "Main", muted: false, hidden: false, elements: [] },
+		main: {
+			id: "main",
+			type: "video",
+			name: "Main",
+			muted: false,
+			hidden: false,
+			elements: [],
+		},
 		audio: [],
 	};
 }
@@ -68,7 +81,10 @@ describe("listSubtitleGroups", () => {
 		expect(
 			groups.map((group) => ({
 				groupId: group.groupId,
-				entries: group.entries.map((entry) => [entry.trackId, entry.element.id]),
+				entries: group.entries.map((entry) => [
+					entry.trackId,
+					entry.element.id,
+				]),
 			})),
 		).toEqual([
 			{ groupId: "g2", entries: [["t2", "x"]] },

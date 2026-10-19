@@ -10,13 +10,19 @@ describe("useTextStylePresets", () => {
 		add({ name: "", style: { color: "#ffffff" } });
 
 		useTextStylePresets.getState().rename({ id: first, name: "  예능 자막 " });
-		expect(useTextStylePresets.getState().presets.map(({ name, style }) => ({ name, style }))).toEqual([
+		expect(
+			useTextStylePresets
+				.getState()
+				.presets.map(({ name, style }) => ({ name, style })),
+		).toEqual([
 			{ name: "예능 자막", style: { color: "#ffff00" } },
 			{ name: "Style 2", style: { color: "#ffffff" } },
 		]);
 
 		useTextStylePresets.getState().remove({ id: first });
-		expect(useTextStylePresets.getState().presets.map((preset) => preset.name)).toEqual(["Style 2"]);
+		expect(
+			useTextStylePresets.getState().presets.map((preset) => preset.name),
+		).toEqual(["Style 2"]);
 	});
 
 	test("빈 이름으로는 바꾸지 않는다", () => {

@@ -73,7 +73,9 @@ export function CaptionLayoutFields({
 					))}
 				</div>
 				<div className="flex items-center justify-between text-xs">
-					<label htmlFor="caption-strip-punctuation">Remove periods and commas</label>
+					<label htmlFor="caption-strip-punctuation">
+						Remove periods and commas
+					</label>
 					<Switch
 						id="caption-strip-punctuation"
 						checked={layout.stripPunctuation}
@@ -103,7 +105,9 @@ function LayoutNumberField({
 		displayValue: String(value),
 		supportsExpressions: false,
 		parse: (input) => {
-			const parsed = integer ? Number.parseInt(input, 10) : Number.parseFloat(input);
+			const parsed = integer
+				? Number.parseInt(input, 10)
+				: Number.parseFloat(input);
 			return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 		},
 		onPreview: onCommit,

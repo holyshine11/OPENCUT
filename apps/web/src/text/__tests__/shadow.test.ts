@@ -14,10 +14,17 @@ describe("resolveTextShadow", () => {
 					"shadow.offsetY": -4,
 				},
 			}),
-		).toEqual({ color: "rgba(255, 128, 0, 0.5)", blur: 12, offsetX: 3, offsetY: -4 });
+		).toEqual({
+			color: "rgba(255, 128, 0, 0.5)",
+			blur: 12,
+			offsetX: 3,
+			offsetY: -4,
+		});
 	});
 
 	test("꺼져 있으면 그리지 않는다", () => {
-		expect(resolveTextShadow({ params: { "shadow.enabled": false } })).toBeNull();
+		expect(
+			resolveTextShadow({ params: { "shadow.enabled": false } }),
+		).toBeNull();
 	});
 });
