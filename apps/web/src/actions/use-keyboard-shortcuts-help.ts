@@ -25,6 +25,7 @@ export interface KeyboardShortcut {
 }
 
 function formatKey({ key }: { key: string }): string {
+	// space는 단어 경계로 찾아 backspace 안의 space를 건드리지 않는다
 	return key
 		.replace("ctrl", getPlatformSpecialKey())
 		.replace("alt", getPlatformAlternateKey())
@@ -33,7 +34,6 @@ function formatKey({ key }: { key: string }): string {
 		.replace("right", "→")
 		.replace("up", "↑")
 		.replace("down", "↓")
-		// backspace 안의 space는 건드리지 않는다
 		.replace(/\bspace\b/, "Space")
 		.replace("backspace", "Backspace")
 		.replace("home", "Home")
