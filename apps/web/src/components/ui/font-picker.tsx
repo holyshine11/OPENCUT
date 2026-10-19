@@ -11,6 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { loadFullFont } from "@/fonts/google-fonts";
 import { SYSTEM_FONTS } from "@/fonts/system-fonts";
+import {
+	isLocalFontAccessSupported,
+	queryLocalFontFamilies,
+} from "@/fonts/local-fonts";
 import type { FontAtlas, FontAtlasEntry } from "@/fonts/types";
 import { useFontAtlas } from "@/fonts/use-font-atlas";
 import { cn } from "@/utils/ui";
@@ -21,7 +25,6 @@ import { TextIcon } from "@hugeicons/core-free-icons";
 const FONT_TABS = [
 	{ key: "all", label: "All fonts" },
 	{ key: "my-fonts", label: "My fonts" },
-	{ key: "favorites", label: "Favorites" },
 ] as const;
 
 type FontTab = (typeof FONT_TABS)[number]["key"];
@@ -48,12 +51,40 @@ export function FontPicker({
 	const [activeTab, setActiveTab] = useState<FontTab>("all");
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const { atlas, status, fontNames, retry: handleRetry } = useFontAtlas({ open });
+	const [localFonts, setLocalFonts] = useState<string[] | null>(null);
+	const [localFontsError, setLocalFontsError] = useState<string | null>(null);
+
+	const isMyFonts = activeTab === "my-fonts";
+	const tabFonts = useMemo(
+		() => (isMyFonts ? (localFonts ?? []) : fontNames),
+		[isMyFonts, localFonts, fontNames],
+	);
 
 	const filteredFonts = useMemo(() => {
-		if (!search) return fontNames;
+		if (!search) return tabFonts;
 		const query = search.toLowerCase();
-		return fontNames.filter((name) => name.toLowerCase().includes(query));
-	}, [fontNames, search]);
+		return tabFonts.filter((name) => name.toLowerCase().includes(query));
+	}, [tabFonts, search]);
+
+	// Runs inside the tab click so the browser can show its permission prompt
+	const handleTabClick = (tab: FontTab) => {
+		setActiveTab(tab);
+		if (tab !== "my-fonts" || localFonts) return;
+		if (!isLocalFontAccessSupported()) {
+			setLocalFontsError(
+				"This browser can't list installed fonts. Use Chrome, Edge, or Whale.",
+			);
+			return;
+		}
+		setLocalFontsError(null);
+		queryLocalFontFamilies()
+			.then(setLocalFonts)
+			.catch(() =>
+				setLocalFontsError(
+					"Font access was blocked. Allow it in the site settings and try again.",
+				),
+			);
+	};
 
 	const listHeight = Math.min(
 		MAX_LIST_HEIGHT,
@@ -62,7 +93,7 @@ export function FontPicker({
 
 	const handleSelect = useCallback(
 		async ({ family }: { family: string }) => {
-			if (!SYSTEM_FONTS.has(family)) {
+			if (!SYSTEM_FONTS.has(family) && !localFonts?.includes(family)) {
 				try {
 					await loadFullFont({ family });
 				} catch {
@@ -72,7 +103,7 @@ export function FontPicker({
 			onValueChange?.(family);
 			setOpen(false);
 		},
-		[onValueChange],
+		[onValueChange, localFonts],
 	);
 
 	useEffect(() => {
@@ -138,18 +169,28 @@ export function FontPicker({
 									? "border-foreground text-foreground"
 									: "border-transparent text-muted-foreground hover:text-foreground",
 							)}
-							onClick={() => setActiveTab(tab.key)}
+							onClick={() => handleTabClick(tab.key)}
 						>
 							{tab.label}
 						</button>
 					))}
 				</div>
-				{status === "loading" && (
+				{isMyFonts && localFontsError && (
+					<div className="py-8 px-4 text-center text-sm text-muted-foreground">
+						{localFontsError}
+					</div>
+				)}
+				{isMyFonts && !localFontsError && !localFonts && (
+					<div className="py-8 text-center text-sm text-muted-foreground">
+						Loading installed fonts...
+					</div>
+				)}
+				{!isMyFonts && status === "loading" && (
 					<div className="py-8 text-center text-sm text-muted-foreground">
 						Loading fonts...
 					</div>
 				)}
-				{status === "error" && (
+				{!isMyFonts && status === "error" && (
 					<div className="flex flex-col items-center gap-3 py-8 px-4">
 						<p className="text-sm text-muted-foreground text-center">
 							Failed to load font previews.
@@ -159,14 +200,12 @@ export function FontPicker({
 						</Button>
 					</div>
 				)}
-				{status === "idle" &&
-					fontNames.length > 0 &&
-					filteredFonts.length === 0 && (
-						<div className="py-6 text-center text-sm text-muted-foreground">
-							No fonts found.
-						</div>
-					)}
-				{status === "idle" && atlas && filteredFonts.length > 0 && (
+				{tabFonts.length > 0 && filteredFonts.length === 0 && (
+					<div className="py-6 text-center text-sm text-muted-foreground">
+						No fonts found.
+					</div>
+				)}
+				{(isMyFonts || (status === "idle" && atlas)) && filteredFonts.length > 0 && (
 					<List
 						rowCount={filteredFonts.length}
 						rowHeight={ROW_HEIGHT}
@@ -208,7 +247,7 @@ function FontSpritePreview({ entry }: { entry: FontAtlasEntry }) {
 }
 
 type FontRowProps = {
-	atlas: FontAtlas;
+	atlas: FontAtlas | null;
 	filteredFonts: string[];
 	selectedFont: string | undefined;
 	onFontSelect: (params: { family: string }) => void;
@@ -223,9 +262,9 @@ function FontRow({
 	onFontSelect,
 }: RowComponentProps<FontRowProps>) {
 	const fontName = filteredFonts[index];
-	const entry = atlas.fonts[fontName];
+	// System and installed fonts have no sprite; render the name in the font itself
+	const entry = atlas?.fonts[fontName];
 	const isSelected = fontName === selectedFont;
-	const isSystemFont = SYSTEM_FONTS.has(fontName);
 
 	return (
 		<button
@@ -245,12 +284,12 @@ function FontRow({
 			aria-label={fontName}
 		>
 			<div className="min-w-0 overflow-hidden">
-				{isSystemFont ? (
+				{entry ? (
+					<FontSpritePreview entry={entry} />
+				) : (
 					<span className="text-xl text-foreground/85" style={{ fontFamily: fontName }}>
 						{fontName}
 					</span>
-				) : (
-					<FontSpritePreview entry={entry} />
 				)}
 			</div>
 		</button>
