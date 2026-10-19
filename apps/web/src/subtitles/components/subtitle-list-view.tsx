@@ -1,6 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { GitMergeIcon, ScissorIcon } from "@hugeicons/core-free-icons";
+import {
+	ArrowDown01Icon,
+	ArrowUp01Icon,
+	GitMergeIcon,
+	ScissorIcon,
+	Search01Icon,
+} from "@hugeicons/core-free-icons";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +19,14 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { useEditor } from "@/editor/use-editor";
+import { cn } from "@/utils/ui";
 import { listSubtitleGroups, type SubtitleEntry } from "@/subtitles/groups";
 import { formatCueTime, parseCueTime } from "@/subtitles/edit";
 import {
 	cueOf,
 	mergeSubtitles,
+	replaceAllInSubtitles,
+	replaceInSubtitle,
 	retimeSubtitle,
 	splitSubtitle,
 } from "@/subtitles/list-actions";
@@ -31,11 +40,46 @@ export function SubtitleListView() {
 	);
 	const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 	const [activeId, setActiveId] = useState<string | null>(null);
+	const [isFinding, setIsFinding] = useState(false);
+	const [query, setQuery] = useState("");
+	const [replacement, setReplacement] = useState("");
+	const [matchIndex, setMatchIndex] = useState(0);
+	const editor = useEditor();
 	const group =
 		groups.find((candidate) => candidate.groupId === selectedGroupId) ?? groups.at(-1);
 
+	const matches =
+		isFinding && query && group
+			? group.entries.filter((entry) => cueOf({ entry }).text.includes(query))
+			: [];
+	const currentMatch = matches.length ? matches[matchIndex % matches.length] : undefined;
+
+	const goToMatch = (index: number) => {
+		const target = matches.at(index % matches.length);
+		if (!target) return;
+		setMatchIndex((index + matches.length) % matches.length);
+		setActiveId(target.element.id);
+		editor.playback.seek({ time: target.element.startTime });
+	};
+
 	return (
-		<PanelView title="Subtitle list">
+		<PanelView
+			title="Subtitle list"
+			actions={
+				group && (
+					<Button
+						type="button"
+						variant={isFinding ? "secondary" : "ghost"}
+						size="icon"
+						aria-label="Find and replace"
+						title="Find and replace"
+						onClick={() => setIsFinding(!isFinding)}
+					>
+						<HugeiconsIcon icon={Search01Icon} size={16} />
+					</Button>
+				)
+			}
+		>
 			{!group ? (
 				<p className="text-muted-foreground px-3 text-sm">
 					Generate or import captions in the Captions tab to edit them here.
@@ -56,6 +100,82 @@ export function SubtitleListView() {
 							</SelectContent>
 						</Select>
 					)}
+					{isFinding && (
+						<div className="flex flex-col gap-1.5 border-b pb-2">
+							<div className="flex items-center gap-1">
+								<Input
+									aria-label="Find"
+									placeholder="Find"
+									value={query}
+									className="h-8 text-sm"
+									onChange={(event) => {
+										setQuery(event.target.value);
+										setMatchIndex(0);
+									}}
+									onKeyDown={(event) => {
+										if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+											goToMatch(matchIndex + (event.shiftKey ? -1 : 1));
+										}
+									}}
+								/>
+								<span className="text-muted-foreground w-12 shrink-0 text-center text-xs tabular-nums">
+									{query ? `${matches.length ? (matchIndex % matches.length) + 1 : 0}/${matches.length}` : ""}
+								</span>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									aria-label="Previous match"
+									disabled={!matches.length}
+									onClick={() => goToMatch(matchIndex - 1)}
+								>
+									<HugeiconsIcon icon={ArrowUp01Icon} size={14} />
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									aria-label="Next match"
+									disabled={!matches.length}
+									onClick={() => goToMatch(matchIndex + 1)}
+								>
+									<HugeiconsIcon icon={ArrowDown01Icon} size={14} />
+								</Button>
+							</div>
+							<div className="flex items-center gap-1">
+								<Input
+									aria-label="Replace with"
+									placeholder="Replace with"
+									value={replacement}
+									className="h-8 text-sm"
+									onChange={(event) => setReplacement(event.target.value)}
+								/>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									disabled={!currentMatch}
+									onClick={() =>
+										currentMatch &&
+										replaceInSubtitle({ editor, entry: currentMatch, query, replacement })
+									}
+								>
+									Replace
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									disabled={!matches.length}
+									onClick={() =>
+										replaceAllInSubtitles({ editor, entries: group.entries, query, replacement })
+									}
+								>
+									All
+								</Button>
+							</div>
+						</div>
+					)}
 					<ol className="flex flex-col gap-1.5">
 						{group.entries.map((entry, index) => (
 							<SubtitleRow
@@ -64,6 +184,8 @@ export function SubtitleListView() {
 								previous={group.entries[index - 1]}
 								next={group.entries[index + 1]}
 								isActive={entry.element.id === activeId}
+								isMatch={matches.includes(entry)}
+								isCurrentMatch={entry === currentMatch}
 								onActivate={() => setActiveId(entry.element.id)}
 							/>
 						))}
@@ -79,12 +201,16 @@ function SubtitleRow({
 	previous,
 	next,
 	isActive,
+	isMatch,
+	isCurrentMatch,
 	onActivate,
 }: {
 	entry: SubtitleEntry;
 	previous: SubtitleEntry | undefined;
 	next: SubtitleEntry | undefined;
 	isActive: boolean;
+	isMatch: boolean;
+	isCurrentMatch: boolean;
 	onActivate: () => void;
 }) {
 	const editor = useEditor();
@@ -92,6 +218,11 @@ function SubtitleRow({
 	const cue = cueOf({ entry });
 	const [draft, setDraft] = useState<string | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const rowRef = useRef<HTMLLIElement>(null);
+
+	useEffect(() => {
+		if (isCurrentMatch) rowRef.current?.scrollIntoView({ block: "nearest" });
+	}, [isCurrentMatch]);
 
 	const commit = () => {
 		if (draft === null) return;
@@ -126,7 +257,15 @@ function SubtitleRow({
 	const text = draft ?? cue.text;
 
 	return (
-		<li className="flex flex-col gap-1">
+		<li
+			ref={rowRef}
+			data-match={isMatch || undefined}
+			className={cn(
+				"flex flex-col gap-1 rounded-sm",
+				isMatch && "bg-amber-500/10",
+				isCurrentMatch && "ring-1 ring-amber-500",
+			)}
+		>
 			<div className="flex gap-2">
 				<button
 					type="button"

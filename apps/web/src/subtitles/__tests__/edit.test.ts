@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { clampCueTiming, formatCueTime, mergeCues, parseCueTime, splitCue } from "../edit";
+import {
+	clampCueTiming,
+	formatCueTime,
+	mergeCues,
+	parseCueTime,
+	planReplaceAll,
+	splitCue,
+} from "../edit";
 
 describe("splitCue", () => {
 	test("커서 위치에서 나누고 시간은 공백을 뺀 글자 수 비율로 나눈다", () => {
@@ -51,5 +58,28 @@ describe("parseCueTime / formatCueTime", () => {
 	test("목록에는 분:초.한자리로 보여 준다", () => {
 		expect(formatCueTime({ seconds: 62.54 })).toBe("1:02.5");
 		expect(formatCueTime({ seconds: 3 })).toBe("0:03.0");
+	});
+});
+
+describe("planReplaceAll", () => {
+	test("검색어가 들어 있는 자막만 바꾼 텍스트로 돌려준다", () => {
+		expect(
+			planReplaceAll({
+				cues: [
+					{ id: "a", text: "요스를 붓고 요스를 끓여요" },
+					{ id: "b", text: "국밥" },
+					{ id: "c", text: "진한 요스" },
+				],
+				query: "요스",
+				replacement: "육수",
+			}),
+		).toEqual([
+			{ id: "a", text: "육수를 붓고 육수를 끓여요" },
+			{ id: "c", text: "진한 육수" },
+		]);
+	});
+
+	test("빈 검색어는 아무것도 바꾸지 않는다", () => {
+		expect(planReplaceAll({ cues: [{ id: "a", text: "국밥" }], query: "", replacement: "x" })).toEqual([]);
 	});
 });

@@ -58,3 +58,19 @@ export function formatCueTime({ seconds }: { seconds: number }): string {
 	const minutes = Math.floor(tenths / 600);
 	return `${minutes}:${((tenths - minutes * 600) / 10).toFixed(1).padStart(4, "0")}`;
 }
+
+/** 모두 바꾸기. 검색어가 들어 있는 자막만, 바꾼 텍스트와 함께 돌려준다 */
+export function planReplaceAll({
+	cues,
+	query,
+	replacement,
+}: {
+	cues: { id: string; text: string }[];
+	query: string;
+	replacement: string;
+}): { id: string; text: string }[] {
+	if (!query) return [];
+	return cues
+		.filter((cue) => cue.text.includes(query))
+		.map((cue) => ({ id: cue.id, text: cue.text.split(query).join(replacement) }));
+}

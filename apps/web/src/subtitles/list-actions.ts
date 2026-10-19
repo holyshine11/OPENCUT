@@ -12,7 +12,7 @@ import {
 	type MediaTime,
 } from "@/wasm";
 import type { SubtitleEntry } from "./groups";
-import { clampCueTiming, mergeCues, splitCue, type Cue } from "./edit";
+import { clampCueTiming, mergeCues, planReplaceAll, splitCue, type Cue } from "./edit";
 
 const seconds = (time: MediaTime) => mediaTimeToSeconds({ time });
 const toTime = (value: number) => mediaTimeFromSeconds({ seconds: value });
@@ -129,4 +129,58 @@ export function retimeSubtitle({
 		updates: [{ trackId: entry.trackId, elementId: entry.element.id, patch: timingPatch(timing) }],
 	});
 	return true;
+}
+
+/** 그룹 안의 검색어를 모두 바꾼다. 한 번의 실행 취소로 되돌아간다 */
+export function replaceAllInSubtitles({
+	editor,
+	entries,
+	query,
+	replacement,
+}: {
+	editor: EditorCore;
+	entries: SubtitleEntry[];
+	query: string;
+	replacement: string;
+}): number {
+	const plan = planReplaceAll({
+		cues: entries.map((entry) => ({ id: entry.element.id, text: cueOf({ entry }).text })),
+		query,
+		replacement,
+	});
+	const textById = new Map(plan.map(({ id, text }) => [id, text]));
+	editor.timeline.updateElements({
+		updates: entries.flatMap((entry) => {
+			const text = textById.get(entry.element.id);
+			return text === undefined
+				? []
+				: [{ trackId: entry.trackId, elementId: entry.element.id, patch: { params: { content: text } } }];
+		}),
+	});
+	return plan.length;
+}
+
+/** 이 자막에서 검색어가 처음 나오는 곳 하나만 바꾼다 */
+export function replaceInSubtitle({
+	editor,
+	entry,
+	query,
+	replacement,
+}: {
+	editor: EditorCore;
+	entry: SubtitleEntry;
+	query: string;
+	replacement: string;
+}): void {
+	const text = cueOf({ entry }).text;
+	if (!query || !text.includes(query)) return;
+	editor.timeline.updateElements({
+		updates: [
+			{
+				trackId: entry.trackId,
+				elementId: entry.element.id,
+				patch: { params: { content: text.replace(query, () => replacement) } },
+			},
+		],
+	});
 }
