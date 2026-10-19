@@ -338,6 +338,17 @@ function SubtitleRow({
 		if (didSplit) setDraft(null);
 	};
 
+	const merge = () => {
+		if (!next) return;
+		mergeSubtitles({
+			editor,
+			first: entry,
+			second: next,
+			text: textareaRef.current?.value,
+		});
+		setDraft(null);
+	};
+
 	const text = draft ?? cue.text;
 
 	return (
@@ -369,14 +380,28 @@ function SubtitleRow({
 					onFocus={jumpTo}
 					onChange={(event) => setDraft(event.target.value)}
 					onBlur={commit}
+					// 전역 단축키는 입력칸에서 쉬므로 여기서 따로 받는다. 한글 조합 중에는 손대지 않는다
 					onKeyDown={(event) => {
-						if (
-							event.key === "Enter" &&
-							!event.shiftKey &&
-							!event.nativeEvent.isComposing
-						) {
+						if (event.nativeEvent.isComposing) return;
+						const textarea = event.currentTarget;
+						if (event.key === "Enter" && event.altKey) {
 							event.preventDefault();
-							event.currentTarget.blur();
+							textarea.setRangeText(
+								"\n",
+								textarea.selectionStart,
+								textarea.selectionEnd,
+								"end",
+							);
+							setDraft(textarea.value);
+						} else if (event.key === "Enter" && event.shiftKey) {
+							event.preventDefault();
+							split();
+						} else if (event.key === "Backspace" && event.shiftKey && next) {
+							event.preventDefault();
+							merge();
+						} else if (event.key === "Enter") {
+							event.preventDefault();
+							textarea.blur();
 						}
 					}}
 				/>
@@ -430,9 +455,7 @@ function SubtitleRow({
 						aria-label={m.subtitleList.mergeWithNext}
 						title={m.subtitleList.mergeWithNext}
 						disabled={!next}
-						onClick={() =>
-							next && mergeSubtitles({ editor, first: entry, second: next })
-						}
+						onClick={merge}
 					>
 						<HugeiconsIcon icon={GitMergeIcon} size={14} />
 					</Button>

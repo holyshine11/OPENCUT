@@ -98,6 +98,14 @@ export const ACTIONS = {
 		description: "Paste text style onto selected text",
 		category: "editing",
 	},
+	"split-caption-at-playhead": {
+		description: "Split caption at playhead",
+		category: "editing",
+	},
+	"merge-caption-with-next": {
+		description: "Merge caption with next",
+		category: "editing",
+	},
 	"toggle-snapping": {
 		description: "Toggle snapping",
 		category: "editing",
@@ -178,6 +186,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["paste-copied", ["ctrl+v"]],
 	["copy-style", ["ctrl+alt+c"]],
 	["paste-style", ["ctrl+alt+v"]],
+	["split-caption-at-playhead", ["shift+enter"]],
+	["merge-caption-with-next", ["shift+backspace"]],
 	["toggle-snapping", ["n"]],
 	["select-all", ["ctrl+a"]],
 	["cancel-interaction", ["escape"]],

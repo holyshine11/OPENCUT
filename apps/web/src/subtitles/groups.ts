@@ -38,3 +38,18 @@ export function listSubtitleGroups({
 			(a, b) => a.entries[0].element.startTime - b.entries[0].element.startTime,
 		);
 }
+
+/** 자막 요소와 같은 묶음의 다음 자막. 자막이 아니면 null */
+export function findSubtitleEntry({
+	groups,
+	elementId,
+}: {
+	groups: SubtitleGroup[];
+	elementId: string;
+}): { entry: SubtitleEntry; next: SubtitleEntry | undefined } | null {
+	for (const { entries } of groups) {
+		const index = entries.findIndex((entry) => entry.element.id === elementId);
+		if (index >= 0) return { entry: entries[index], next: entries[index + 1] };
+	}
+	return null;
+}

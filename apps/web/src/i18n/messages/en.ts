@@ -688,6 +688,8 @@ export const en = {
 		"paste-copied": "Paste elements at playhead",
 		"copy-style": "Copy text style",
 		"paste-style": "Paste text style onto selected text",
+		"split-caption-at-playhead": "Split caption at playhead",
+		"merge-caption-with-next": "Merge caption with next",
 		"toggle-snapping": "Toggle snapping",
 		"toggle-ripple-editing": "Toggle ripple editing",
 		"toggle-source-audio": "Extract or recover source audio",

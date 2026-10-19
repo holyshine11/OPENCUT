@@ -638,6 +638,8 @@ export const ko: Messages = {
 		"paste-copied": "재생 헤드 위치에 붙여넣기",
 		"copy-style": "텍스트 스타일 복사",
 		"paste-style": "선택한 텍스트에 스타일 붙여넣기",
+		"split-caption-at-playhead": "재생 위치에서 자막 나누기",
+		"merge-caption-with-next": "다음 자막과 합치기",
 		"toggle-snapping": "자동 맞춤 켜기/끄기",
 		"toggle-ripple-editing": "리플 편집 켜기/끄기",
 		"toggle-source-audio": "원본 오디오 분리/되돌리기",

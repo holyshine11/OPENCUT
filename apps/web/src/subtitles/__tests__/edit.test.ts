@@ -6,6 +6,7 @@ import {
 	parseCueTime,
 	planReplaceAll,
 	splitCue,
+	splitIndexAtTime,
 } from "../edit";
 
 describe("splitCue", () => {
@@ -59,6 +60,54 @@ describe("splitCue", () => {
 				at: 4,
 			})?.[0],
 		).toEqual({ text: "국밥 맛", start: 10, end: 11.5 });
+	});
+});
+
+describe("splitCue time", () => {
+	const cue = {
+		text: "국밥 맛집 오늘 최고",
+		start: 10,
+		end: 14,
+		wordStarts: [10, 10.4, 13, 13.5],
+	};
+
+	test("시각을 주면 그 시각에서 나누고 단어 시각은 단어 경계대로 나눈다", () => {
+		expect(splitCue({ cue, at: 5, time: 12.8 })).toEqual([
+			{ text: "국밥 맛집", start: 10, end: 12.8, wordStarts: [10, 10.4] },
+			{ text: "오늘 최고", start: 12.8, end: 14, wordStarts: [13, 13.5] },
+		]);
+	});
+
+	test("시각이 자막 범위 밖이면 나누지 않는다", () => {
+		expect(splitCue({ cue, at: 5, time: 14 })).toBeNull();
+		expect(splitCue({ cue, at: 5, time: 9 })).toBeNull();
+	});
+});
+
+describe("splitIndexAtTime", () => {
+	test("단어 시각이 있으면 시작 시각이 가장 가까운 단어 앞에서 가른다", () => {
+		const cue = {
+			text: "국밥 맛집 오늘 최고",
+			start: 10,
+			end: 14,
+			wordStarts: [10, 10.4, 13, 13.5],
+		};
+		expect(splitIndexAtTime({ cue, time: 12.8 })).toBe(6);
+		expect(splitIndexAtTime({ cue, time: 10.5 })).toBe(3);
+		expect(splitIndexAtTime({ cue, time: 13.9 })).toBe(9);
+	});
+
+	test("단어 시각이 없으면 글자 비율로 가장 가까운 단어 앞에서 가른다", () => {
+		// 글자 8개, 12초는 4글자 지점 → "오늘" 앞
+		const cue = { text: "국밥 맛집 오늘 최고", start: 10, end: 14 };
+		expect(splitIndexAtTime({ cue, time: 12 })).toBe(6);
+		expect(splitIndexAtTime({ cue, time: 10.2 })).toBe(3);
+	});
+
+	test("단어가 하나뿐이면 가를 곳이 없다", () => {
+		expect(
+			splitIndexAtTime({ cue: { text: "국밥", start: 0, end: 1 }, time: 0.5 }),
+		).toBeNull();
 	});
 });
 
