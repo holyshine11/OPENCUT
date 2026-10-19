@@ -22,8 +22,18 @@ export interface TScene {
 	isMain: boolean;
 	tracks: SceneTracks;
 	bookmarks: Bookmark[];
+	/** 트랙 폴더. 구성원은 트랙의 folderId로 가리킨다 */
+	trackFolders?: TrackFolder[];
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+export interface TrackFolder {
+	id: string;
+	name: string;
+	color?: string;
+	/** 접으면 안의 트랙 줄만 감춘다. 미리보기·내보내기에는 영향이 없다 */
+	collapsed?: boolean;
 }
 
 export type TrackType = "video" | "text" | "audio" | "graphic" | "effect";
@@ -35,6 +45,8 @@ interface BaseTrack {
 	color?: string;
 	/** 잠긴 트랙의 클립은 선택·편집되지 않는다 */
 	locked?: boolean;
+	/** 속한 트랙 폴더 */
+	folderId?: string;
 }
 
 export interface VideoTrack extends BaseTrack {
@@ -293,6 +305,7 @@ export interface ComputeDropTargetParams {
 	startTimeOverride?: MediaTime;
 	excludeElementId?: string;
 	targetElementTypes?: string[];
+	trackFolders?: TrackFolder[];
 }
 
 export interface ClipboardItem {

@@ -94,33 +94,44 @@ function ColorPaletteContent({
 	);
 }
 
-/** 트랙 머리 왼쪽 색 띠. 누르면 트랙 색 팔레트가 열린다 */
-export function TrackColorStrip({ track }: { track: TimelineTrack }) {
-	const m = useMessages();
-	const editor = useEditor();
-	const color = getTrackColor({ track });
-
+/** 트랙·폴더 머리 왼쪽 색 띠. 누르면 색 팔레트가 열린다 */
+export function ColorStrip({
+	label,
+	...paletteProps
+}: ColorPaletteProps & { label: string }) {
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
 				<button
 					type="button"
-					aria-label={m.timeline.trackColor}
+					aria-label={label}
 					className="bg-muted absolute inset-y-0 left-0 w-1.5 cursor-pointer hover:brightness-125"
-					style={color ? { backgroundColor: color } : undefined}
+					style={
+						paletteProps.color
+							? { backgroundColor: paletteProps.color }
+							: undefined
+					}
 				/>
 			</PopoverTrigger>
-			<ColorPaletteContent
-				side="right"
-				align="start"
-				color={color}
-				canReset={track.color !== undefined}
-				resetLabel={m.timeline.resetColor}
-				onColorChange={(next) =>
-					editor.timeline.setTrackColor({ trackId: track.id, color: next })
-				}
-			/>
+			<ColorPaletteContent side="right" align="start" {...paletteProps} />
 		</Popover>
+	);
+}
+
+export function TrackColorStrip({ track }: { track: TimelineTrack }) {
+	const m = useMessages();
+	const editor = useEditor();
+
+	return (
+		<ColorStrip
+			label={m.timeline.trackColor}
+			color={getTrackColor({ track })}
+			canReset={track.color !== undefined}
+			resetLabel={m.timeline.resetColor}
+			onColorChange={(next) =>
+				editor.timeline.setTrackColor({ trackId: track.id, color: next })
+			}
+		/>
 	);
 }
 

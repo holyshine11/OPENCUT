@@ -2,11 +2,16 @@
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+	ArrowDown01Icon,
+	ArrowRight01Icon,
 	Delete02Icon,
+	FolderAddIcon,
+	FolderRemoveIcon,
 	LockIcon,
 	MagicWand05Icon,
 	PaintBoardIcon,
 	MusicNote03Icon,
+	PencilEdit01Icon,
 	SquareUnlock02Icon,
 	TaskAdd02Icon,
 	TextIcon,
@@ -28,6 +33,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	Fragment,
 	useRef,
 	useState,
 	type ReactNode,
@@ -41,12 +47,13 @@ import { SelectionBox } from "@/selection/selection-box";
 import { useBoxSelect } from "@/selection/hooks/use-box-select";
 import { SnapIndicator } from "./snap-indicator";
 import type { SnapPoint } from "@/timeline/snapping";
-import type { TimelineTrack } from "@/timeline";
+import type { TimelineTrack, TrackFolder } from "@/timeline";
 import {
 	TIMELINE_SCROLLBAR_SIZE_PX,
 	TIMELINE_CONTENT_TOP_PADDING_PX,
 	TIMELINE_TRACK_GAP_PX,
 	TIMELINE_TRACK_LABELS_COLUMN_WIDTH_PX,
+	TIMELINE_FOLDER_HEADER_HEIGHT_PX,
 	KEYFRAME_LANE_HEIGHT_PX,
 } from "./layout";
 import { useElementInteraction } from "@/timeline/hooks/element/use-element-interaction";
@@ -59,9 +66,15 @@ import {
 import { timelineTimeToPixels } from "@/timeline/pixel-utils";
 import {
 	getTrackHeight,
-	getCumulativeHeightBefore,
 	getTotalTracksHeight,
+	getTrackRowLayouts,
 } from "./track-layout";
+import {
+	getFolderToggleState,
+	getGroupableTrackIds,
+	getTrackFolderRows,
+	type TrackFolderRow,
+} from "@/timeline/track-folders";
 import {
 	getTrackColor,
 	LOCKED_TRACK_OVERLAY_CLASS,
@@ -78,6 +91,7 @@ import { TIMELINE_HORIZONTAL_WHEEL_STEP_PX } from "./interaction";
 import { TimelineToolbar } from "./timeline-toolbar";
 import {
 	AnchoredColorPopover,
+	ColorStrip,
 	TrackColorStrip,
 } from "./timeline-color-popover";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
@@ -151,6 +165,10 @@ export function Timeline() {
 		[scene],
 	);
 	const mainTrackId = scene?.tracks.main.id ?? null;
+	const folderRows = useMemo(
+		() => getTrackFolderRows({ tracks, folders: scene?.trackFolders }),
+		[tracks, scene],
+	);
 	const seek = (time: MediaTime) => editor.playback.seek({ time });
 
 	const timelineRef = useRef<HTMLDivElement>(null);
@@ -318,12 +336,12 @@ export function Timeline() {
 
 	const { dragView, handleElementMouseDown, handleElementClick } =
 		useElementInteraction({
-		zoomLevel,
-		tracksContainerRef,
-		tracksScrollRef,
-		snappingEnabled,
-		onSnapPointChange: handleSnapPointChange,
-	});
+			zoomLevel,
+			tracksContainerRef,
+			tracksScrollRef,
+			snappingEnabled,
+			onSnapPointChange: handleSnapPointChange,
+		});
 	const isElementDragging = dragView.kind === "dragging";
 
 	const {
@@ -372,6 +390,7 @@ export function Timeline() {
 				container: tracksContainerRef.current,
 				scrollContainer: tracksScrollRef.current,
 				tracks,
+				folderRows,
 				zoomLevel,
 				startPos,
 				currentPos,
@@ -465,24 +484,25 @@ export function Timeline() {
 					timelineHeaderHeight={timelineHeaderHeight}
 					hasHorizontalScrollbar={hasHorizontalScrollbar}
 					getTrackExpansionHeight={getTrackExpansionHeight}
+					folderRows={folderRows}
 				/>
 
 				<div
 					className="relative isolate flex flex-1 flex-col overflow-hidden"
 					ref={tracksContainerRef}
 				>
-					<SelectionBox
-						bounds={selectionBox?.bounds ?? null}
-					/>
+					<SelectionBox bounds={selectionBox?.bounds ?? null} />
 					<DragLine
 						dropTarget={dropTarget}
 						tracks={tracks}
+						folderRows={folderRows}
 						isVisible={isDragOver && !dropTarget?.targetElement}
 						headerHeight={timelineHeaderHeight}
 					/>
 					<DragLine
 						dropTarget={isElementDragging ? dragView.dropTarget : null}
 						tracks={tracks}
+						folderRows={folderRows}
 						isVisible={isElementDragging}
 						headerHeight={timelineHeaderHeight}
 					/>
@@ -540,6 +560,7 @@ export function Timeline() {
 												getTotalTracksHeight({
 													tracks,
 													getExtraHeight: getTrackExpansionHeight,
+													folderRows,
 												}),
 											),
 										) + TIMELINE_CONTENT_TOP_PADDING_PX
@@ -575,6 +596,7 @@ export function Timeline() {
 										shouldIgnoreClick={shouldIgnoreClick}
 										isDragOver={isDragOver}
 										dropTarget={dropTarget}
+										folderRows={folderRows}
 									/>
 								)}
 							</div>
@@ -619,12 +641,14 @@ function TrackLabelsPanel({
 	timelineHeaderHeight,
 	hasHorizontalScrollbar,
 	getTrackExpansionHeight,
+	folderRows,
 }: {
 	trackLabelsRef: React.RefObject<HTMLDivElement | null>;
 	trackLabelsScrollRef: React.RefObject<HTMLDivElement | null>;
 	timelineHeaderHeight: number;
 	hasHorizontalScrollbar: boolean;
 	getTrackExpansionHeight: (trackIndex: number) => number;
+	folderRows: readonly TrackFolderRow[];
 }) {
 	const editor = useEditor();
 	const m = useMessages();
@@ -670,83 +694,97 @@ function TrackLabelsPanel({
 							{tracks.map((track, index) => {
 								const expandedRows = trackExpandedRowsMap[index];
 								const baseHeight = getTrackHeight({ type: track.type });
+								const folderHeader = folderRows[index]?.header;
 
 								return (
-									<div
-										key={track.id}
-										className={cn(
-											"group relative flex flex-col",
-											tracksWithSelection.has(track.id) &&
-												SELECTED_TRACK_ROW_CLASS,
-										)}
-										style={{
-											height: `${baseHeight + getTrackExpansionHeight(index)}px`,
-										}}
-									>
-										<TrackColorStrip track={track} />
-										<div
-											className="flex shrink-0 items-center justify-end gap-2 px-3"
-											style={{ height: `${baseHeight}px` }}
-										>
-											{canTrackHaveAudio(track) && (
-												<TrackToggleIcon
-													isOff={track.muted}
-													label={
-														track.muted
-															? m.timeline.unmuteTrack
-															: m.timeline.muteTrack
-													}
-													icons={{
-														on: VolumeHighIcon,
-														off: VolumeOffIcon,
-													}}
-													onClick={() =>
-														editor.timeline.toggleTrackMute({
-															trackId: track.id,
-														})
-													}
-												/>
-											)}
-											{canTrackBeHidden(track) && (
-												<TrackToggleIcon
-													isOff={track.hidden}
-													label={
-														track.hidden
-															? m.timeline.showTrack
-															: m.timeline.hideTrack
-													}
-													icons={{
-														on: ViewIcon,
-														off: ViewOffSlashIcon,
-													}}
-													onClick={() =>
-														editor.timeline.toggleTrackVisibility({
-															trackId: track.id,
-														})
-													}
-												/>
-											)}
-											<TrackToggleIcon
-												isOff={track.locked === true}
-												label={
-													track.locked
-														? m.timeline.unlockTrack
-														: m.timeline.lockTrack
-												}
-												icons={{
-													on: SquareUnlock02Icon,
-													off: LockIcon,
-												}}
-												onClick={() =>
-													editor.timeline.toggleTrackLock({ trackId: track.id })
-												}
+									<Fragment key={track.id}>
+										{folderHeader && (
+											<TrackFolderHeader
+												folder={folderHeader}
+												members={tracks.filter(
+													({ folderId }) => folderId === folderHeader.id,
+												)}
 											/>
-											<TrackIcon track={track} />
-										</div>
-										{expandedRows.length > 0 && (
-											<PropertyTree rows={expandedRows} />
 										)}
-									</div>
+										{!folderRows[index]?.hidden && (
+											<div
+												className={cn(
+													"group relative flex flex-col",
+													tracksWithSelection.has(track.id) &&
+														SELECTED_TRACK_ROW_CLASS,
+												)}
+												style={{
+													height: `${baseHeight + getTrackExpansionHeight(index)}px`,
+												}}
+											>
+												<TrackColorStrip track={track} />
+												<div
+													className="flex shrink-0 items-center justify-end gap-2 px-3"
+													style={{ height: `${baseHeight}px` }}
+												>
+													{canTrackHaveAudio(track) && (
+														<TrackToggleIcon
+															isOff={track.muted}
+															label={
+																track.muted
+																	? m.timeline.unmuteTrack
+																	: m.timeline.muteTrack
+															}
+															icons={{
+																on: VolumeHighIcon,
+																off: VolumeOffIcon,
+															}}
+															onClick={() =>
+																editor.timeline.toggleTrackMute({
+																	trackId: track.id,
+																})
+															}
+														/>
+													)}
+													{canTrackBeHidden(track) && (
+														<TrackToggleIcon
+															isOff={track.hidden}
+															label={
+																track.hidden
+																	? m.timeline.showTrack
+																	: m.timeline.hideTrack
+															}
+															icons={{
+																on: ViewIcon,
+																off: ViewOffSlashIcon,
+															}}
+															onClick={() =>
+																editor.timeline.toggleTrackVisibility({
+																	trackId: track.id,
+																})
+															}
+														/>
+													)}
+													<TrackToggleIcon
+														isOff={track.locked === true}
+														label={
+															track.locked
+																? m.timeline.unlockTrack
+																: m.timeline.lockTrack
+														}
+														icons={{
+															on: SquareUnlock02Icon,
+															off: LockIcon,
+														}}
+														onClick={() =>
+															editor.timeline.toggleTrackLock({
+																trackId: track.id,
+															})
+														}
+													/>
+													<TrackIcon track={track} />
+												</div>
+												{expandedRows.length > 0 && (
+													<PropertyTree rows={expandedRows} />
+												)}
+											</div>
+										)}
+									</Fragment>
 								);
 							})}
 						</div>
@@ -775,6 +813,7 @@ function TimelineTrackRows({
 	shouldIgnoreClick,
 	isDragOver,
 	dropTarget,
+	folderRows,
 }: {
 	mainTrackId: string | null;
 	zoomLevel: number;
@@ -793,6 +832,7 @@ function TimelineTrackRows({
 	shouldIgnoreClick: () => boolean;
 	isDragOver: boolean;
 	dropTarget: DropTarget | null;
+	folderRows: readonly TrackFolderRow[];
 }) {
 	const m = useMessages();
 	const timeline = useEditor((e) => e.timeline);
@@ -821,12 +861,25 @@ function TimelineTrackRows({
 		},
 		[tracks, expandedElementIds],
 	);
+	const { rows } = useMemo(
+		() =>
+			getTrackRowLayouts({
+				tracks,
+				getExtraHeight: getTrackExpansionHeight,
+				folderRows,
+			}),
+		[tracks, getTrackExpansionHeight, folderRows],
+	);
+	const folders = scene?.trackFolders;
+	// 고른 클립이 있는 트랙을 우클릭하면 그 트랙들을, 아니면 우클릭한 트랙만 묶는다
+	const getGroupTargetIds = (trackId: string) =>
+		tracksWithSelection.has(trackId) ? [...tracksWithSelection] : [trackId];
 
 	const draggingElementIds = useMemo(
 		() =>
 			dragView.kind === "dragging"
-			? dragView.memberTimeOffsets
-			: (null as ReadonlyMap<string, MediaTime> | null),
+				? dragView.memberTimeOffsets
+				: (null as ReadonlyMap<string, MediaTime> | null),
 		[dragView],
 	);
 	const sortedTracks = useMemo(() => {
@@ -849,129 +902,161 @@ function TimelineTrackRows({
 
 	return (
 		<>
-			{sortedTracks.map(({ track, index }) => (
-				<ContextMenu key={track.id}>
-					<ContextMenuTrigger asChild>
-						<div
-							className={cn(
-								"absolute right-0 left-0 transition-colors",
-								tracksWithSelection.has(track.id) && SELECTED_TRACK_ROW_CLASS,
-							)}
-							style={{
-								top: `${TIMELINE_CONTENT_TOP_PADDING_PX + getCumulativeHeightBefore({ tracks, trackIndex: index, getExtraHeight: getTrackExpansionHeight })}px`,
-								height: `${getTrackHeight({ type: track.type }) + getTrackExpansionHeight(index)}px`,
-							}}
-						>
-							<TimelineTrackContent
-								track={track}
-								zoomLevel={zoomLevel}
-								dragView={dragView}
-								onResizeStart={onResizeStart}
-								onElementMouseDown={onElementMouseDown}
-								onElementClick={onElementClick}
-								onTrackMouseDown={onTrackMouseDown}
-								onTrackMouseUp={onTrackMouseUp}
-								shouldIgnoreClick={shouldIgnoreClick}
-								targetElementId={
-									isDragOver
-										? (dropTarget?.targetElement?.elementId ?? null)
-										: null
-								}
-							/>
-							{track.locked && (
-								<div
-									className={cn(
-										"pointer-events-none absolute inset-0",
-										LOCKED_TRACK_OVERLAY_CLASS,
-									)}
-									style={{ zIndex: TIMELINE_LAYERS.trackLockOverlay }}
-								/>
-							)}
-							<AnchoredColorPopover
-								open={colorTrackId === track.id}
-								onOpenChange={(open) => setColorTrackId(open ? track.id : null)}
-								color={getTrackColor({ track })}
-								canReset={track.color !== undefined}
-								resetLabel={m.timeline.resetColor}
-								onColorChange={(color) =>
-									timeline.setTrackColor({ trackId: track.id, color })
-								}
-							/>
-						</div>
-					</ContextMenuTrigger>
-					<ContextMenuContent
-						className="w-40"
-						// 메뉴가 닫히며 포커스를 되돌리면 막 연 색 팝오버가 바로 닫힌다
-						onCloseAutoFocus={(event) => event.preventDefault()}
+			{rows.map(({ folderHeaderTop }, index) => {
+				const folder = folderRows[index]?.header;
+				if (folderHeaderTop === null || !folder) return null;
+				return (
+					<div
+						key={folder.id}
+						className="bg-muted/40 text-muted-foreground pointer-events-none absolute right-0 left-0 flex items-center px-2 text-xs"
+						style={{
+							top: `${TIMELINE_CONTENT_TOP_PADDING_PX + folderHeaderTop}px`,
+							height: `${TIMELINE_FOLDER_HEADER_HEIGHT_PX}px`,
+						}}
 					>
-						<ContextMenuItem
-							icon={<HugeiconsIcon icon={TaskAdd02Icon} />}
-							onClick={(event: React.MouseEvent) => {
-								event.stopPropagation();
-								invokeAction("paste-copied");
-							}}
-						>
-							{m.timeline.pasteElements}
-						</ContextMenuItem>
-						<ContextMenuItem
-							icon={<HugeiconsIcon icon={VolumeHighIcon} />}
-							onClick={(event: React.MouseEvent) => {
-								event.stopPropagation();
-								timeline.toggleTrackMute({ trackId: track.id });
-							}}
-						>
-							{canTrackHaveAudio(track) && track.muted
-								? m.timeline.unmuteTrack
-								: m.timeline.muteTrack}
-						</ContextMenuItem>
-						<ContextMenuItem
-							icon={<HugeiconsIcon icon={ViewIcon} />}
-							onClick={(event: React.MouseEvent) => {
-								event.stopPropagation();
-								timeline.toggleTrackVisibility({ trackId: track.id });
-							}}
-						>
-							{canTrackBeHidden(track) && track.hidden
-								? m.timeline.showTrack
-								: m.timeline.hideTrack}
-						</ContextMenuItem>
-						<ContextMenuItem
-							icon={<HugeiconsIcon icon={PaintBoardIcon} />}
-							onClick={(event: React.MouseEvent) => {
-								event.stopPropagation();
-								setColorTrackId(track.id);
-							}}
-						>
-							{m.timeline.trackColor}
-						</ContextMenuItem>
-						<ContextMenuItem
-							icon={
-								<HugeiconsIcon
-									icon={track.locked ? SquareUnlock02Icon : LockIcon}
+						{folder.color && (
+							<div
+								className="absolute inset-0 opacity-20"
+								style={{ backgroundColor: folder.color }}
+							/>
+						)}
+						<span className="relative truncate">{folder.name}</span>
+					</div>
+				);
+			})}
+			{sortedTracks.map(({ track, index }) =>
+				rows[index].hidden ? null : (
+					<ContextMenu key={track.id}>
+						<ContextMenuTrigger asChild>
+							<div
+								className={cn(
+									"absolute right-0 left-0 transition-colors",
+									tracksWithSelection.has(track.id) && SELECTED_TRACK_ROW_CLASS,
+								)}
+								style={{
+									top: `${TIMELINE_CONTENT_TOP_PADDING_PX + rows[index].top}px`,
+									height: `${rows[index].height}px`,
+								}}
+							>
+								<TimelineTrackContent
+									track={track}
+									zoomLevel={zoomLevel}
+									dragView={dragView}
+									onResizeStart={onResizeStart}
+									onElementMouseDown={onElementMouseDown}
+									onElementClick={onElementClick}
+									onTrackMouseDown={onTrackMouseDown}
+									onTrackMouseUp={onTrackMouseUp}
+									shouldIgnoreClick={shouldIgnoreClick}
+									targetElementId={
+										isDragOver
+											? (dropTarget?.targetElement?.elementId ?? null)
+											: null
+									}
 								/>
-							}
-							onClick={(event: React.MouseEvent) => {
-								event.stopPropagation();
-								timeline.toggleTrackLock({ trackId: track.id });
-							}}
+								{track.locked && (
+									<div
+										className={cn(
+											"pointer-events-none absolute inset-0",
+											LOCKED_TRACK_OVERLAY_CLASS,
+										)}
+										style={{ zIndex: TIMELINE_LAYERS.trackLockOverlay }}
+									/>
+								)}
+								<AnchoredColorPopover
+									open={colorTrackId === track.id}
+									onOpenChange={(open) =>
+										setColorTrackId(open ? track.id : null)
+									}
+									color={getTrackColor({ track })}
+									canReset={track.color !== undefined}
+									resetLabel={m.timeline.resetColor}
+									onColorChange={(color) =>
+										timeline.setTrackColor({ trackId: track.id, color })
+									}
+								/>
+							</div>
+						</ContextMenuTrigger>
+						<ContextMenuContent
+							className="w-40"
+							// 메뉴가 닫히며 포커스를 되돌리면 막 연 색 팝오버가 바로 닫힌다
+							onCloseAutoFocus={(event) => event.preventDefault()}
 						>
-							{track.locked ? m.timeline.unlockTrack : m.timeline.lockTrack}
-						</ContextMenuItem>
-						{track.id !== mainTrackId && (
 							<ContextMenuItem
-								icon={<HugeiconsIcon icon={Delete02Icon} />}
+								icon={<HugeiconsIcon icon={TaskAdd02Icon} />}
 								onClick={(event: React.MouseEvent) => {
 									event.stopPropagation();
-									timeline.removeTrack({ trackId: track.id });
+									invokeAction("paste-copied");
 								}}
-								variant="destructive"
 							>
-								{m.timeline.deleteTrack}
+								{m.timeline.pasteElements}
 							</ContextMenuItem>
-						)}
-					</ContextMenuContent>
-				</ContextMenu>
-			))}
+							<ContextMenuItem
+								icon={<HugeiconsIcon icon={VolumeHighIcon} />}
+								onClick={(event: React.MouseEvent) => {
+									event.stopPropagation();
+									timeline.toggleTrackMute({ trackId: track.id });
+								}}
+							>
+								{canTrackHaveAudio(track) && track.muted
+									? m.timeline.unmuteTrack
+									: m.timeline.muteTrack}
+							</ContextMenuItem>
+							<ContextMenuItem
+								icon={<HugeiconsIcon icon={ViewIcon} />}
+								onClick={(event: React.MouseEvent) => {
+									event.stopPropagation();
+									timeline.toggleTrackVisibility({ trackId: track.id });
+								}}
+							>
+								{canTrackBeHidden(track) && track.hidden
+									? m.timeline.showTrack
+									: m.timeline.hideTrack}
+							</ContextMenuItem>
+							<ContextMenuItem
+								icon={<HugeiconsIcon icon={PaintBoardIcon} />}
+								onClick={(event: React.MouseEvent) => {
+									event.stopPropagation();
+									setColorTrackId(track.id);
+								}}
+							>
+								{m.timeline.trackColor}
+							</ContextMenuItem>
+							<ContextMenuItem
+								icon={
+									<HugeiconsIcon
+										icon={track.locked ? SquareUnlock02Icon : LockIcon}
+									/>
+								}
+								onClick={(event: React.MouseEvent) => {
+									event.stopPropagation();
+									timeline.toggleTrackLock({ trackId: track.id });
+								}}
+							>
+								{track.locked ? m.timeline.unlockTrack : m.timeline.lockTrack}
+							</ContextMenuItem>
+							<TrackFolderMenuItem
+								track={track}
+								folders={folders}
+								groupTargetIds={getGroupTargetIds(track.id)}
+								tracks={tracks}
+							/>
+							{track.id !== mainTrackId && (
+								<ContextMenuItem
+									icon={<HugeiconsIcon icon={Delete02Icon} />}
+									onClick={(event: React.MouseEvent) => {
+										event.stopPropagation();
+										timeline.removeTrack({ trackId: track.id });
+									}}
+									variant="destructive"
+								>
+									{m.timeline.deleteTrack}
+								</ContextMenuItem>
+							)}
+						</ContextMenuContent>
+					</ContextMenu>
+				),
+			)}
 		</>
 	);
 }
@@ -986,6 +1071,210 @@ function TimelineGutter({
 	return (
 		// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- spatial gesture surface (empty space below tracks); clicks here clear selection. Keyboard control is global timeline shortcuts.
 		<div className="flex-1" onMouseDown={onMouseDown} onClick={onClick} />
+	);
+}
+
+/** 트랙 우클릭 메뉴의 폴더 항목. 폴더 안이면 풀기, 밖이면 묶기 */
+function TrackFolderMenuItem({
+	track,
+	tracks,
+	folders,
+	groupTargetIds,
+}: {
+	track: TimelineTrack;
+	tracks: TimelineTrack[];
+	folders: TrackFolder[] | undefined;
+	groupTargetIds: string[];
+}) {
+	const m = useMessages();
+	const timeline = useEditor((e) => e.timeline);
+	const folder = folders?.find(({ id }) => id === track.folderId);
+
+	if (folder) {
+		return (
+			<ContextMenuItem
+				icon={<HugeiconsIcon icon={FolderRemoveIcon} />}
+				onClick={(event: React.MouseEvent) => {
+					event.stopPropagation();
+					timeline.ungroupTrackFolder({ folderId: folder.id });
+				}}
+			>
+				{m.timeline.ungroupFolder}
+			</ContextMenuItem>
+		);
+	}
+	if (!getGroupableTrackIds({ tracks, folders, trackIds: groupTargetIds })) {
+		return null;
+	}
+	return (
+		<ContextMenuItem
+			icon={<HugeiconsIcon icon={FolderAddIcon} />}
+			onClick={(event: React.MouseEvent) => {
+				event.stopPropagation();
+				timeline.groupTracksIntoFolder({
+					trackIds: groupTargetIds,
+					name: m.timeline.newFolder,
+				});
+			}}
+		>
+			{m.timeline.groupIntoFolder}
+		</ContextMenuItem>
+	);
+}
+
+/** 폴더 머리 줄. 접기·이름·색과 안의 트랙 전체에 걸리는 토글을 둔다 */
+function TrackFolderHeader({
+	folder,
+	members,
+}: {
+	folder: TrackFolder;
+	members: TimelineTrack[];
+}) {
+	const m = useMessages();
+	const timeline = useEditor((e) => e.timeline);
+	const [isRenaming, setIsRenaming] = useState(false);
+	const [isColorOpen, setIsColorOpen] = useState(false);
+	const toggles = getFolderToggleState({ members });
+	const folderId = folder.id;
+	const toggleFlag = (flag: "muted" | "hidden" | "locked") =>
+		timeline.toggleTrackFolderFlag({ folderId, flag });
+	const commitName = (name: string) => {
+		setIsRenaming(false);
+		const trimmed = name.trim();
+		if (trimmed && trimmed !== folder.name) {
+			timeline.updateTrackFolder({ folderId, patch: { name: trimmed } });
+		}
+	};
+	const colorProps = {
+		color: folder.color,
+		canReset: folder.color !== undefined,
+		resetLabel: m.timeline.resetColor,
+		onColorChange: (color: string | undefined) =>
+			timeline.updateTrackFolder({ folderId, patch: { color } }),
+	};
+	const collapseLabel = folder.collapsed
+		? m.timeline.expandFolder
+		: m.timeline.collapseFolder;
+
+	return (
+		<ContextMenu>
+			<ContextMenuTrigger asChild>
+				<div
+					className="bg-muted/40 relative flex shrink-0 items-center gap-1 pr-2 pl-2.5"
+					style={{ height: `${TIMELINE_FOLDER_HEADER_HEIGHT_PX}px` }}
+				>
+					<ColorStrip label={m.timeline.folderColor} {...colorProps} />
+					<ActionTooltip label={collapseLabel}>
+						<button
+							type="button"
+							aria-label={collapseLabel}
+							className="text-muted-foreground inline-flex shrink-0 cursor-pointer"
+							onClick={() => timeline.toggleTrackFolderCollapsed({ folderId })}
+						>
+							<HugeiconsIcon
+								icon={folder.collapsed ? ArrowRight01Icon : ArrowDown01Icon}
+								className="size-3.5"
+							/>
+						</button>
+					</ActionTooltip>
+					{isRenaming ? (
+						<input
+							// eslint-disable-next-line jsx-a11y/no-autofocus -- 이름 바꾸기를 고르면 바로 입력한다
+							autoFocus
+							aria-label={m.timeline.folderName}
+							defaultValue={folder.name}
+							className="bg-background min-w-0 flex-1 rounded-sm px-1 text-xs"
+							onBlur={(event) => commitName(event.currentTarget.value)}
+							onKeyDown={(event) => {
+								event.stopPropagation();
+								if (event.key === "Escape") {
+									event.currentTarget.value = folder.name;
+								}
+								if (event.key === "Enter" || event.key === "Escape") {
+									event.currentTarget.blur();
+								}
+							}}
+						/>
+					) : (
+						<span
+							className="min-w-0 flex-1 truncate text-xs"
+							title={folder.name}
+							onDoubleClick={() => setIsRenaming(true)}
+						>
+							{folder.name}
+						</span>
+					)}
+					{!isRenaming && toggles.muted !== null && (
+						<TrackToggleIcon
+							isOff={toggles.muted}
+							label={
+								toggles.muted ? m.timeline.unmuteTrack : m.timeline.muteTrack
+							}
+							icons={{ on: VolumeHighIcon, off: VolumeOffIcon }}
+							onClick={() => toggleFlag("muted")}
+						/>
+					)}
+					{!isRenaming && toggles.hidden !== null && (
+						<TrackToggleIcon
+							isOff={toggles.hidden}
+							label={
+								toggles.hidden ? m.timeline.showTrack : m.timeline.hideTrack
+							}
+							icons={{ on: ViewIcon, off: ViewOffSlashIcon }}
+							onClick={() => toggleFlag("hidden")}
+						/>
+					)}
+					{!isRenaming && toggles.locked !== null && (
+						<TrackToggleIcon
+							isOff={toggles.locked}
+							label={
+								toggles.locked ? m.timeline.unlockTrack : m.timeline.lockTrack
+							}
+							icons={{ on: SquareUnlock02Icon, off: LockIcon }}
+							onClick={() => toggleFlag("locked")}
+						/>
+					)}
+					<AnchoredColorPopover
+						open={isColorOpen}
+						onOpenChange={setIsColorOpen}
+						{...colorProps}
+					/>
+				</div>
+			</ContextMenuTrigger>
+			<ContextMenuContent
+				className="w-40"
+				onCloseAutoFocus={(event) => event.preventDefault()}
+			>
+				<ContextMenuItem
+					icon={
+						<HugeiconsIcon
+							icon={folder.collapsed ? ArrowRight01Icon : ArrowDown01Icon}
+						/>
+					}
+					onClick={() => timeline.toggleTrackFolderCollapsed({ folderId })}
+				>
+					{collapseLabel}
+				</ContextMenuItem>
+				<ContextMenuItem
+					icon={<HugeiconsIcon icon={PencilEdit01Icon} />}
+					onClick={() => setIsRenaming(true)}
+				>
+					{m.timeline.renameFolder}
+				</ContextMenuItem>
+				<ContextMenuItem
+					icon={<HugeiconsIcon icon={PaintBoardIcon} />}
+					onClick={() => setIsColorOpen(true)}
+				>
+					{m.timeline.folderColor}
+				</ContextMenuItem>
+				<ContextMenuItem
+					icon={<HugeiconsIcon icon={FolderRemoveIcon} />}
+					onClick={() => timeline.ungroupTrackFolder({ folderId })}
+				>
+					{m.timeline.ungroupFolder}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }
 

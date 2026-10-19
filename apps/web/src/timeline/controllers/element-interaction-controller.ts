@@ -30,6 +30,7 @@ import type {
 	SceneTracks,
 	TimelineElement,
 	TimelineTrack,
+	TrackFolder,
 } from "@/timeline";
 
 const MOUSE_BUTTON_RIGHT = 2;
@@ -49,6 +50,7 @@ export interface InputAdapter {
 
 export interface SceneReader {
 	getTracks: () => SceneTracks;
+	getTrackFolders: () => TrackFolder[] | undefined;
 	getActiveFps: () => FrameRate | null;
 }
 
@@ -201,6 +203,7 @@ function resolveDropTarget({
 	elementId,
 	trackId,
 	tracks,
+	trackFolders,
 	viewport,
 	zoomLevel,
 	snappedTime,
@@ -211,6 +214,7 @@ function resolveDropTarget({
 	elementId: string;
 	trackId: string;
 	tracks: SceneTracks;
+	trackFolders: TrackFolder[] | undefined;
 	viewport: ViewportAdapter;
 	zoomLevel: number;
 	snappedTime: MediaTime;
@@ -245,6 +249,7 @@ function resolveDropTarget({
 		startTimeOverride: snappedTime,
 		excludeElementId: movingElement.id,
 		verticalDragDirection,
+		trackFolders,
 	});
 }
 
@@ -506,6 +511,7 @@ export class ElementInteractionController {
 			elementId: mousedown.elementId,
 			trackId: mousedown.trackId,
 			tracks,
+			trackFolders: scene.getTrackFolders(),
 			viewport,
 			zoomLevel,
 			snappedTime,
