@@ -45,3 +45,18 @@ export function LocaleSync() {
 	}, [locale]);
 	return null;
 }
+
+/**
+ * 정의 레지스트리(파라미터·선택지·마스크·효과·도형)에 영어로 적힌 라벨을
+ * 현재 언어로 옮긴다. 사전(`labels`)에 없는 라벨은 원문 그대로 둔다
+ */
+export function translateLabel({
+	messages,
+	label,
+}: {
+	messages: Messages;
+	label: string;
+}): string {
+	const labels: Partial<Record<string, string>> = messages.labels;
+	return labels[label] ?? label;
+}

@@ -1,7 +1,9 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Settings05Icon } from "@hugeicons/core-free-icons";
+import { useMessages } from "@/i18n";
 
 export function EmptyView() {
+	const m = useMessages();
 	return (
 		<div className="bg-background flex h-full flex-col items-center justify-center gap-3 p-4">
 			<HugeiconsIcon
@@ -10,9 +12,9 @@ export function EmptyView() {
 				strokeWidth={1}
 			/>
 			<div className="flex flex-col gap-2 text-center">
-				<p className="text-lg font-medium ">It's empty here</p>
+				<p className="text-lg font-medium ">{m.properties.emptyTitle}</p>
 				<p className="text-muted-foreground text-sm text-balance">
-					Click an element on the timeline to edit its properties
+					{m.properties.emptyHint}
 				</p>
 			</div>
 		</div>

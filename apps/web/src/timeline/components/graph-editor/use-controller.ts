@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor } from "@/editor/use-editor";
+import { useMessages } from "@/i18n";
 import { registerCanceller } from "@/editor/cancel-interaction";
 import type { NormalizedCubicBezier } from "@/animation/types";
 import { useKeyframeSelection } from "@/timeline/hooks/element/use-keyframe-selection";
@@ -14,6 +15,7 @@ import {
 
 export function useGraphEditorController() {
 	const editor = useEditor();
+	const m = useMessages();
 	const renderTracks = useEditor(
 		(currentEditor) =>
 			currentEditor.timeline.getPreviewTracks() ??
@@ -168,7 +170,14 @@ export function useGraphEditorController() {
 		open,
 		onOpenChange: handleOpenChange,
 		canOpen: state.status === "ready",
-		tooltip: state.status === "ready" ? "Open graph editor" : state.message,
+		tooltip:
+			state.status === "ready"
+				? m.graphEditor.open
+				: m.graphEditor.reasons[state.reason],
+		message:
+			state.status === "ready"
+				? m.graphEditor.editGraph({ count: state.segments.length })
+				: m.graphEditor.reasons[state.reason],
 		state,
 		onActiveComponentKeyChange: handleActiveComponentKeyChange,
 		onPreviewValue: handlePreviewValue,

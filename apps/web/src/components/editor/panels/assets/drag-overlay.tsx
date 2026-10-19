@@ -1,5 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UploadIcon } from "@hugeicons/core-free-icons";
+import { useMessages } from "@/i18n";
 
 interface MediaDragOverlayProps {
 	isVisible: boolean;
@@ -14,6 +15,7 @@ export function MediaDragOverlay({
 	progress = 0,
 	onClick,
 }: MediaDragOverlayProps) {
+	const m = useMessages();
 	if (!isVisible) return null;
 
 	const handleClick = ({
@@ -41,8 +43,8 @@ export function MediaDragOverlay({
 			<div className="space-y-2">
 				<p className="text-muted-foreground max-w-sm text-xs">
 					{isProcessing
-						? `Processing your files (${progress}%)`
-						: "Drag and drop videos, photos, and audio files here"}
+						? m.assets.processingFiles({ progress })
+						: m.assets.dropHint}
 				</p>
 			</div>
 

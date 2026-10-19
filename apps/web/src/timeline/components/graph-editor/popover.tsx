@@ -21,6 +21,7 @@ import {
 } from "./easing-presets";
 import { removePreset, savePreset, useCustomPresets } from "./custom-presets-store";
 import { BezierGraph, BEZIER_GRAPH_MIN_HEIGHT } from "./bezier-graph";
+import { translateLabel, useMessages } from "@/i18n";
 
 const COLLAPSED_MAX = 6;
 const THUMB_SEGMENTS = 24;
@@ -58,6 +59,7 @@ export function GraphEditorPopover({
 	onCommitValue?: (value: NormalizedCubicBezier) => void;
 	onCancelPreview?: () => void;
 }) {
+	const m = useMessages();
 	const [isExpanded, setIsExpanded] = useState(false);
 	const custom = useCustomPresets();
 	const allPresets = [...BUILTIN_PRESETS, ...custom];
@@ -103,7 +105,7 @@ export function GraphEditorPopover({
 											: "text-muted-foreground hover:text-foreground",
 									)}
 								>
-									{component.label}
+									{translateLabel({ messages: m, label: component.label })}
 								</button>
 							))}
 						</div>
@@ -126,10 +128,10 @@ export function GraphEditorPopover({
 				<Tabs variant="underline" defaultValue="presets" className="flex flex-col gap-2">
 					<TabsList className="px-3">
 						<TabsTrigger value="presets" className="text-xs">
-							Presets
+							{m.graphEditor.presets}
 						</TabsTrigger>
 						<TabsTrigger value="saved" className="text-xs">
-							Saved
+							{m.graphEditor.saved}
 						</TabsTrigger>
 					</TabsList>
 					<TabsContent value="presets" className="px-3 pb-0">
@@ -178,7 +180,9 @@ export function GraphEditorPopover({
 										className="size-3.5 opacity-40"
 									/>
 								</div>
-								<span className="text-[10px] leading-tight">Save</span>
+								<span className="text-[10px] leading-tight">
+									{m.graphEditor.save}
+								</span>
 							</button>
 						</div>
 					</TabsContent>
@@ -253,6 +257,7 @@ function PresetItem({
 	onDelete?: () => void;
 	disabled?: boolean;
 }) {
+	const m = useMessages();
 	return (
 		<button
 			type="button"
@@ -280,7 +285,9 @@ function PresetItem({
 					isActive ? "text-primary" : "text-muted-foreground",
 				)}
 			>
-				{preset.label}
+				{preset.isCustom
+					? preset.label
+					: translateLabel({ messages: m, label: preset.label })}
 			</span>
 			{onDelete && (
 				<Button

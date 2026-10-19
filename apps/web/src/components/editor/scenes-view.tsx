@@ -24,9 +24,11 @@ import {
 import { canDeleteScene, getMainScene } from "@/timeline/scenes";
 import { toast } from "sonner";
 import { useEditor } from "@/editor/use-editor";
+import { useMessages } from "@/i18n";
 
 export function ScenesView({ children }: { children: React.ReactNode }) {
 	const editor = useEditor();
+	const m = useMessages();
 	const scenes = editor.scenes.getScenes();
 	const currentScene = editor.scenes.getActiveScene();
 	const [isSelectMode, setIsSelectMode] = useState(false);
@@ -96,12 +98,14 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 			<SheetContent>
 				<SheetHeader>
 					<SheetTitle>
-						{isSelectMode ? `Select scenes (${selectedScenes.size})` : "Scenes"}
+						{isSelectMode
+								? m.editor.scenes.selectTitle({ count: selectedScenes.size })
+								: m.editor.scenes.title}
 					</SheetTitle>
 					<SheetDescription>
 						{isSelectMode
-							? "Select scenes to delete"
-							: "Switch between scenes in your project"}
+							? m.editor.scenes.selectDescription
+							: m.editor.scenes.description}
 					</SheetDescription>
 				</SheetHeader>
 				<div className="flex flex-col gap-4 py-4">
@@ -113,7 +117,7 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 							onClick={handleSelectMode}
 						>
 							<ListCheck />
-							{isSelectMode ? "Cancel" : "Select"}
+							{isSelectMode ? m.editor.scenes.cancel : m.editor.scenes.select}
 						</Button>
 						{isSelectMode && (
 							<DeleteDialog
@@ -128,7 +132,7 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 										size="sm"
 									>
 										<Trash2 />
-										Delete ({selectedScenes.size})
+										{m.editor.scenes.deleteCount({ count: selectedScenes.size })}
 									</Button>
 								}
 							/>
@@ -136,7 +140,7 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
 					</div>
 					{scenes.length === 0 ? (
 						<div className="text-muted-foreground text-sm">
-							No scenes available
+							{m.editor.scenes.empty}
 						</div>
 					) : (
 						<div className="space-y-2">
@@ -183,6 +187,7 @@ function DeleteDialog({
 	disabled?: boolean;
 	trigger: React.ReactNode;
 }) {
+	const m = useMessages();
 	const [open, setOpen] = useState(false);
 
 	const handleDelete = () => {
@@ -195,22 +200,21 @@ function DeleteDialog({
 			<DialogTrigger asChild>{trigger}</DialogTrigger>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Delete Scenes</DialogTitle>
+					<DialogTitle>{m.editor.scenes.deleteTitle}</DialogTitle>
 					<DialogDescription>
-						Are you sure you want to delete {count} scene
-						{count === 1 ? "" : "s"}? This action cannot be undone.
+						{m.editor.scenes.deleteConfirm({ count })}
 					</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
 					<Button variant="outline" onClick={() => setOpen(false)}>
-						Cancel
+						{m.editor.scenes.cancel}
 					</Button>
 					<Button
 						variant="destructive"
 						onClick={handleDelete}
 						disabled={disabled}
 					>
-						Delete
+						{m.editor.scenes.delete}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

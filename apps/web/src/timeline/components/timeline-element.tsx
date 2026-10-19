@@ -84,6 +84,7 @@ import { usePropertiesStore } from "@/components/editor/panels/properties/stores
 import { getTrackTypeForElementType } from "@/timeline/placement/compatibility";
 import { useTimelineStore } from "@/timeline/timeline-store";
 import { KEYFRAME_LANE_HEIGHT_PX } from "./layout";
+import { useMessages } from "@/i18n";
 import {
 	getExpandedRows,
 	getExpansionHeight,
@@ -230,6 +231,7 @@ export function TimelineElement({
 	dragView,
 	isDropTarget = false,
 }: TimelineElementProps) {
+	const m = useMessages();
 	const mediaAssets = useEditor((e) => e.media.getAssets());
 	const { selectedElements } = useElementSelection();
 	const requestRevealMedia = useAssetsPanelStore((s) => s.requestRevealMedia);
@@ -341,9 +343,10 @@ export function TimelineElement({
 		isCurrentElementSelected &&
 		canToggleSourceAudio(element, mediaAsset);
 	const sourceAudioLabel =
-		element.type === "video"
-			? getSourceAudioActionLabel({ element })
-			: "Extract audio";
+		element.type === "video" &&
+		getSourceAudioActionLabel({ element }) === "Recover audio"
+			? m.timeline.recoverAudio
+			: m.timeline.extractAudio;
 	const isElementSourceAudioSeparated =
 		element.type === "video" && isSourceAudioSeparated({ element });
 	const hasKeyframes = elementKeyframes.length > 0;
@@ -427,7 +430,7 @@ export function TimelineElement({
 						action="split"
 						icon={<HugeiconsIcon icon={ScissorIcon} />}
 					>
-						Split
+						{m.timeline.split}
 					</ActionMenuItem>
 					<CopyMenuItem />
 					{selectedElements.length === 1 && (
@@ -435,7 +438,7 @@ export function TimelineElement({
 							action="duplicate-selected"
 							icon={<HugeiconsIcon icon={Copy01Icon} />}
 						>
-							Duplicate
+							{m.timeline.duplicate}
 						</ActionMenuItem>
 					)}
 					{canElementHaveAudio(element) && hasAudio && (
@@ -477,7 +480,9 @@ export function TimelineElement({
 								toggleElementExpanded(element.id);
 							}}
 						>
-							{isExpanded ? "Collapse keyframes" : "Expand keyframes"}
+							{isExpanded
+								? m.timeline.collapseKeyframes
+								: m.timeline.expandKeyframes}
 						</ContextMenuItem>
 					)}
 					{selectedElements.length === 1 && hasMediaId(element) && (
@@ -488,13 +493,13 @@ export function TimelineElement({
 									handleRevealInMedia({ event })
 								}
 							>
-								Reveal media
+								{m.timeline.revealMedia}
 							</ContextMenuItem>
 							<ContextMenuItem
 								icon={<HugeiconsIcon icon={Exchange01Icon} />}
 								disabled
 							>
-								Replace media
+								{m.timeline.replaceMedia}
 							</ContextMenuItem>
 						</>
 					)}
@@ -639,6 +644,7 @@ function ResizeHandle({
 		side: "left" | "right";
 	}) => void;
 }) {
+	const m = useMessages();
 	const isLeft = side === "left";
 	return (
 		<button
@@ -649,7 +655,9 @@ function ResizeHandle({
 			)}
 			onMouseDown={(event) => onResizeStart({ event, element, track, side })}
 			onClick={(event) => event.stopPropagation()}
-			aria-label={`${isLeft ? "Left" : "Right"} resize handle`}
+			aria-label={
+				isLeft ? m.timeline.resizeHandleLeft : m.timeline.resizeHandleRight
+			}
 		></button>
 	);
 }
@@ -685,6 +693,7 @@ function KeyframeIndicators({
 		elementLeft: number;
 	}) => number;
 }) {
+	const m = useMessages();
 	const { isKeyframeSelected } = useKeyframeSelection();
 	const orderedKeyframes = indicators.flatMap(
 		(indicator) => indicator.keyframes,
@@ -722,7 +731,7 @@ function KeyframeIndicators({
 						indicatorTime: indicator.time,
 					})
 				}
-				aria-label="Select keyframe"
+				aria-label={m.timeline.selectKeyframe}
 			>
 				<HugeiconsIcon
 					icon={KeyframeIcon}
@@ -788,6 +797,7 @@ function ExpandedKeyframeLanes({
 		elementLeft: number;
 	}) => number;
 }) {
+	const m = useMessages();
 	const { isKeyframeSelected } = useKeyframeSelection();
 
 	const orderedKeyframes = useMemo(
@@ -875,7 +885,7 @@ function ExpandedKeyframeLanes({
 											indicatorTime: kf.time,
 										});
 									}}
-									aria-label="Select keyframe"
+									aria-label={m.timeline.selectKeyframe}
 								>
 									<HugeiconsIcon
 										icon={KeyframeIcon}
@@ -1182,12 +1192,13 @@ function ElementContent({ element, track }: ElementContentProps) {
 }
 
 function CopyMenuItem() {
+	const m = useMessages();
 	return (
 		<ActionMenuItem
 			action="copy-selected"
 			icon={<HugeiconsIcon icon={Copy01Icon} />}
 		>
-			Copy
+			{m.timeline.copy}
 		</ActionMenuItem>
 	);
 }
@@ -1201,6 +1212,7 @@ function MuteMenuItem({
 	isCurrentElementSelected: boolean;
 	isMuted: boolean;
 }) {
+	const m = useMessages();
 	const getIcon = () => {
 		if (isMultipleSelected && isCurrentElementSelected) {
 			return <HugeiconsIcon icon={VolumeMute02Icon} />;
@@ -1214,7 +1226,7 @@ function MuteMenuItem({
 
 	return (
 		<ActionMenuItem action="toggle-elements-muted-selected" icon={getIcon()}>
-			{isMuted ? "Unmute" : "Mute"}
+			{isMuted ? m.timeline.unmute : m.timeline.mute}
 		</ActionMenuItem>
 	);
 }
@@ -1228,6 +1240,7 @@ function VisibilityMenuItem({
 	isMultipleSelected: boolean;
 	isCurrentElementSelected: boolean;
 }) {
+	const m = useMessages();
 	const isHidden = canElementBeHidden(element) && element.hidden;
 
 	const getIcon = () => {
@@ -1246,7 +1259,7 @@ function VisibilityMenuItem({
 			action="toggle-elements-visibility-selected"
 			icon={getIcon()}
 		>
-			{isHidden ? "Show" : "Hide"}
+			{isHidden ? m.timeline.show : m.timeline.hide}
 		</ActionMenuItem>
 	);
 }
@@ -1262,6 +1275,7 @@ function DeleteMenuItem({
 	elementType: TimelineElementType["type"];
 	selectedCount: number;
 }) {
+	const m = useMessages();
 	return (
 		<ActionMenuItem
 			action="delete-selected"
@@ -1269,8 +1283,10 @@ function DeleteMenuItem({
 			icon={<HugeiconsIcon icon={Delete02Icon} />}
 		>
 			{isMultipleSelected && isCurrentElementSelected
-				? `Delete ${selectedCount} elements`
-				: `Delete ${elementType === "text" ? "text" : "clip"}`}
+				? m.timeline.deleteElements({ count: selectedCount })
+				: elementType === "text"
+					? m.timeline.deleteText
+					: m.timeline.deleteClip}
 		</ActionMenuItem>
 	);
 }

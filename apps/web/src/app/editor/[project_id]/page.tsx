@@ -33,6 +33,7 @@ import {
 	bookmarkNotesPreviewOverlay,
 	getBookmarkPreviewOverlaySource,
 } from "@/timeline/bookmarks/index";
+import { useMessages } from "@/i18n";
 
 export default function Editor() {
 	const params = useParams();
@@ -56,19 +57,20 @@ export default function Editor() {
 }
 
 function DegradedRendererBanner() {
+	const m = useMessages();
 	const isDegraded = useEditor((e) => e.renderer.isDegraded);
 	const [dismissed, setDismissed] = useState(false);
 	if (!isDegraded || dismissed) return null;
 
 	return (
 		<div className="bg-accent border-b h-9 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-			<span>For the best experience, open OpenCut in Chrome.</span>
+			<span>{m.editor.degradedRenderer}</span>
 			<Button
 				variant="text"
 				size="icon"
 				className="p-0 w-auto [&_svg]:size-3.5"
 				onClick={() => setDismissed(true)}
-				aria-label="Dismiss"
+				aria-label={m.editor.dismiss}
 			>
 				<HugeiconsIcon icon={Cancel01Icon} />
 			</Button>

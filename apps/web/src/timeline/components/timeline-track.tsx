@@ -6,6 +6,7 @@ import type { TimelineTrack } from "@/timeline";
 import type { TimelineElement as TimelineElementType } from "@/timeline";
 import { TIMELINE_LAYERS } from "./layers";
 import type { ElementDragView } from "@/timeline";
+import { useMessages } from "@/i18n";
 
 interface TimelineTrackContentProps {
 	track: TimelineTrack;
@@ -45,6 +46,7 @@ export function TimelineTrackContent({
 	shouldIgnoreClick,
 	targetElementId = null,
 }: TimelineTrackContentProps) {
+	const m = useMessages();
 	const { isElementSelected } = useElementSelection();
 
 	return (
@@ -52,7 +54,7 @@ export function TimelineTrackContent({
 			<button
 				type="button"
 				className="absolute inset-0 m-0 size-full appearance-none border-0 bg-transparent p-0"
-				aria-label={`Select ${track.name} track`}
+				aria-label={m.timeline.selectTrack({ name: track.name })}
 				onMouseUp={(event) => {
 					if (shouldIgnoreClick?.()) return;
 					onTrackMouseUp?.(event);

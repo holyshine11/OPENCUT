@@ -11,6 +11,7 @@ import type { GraphicElement } from "@/timeline";
 import { graphicsRegistry, registerDefaultGraphics, resolveGraphicElementParamsAtTime } from "@/graphics";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
 import { useEditor } from "@/editor/use-editor";
+import { translateLabel, useMessages } from "@/i18n";
 import {
 	Section,
 	SectionContent,
@@ -36,6 +37,7 @@ export function GraphicTab({
 	element: GraphicElement;
 	trackId: string;
 }) {
+	const m = useMessages();
 	const definition = graphicsRegistry.get(element.definitionId);
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
@@ -60,7 +62,9 @@ export function GraphicTab({
 		<div className="flex flex-col">
 			<Section collapsible sectionKey={`${element.id}:graphic`}>
 				<SectionHeader>
-					<SectionTitle>{definition.name}</SectionTitle>
+					<SectionTitle>
+						{translateLabel({ messages: m, label: definition.name })}
+					</SectionTitle>
 				</SectionHeader>
 				<SectionContent>
 					<SectionFields>
@@ -91,6 +95,7 @@ function StrokeSection({
 	trackId: string;
 }) {
 	const editor = useEditor();
+	const m = useMessages();
 	const definition = graphicsRegistry.get(element.definitionId);
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
@@ -166,7 +171,7 @@ function StrokeSection({
 					</Button>
 				}
 			>
-				<SectionTitle>Stroke</SectionTitle>
+				<SectionTitle>{m.properties.stroke}</SectionTitle>
 			</SectionHeader>
 			<SectionContent
 				className={cn(!isStrokeEnabled && "pointer-events-none opacity-50")}

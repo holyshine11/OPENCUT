@@ -13,10 +13,12 @@ import {
 	useTextStylePresets,
 	type TextStylePreset,
 } from "@/text/style-presets";
+import { useMessages } from "@/i18n";
 
 /** 텍스트 탭의 "내 스타일". 선택한 텍스트 스타일을 저장하고, 선택한 텍스트들에 한꺼번에 적용한다 */
 export function StylePresetsSection() {
 	const editor = useEditor();
+	const m = useMessages();
 	const { selectedElements } = useElementSelection();
 	const presets = useTextStylePresets((state) => state.presets);
 	const selectedStyle = getSelectedTextStyle({
@@ -27,7 +29,7 @@ export function StylePresetsSection() {
 	return (
 		<section className="flex flex-col gap-2 border-t px-3 pt-3">
 			<div className="flex items-center justify-between">
-				<h3 className="text-sm font-medium">My styles</h3>
+				<h3 className="text-sm font-medium">{m.textPanel.myStyles}</h3>
 				<Button
 					type="button"
 					variant="outline"
@@ -40,20 +42,19 @@ export function StylePresetsSection() {
 							.add({ name: "", style: selectedStyle })
 					}
 				>
-					Save selected style
+					{m.textPanel.saveSelectedStyle}
 				</Button>
 			</div>
 			{presets.length === 0 ? (
 				<p className="text-muted-foreground text-xs">
-					Select a text or caption on the timeline and save its style to reuse
-					it in any project.
+					{m.textPanel.noStylesHint}
 				</p>
 			) : (
 				<>
 					<p className="text-muted-foreground text-xs">
 						{selectedStyle
-							? "Click a style to apply it to every selected text."
-							: "Select texts or captions on the timeline to apply a style."}
+							? m.textPanel.applyHint
+							: m.textPanel.selectToApplyHint}
 					</p>
 					<ul className="flex flex-col gap-1">
 						{presets.map((preset) => (
@@ -86,6 +87,7 @@ function PresetRow({
 	canApply: boolean;
 	onApply: () => void;
 }) {
+	const m = useMessages();
 	const [draftName, setDraftName] = useState<string | null>(null);
 	const nameInputRef = useRef<HTMLInputElement>(null);
 	const isRenaming = draftName !== null;
@@ -109,7 +111,7 @@ function PresetRow({
 			<li>
 				<Input
 					ref={nameInputRef}
-					aria-label="Style name"
+					aria-label={m.textPanel.styleName}
 					value={draftName}
 					className="h-8 text-sm"
 					onChange={(event) => setDraftName(event.target.value)}
@@ -146,7 +148,7 @@ function PresetRow({
 				type="button"
 				variant="ghost"
 				size="icon"
-				aria-label={`Rename ${preset.name}`}
+				aria-label={m.textPanel.renameStyle({ name: preset.name })}
 				onClick={() => setDraftName(preset.name)}
 			>
 				<HugeiconsIcon icon={PencilEdit01Icon} size={14} />
@@ -155,7 +157,7 @@ function PresetRow({
 				type="button"
 				variant="ghost"
 				size="icon"
-				aria-label={`Delete ${preset.name}`}
+				aria-label={m.textPanel.deleteStyle({ name: preset.name })}
 				onClick={() => remove({ id: preset.id })}
 			>
 				<HugeiconsIcon icon={Delete02Icon} size={14} />

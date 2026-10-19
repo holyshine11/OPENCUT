@@ -10,6 +10,7 @@ import { usePreviewViewport } from "@/preview/components/preview-viewport";
 import { useEditor } from "@/editor/use-editor";
 import type { PreviewOverlayControl } from "@/preview/overlays";
 import { toast } from "sonner";
+import { translateLabel, useMessages } from "@/i18n";
 
 export function PreviewContextMenu({
 	onToggleFullscreen,
@@ -25,6 +26,7 @@ export function PreviewContextMenu({
 		isVisible: boolean;
 	}) => void;
 }) {
+	const m = useMessages();
 	const editor = useEditor();
 	const viewport = usePreviewViewport();
 
@@ -53,17 +55,17 @@ export function PreviewContextMenu({
 	return (
 		<ContextMenuContent className="w-56" container={container}>
 			<ContextMenuItem onClick={viewport.fitToScreen} inset>
-				Fit to screen
+				{m.preview.fitToScreen}
 			</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuItem onClick={onToggleFullscreen} inset>
-				Full screen
+				{m.preview.fullScreen}
 			</ContextMenuItem>
 			<ContextMenuItem onClick={handleSaveSnapshot} inset>
-				Save snapshot
+				{m.preview.saveSnapshot}
 			</ContextMenuItem>
 			<ContextMenuItem onClick={handleCopySnapshot} inset>
-				Copy snapshot
+				{m.preview.copySnapshot}
 			</ContextMenuItem>
 			{overlayControls.length > 0 ? <ContextMenuSeparator /> : null}
 			{overlayControls.map((overlayControl) => (
@@ -77,7 +79,7 @@ export function PreviewContextMenu({
 						})
 					}
 				>
-					{overlayControl.label}
+					{translateLabel({ messages: m, label: overlayControl.label })}
 				</ContextMenuCheckboxItem>
 			))}
 		</ContextMenuContent>

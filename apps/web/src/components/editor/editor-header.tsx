@@ -25,6 +25,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
+import { useMessages } from "@/i18n";
 
 export function EditorHeader() {
 	return (
@@ -49,6 +50,7 @@ function ProjectDropdown() {
 	const router = useRouter();
 	const editor = useEditor();
 	const activeProject = useEditor((e) => e.project.getActive());
+	const m = useMessages();
 
 	const handleExit = async () => {
 		if (isExiting) return;
@@ -112,7 +114,7 @@ function ProjectDropdown() {
 					<Button variant="ghost" size="icon" className="p-1 rounded-sm size-8">
 						<Image
 							src={DEFAULT_LOGO_URL}
-							alt="Project thumbnail"
+							alt={m.projects.thumbnailAlt}
 							width={32}
 							height={32}
 							className="invert dark:invert-0 size-5"
@@ -125,14 +127,14 @@ function ProjectDropdown() {
 						disabled={isExiting}
 						icon={<HugeiconsIcon icon={Logout05Icon} />}
 					>
-						Exit project
+						{m.editor.exitProject}
 					</DropdownMenuItem>
 
 					<DropdownMenuItem
 						onClick={() => setOpenDialog("shortcuts")}
 						icon={<HugeiconsIcon icon={CommandIcon} />}
 					>
-						Shortcuts
+						{m.editor.shortcuts}
 					</DropdownMenuItem>
 
 					<DropdownMenuSeparator />

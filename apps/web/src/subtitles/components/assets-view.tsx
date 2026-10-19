@@ -50,6 +50,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { DiagnosticSeverity } from "@/diagnostics/types";
+import { useMessages } from "@/i18n";
 
 const DIAGNOSTIC_BUTTON_VARIANT: Record<
 	DiagnosticSeverity,
@@ -95,6 +96,7 @@ function processingReducer(
 /* eslint-enable opencut/prefer-object-params */
 
 export function Captions() {
+	const m = useMessages();
 	const [selectedLanguage, setSelectedLanguage] =
 		useState<TranscriptionLanguage>(DEFAULT_TRANSCRIPTION_LANGUAGE);
 	const [termsInput, setTermsInput] = useState(() =>
@@ -118,12 +120,16 @@ export function Captions() {
 		if (progress.status === "loading-model") {
 			dispatch({
 				type: "update_step",
-				step: `Loading model ${Math.round(progress.progress)}%`,
+				step: m.captions.steps.loadingModel({
+					percent: Math.round(progress.progress),
+				}),
 			});
 		} else if (progress.status === "transcribing") {
 			dispatch({
 				type: "update_step",
-				step: `Transcribing ${Math.round(progress.progress)}%`,
+				step: m.captions.steps.transcribing({
+					percent: Math.round(progress.progress),
+				}),
 			});
 		}
 	};
@@ -138,7 +144,7 @@ export function Captions() {
 	};
 
 	const handleGenerateTranscript = async () => {
-		dispatch({ type: "start", step: "Extracting audio..." });
+		dispatch({ type: "start", step: m.captions.steps.extractingAudio });
 		try {
 			const audioBlob = await extractTimelineAudio({
 				tracks: editor.scenes.getActiveScene().tracks,
@@ -146,7 +152,7 @@ export function Captions() {
 				totalDuration: editor.timeline.getTotalDuration(),
 			});
 
-			dispatch({ type: "update_step", step: "Preparing audio..." });
+			dispatch({ type: "update_step", step: m.captions.steps.preparingAudio });
 			const { samples } = await decodeAudioToFloat32({
 				audioBlob,
 				sampleRate: DEFAULT_TRANSCRIPTION_SAMPLE_RATE,
@@ -159,14 +165,17 @@ export function Captions() {
 				onProgress: handleProgress,
 			});
 
-			dispatch({ type: "update_step", step: "Generating captions..." });
+			dispatch({
+				type: "update_step",
+				step: m.captions.steps.generatingCaptions,
+			});
 			const captionChunks = buildCaptionChunks({
 				segments: result.segments,
 				layout: useCaptionLayouts.getState().layouts[captionForm],
 			});
 
 			if (!insertCaptions({ captions: captionChunks })) {
-				dispatch({ type: "fail", error: "No captions were generated" });
+				dispatch({ type: "fail", error: m.captions.noCaptionsGenerated });
 				return;
 			}
 
@@ -183,9 +192,7 @@ export function Captions() {
 			dispatch({
 				type: "fail",
 				error:
-					error instanceof Error
-						? error.message
-						: "An unexpected error occurred",
+					error instanceof Error ? error.message : m.captions.unexpectedError,
 			});
 		}
 	};
@@ -195,7 +202,7 @@ export function Captions() {
 	};
 
 	const handleImportFile = async ({ file }: { file: File }) => {
-		dispatch({ type: "start", step: "Reading subtitle file..." });
+		dispatch({ type: "start", step: m.captions.steps.readingFile });
 		try {
 			const input = await file.text();
 			const result = parseSubtitleFile({
@@ -206,22 +213,25 @@ export function Captions() {
 			if (result.captions.length === 0) {
 				dispatch({
 					type: "fail",
-					error: "No valid subtitle cues were found in the subtitle file",
+					error: m.captions.noValidCues,
 				});
 				return;
 			}
 
-			dispatch({ type: "update_step", step: "Importing subtitles..." });
+			dispatch({ type: "update_step", step: m.captions.steps.importing });
 
 			if (!insertCaptions({ captions: result.captions })) {
-				dispatch({ type: "fail", error: "No captions were generated" });
+				dispatch({ type: "fail", error: m.captions.noCaptionsGenerated });
 				return;
 			}
 
 			const nextWarnings = [...result.warnings];
 			if (result.skippedCueCount > 0) {
 				nextWarnings.unshift(
-					`Imported ${result.captions.length} subtitle cue(s) and skipped ${result.skippedCueCount} malformed cue(s).`,
+					m.captions.importedWithSkipped({
+						imported: result.captions.length,
+						skipped: result.skippedCueCount,
+					}),
 				);
 			}
 
@@ -231,9 +241,7 @@ export function Captions() {
 			dispatch({
 				type: "fail",
 				error:
-					error instanceof Error
-						? error.message
-						: "An unexpected error occurred",
+					error instanceof Error ? error.message : m.captions.unexpectedError,
 			});
 		}
 	};
@@ -265,7 +273,7 @@ export function Captions() {
 
 	return (
 		<PanelView
-			title="Captions"
+			title={m.assets.tabs.captions}
 			contentClassName="px-0 flex flex-col h-full"
 			actions={
 				<TooltipProvider>
@@ -294,7 +302,7 @@ export function Captions() {
 							className="items-center justify-center gap-1.5"
 						>
 							<HugeiconsIcon icon={CloudUploadIcon} />
-							Import
+							{m.captions.import}
 						</Button>
 					</div>
 				</TooltipProvider>
@@ -315,27 +323,27 @@ export function Captions() {
 			>
 				<SectionContent className="flex flex-col gap-4 h-full pt-1">
 					<SectionFields>
-						<SectionField label="Language">
+						<SectionField label={m.captions.language}>
 							<Select
 								value={selectedLanguage}
 								onValueChange={(value) => handleLanguageChange({ value })}
 							>
 								<SelectTrigger>
-									<SelectValue placeholder="Select a language" />
+									<SelectValue placeholder={m.captions.selectLanguage} />
 								</SelectTrigger>
 								<SelectContent>
 									{TRANSCRIPTION_LANGUAGES.map((language) => (
 										<SelectItem key={language.code} value={language.code}>
-											{language.name}
+											{m.captions.languages[language.code]}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
 						</SectionField>
-						<SectionField label="Names and terms">
+						<SectionField label={m.captions.terms}>
 							<Textarea
 								value={termsInput}
-								placeholder="People, places, product names. Separate with commas."
+								placeholder={m.captions.termsPlaceholder}
 								disabled={isProcessing}
 								onChange={(event) => setTermsInput(event.target.value)}
 								onBlur={() =>
@@ -355,7 +363,7 @@ export function Captions() {
 						disabled={isProcessing || activeDiagnostics.length > 0}
 					>
 						{isProcessing && <Spinner className="mr-1" />}
-						{isProcessing ? processing.step : "Generate transcript"}
+						{isProcessing ? processing.step : m.captions.generate}
 					</Button>
 					{isProcessing && (
 						<Button
@@ -364,7 +372,7 @@ export function Captions() {
 							className="w-full"
 							onClick={() => transcriptionService.cancel()}
 						>
-							Cancel
+							{m.captions.cancel}
 						</Button>
 					)}
 					{error && (

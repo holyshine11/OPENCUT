@@ -5,9 +5,11 @@ import { DEFAULTS } from "@/timeline/defaults";
 import { buildTextElement } from "@/timeline/element-utils";
 import type { MediaTime } from "@/wasm";
 import { StylePresetsSection } from "./style-presets-section";
+import { useMessages } from "@/i18n";
 
 export function TextView() {
 	const editor = useEditor();
+	const m = useMessages();
 
 	const handleAddToTimeline = ({ currentTime }: { currentTime: MediaTime }) => {
 		const activeScene = editor.scenes.getActiveScene();
@@ -25,12 +27,14 @@ export function TextView() {
 	};
 
 	return (
-		<PanelView title="Text">
+		<PanelView title={m.assets.tabs.text}>
 			<DraggableItem
-				name="Default text"
+				name={m.textPanel.defaultText}
 				preview={
 					<div className="bg-accent flex size-full items-center justify-center rounded">
-						<span className="text-xs select-none">Default text</span>
+						<span className="text-xs select-none">
+							{m.textPanel.defaultText}
+						</span>
 					</div>
 				}
 				dragData={{

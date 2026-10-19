@@ -14,9 +14,11 @@ import { usePropertiesStore } from "./stores/properties-store";
 import { getPropertiesConfig } from "./registry";
 import { cn } from "@/utils/ui";
 import { EmptyView } from "./empty-view";
+import { useMessages } from "@/i18n";
 
 export function PropertiesPanel() {
 	const editor = useEditor();
+	const m = useMessages();
 	useEditor((e) => e.scenes.getActiveSceneOrNull());
 	useEditor((e) => e.media.getAssets());
 	const { selectedElements } = useElementSelection();
@@ -34,7 +36,7 @@ export function PropertiesPanel() {
 		return (
 			<div className="panel bg-background flex h-full flex-col items-center justify-center overflow-hidden rounded-sm border">
 				<p className="text-muted-foreground text-sm">
-					{selectedElements.length} elements selected.0
+					{m.properties.multipleSelected({ count: selectedElements.length })}
 				</p>
 			</div>
 		);
@@ -77,7 +79,7 @@ export function PropertiesPanel() {
 											tabId: tab.id,
 										})
 									}
-									aria-label={tab.label}
+									aria-label={m.properties.tabs[tab.id]}
 									className={cn(
 										"shrink-0",
 										"h-8 w-8",
@@ -87,7 +89,9 @@ export function PropertiesPanel() {
 									{tab.icon}
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent side="right">{tab.label}</TooltipContent>
+							<TooltipContent side="right">
+								{m.properties.tabs[tab.id]}
+							</TooltipContent>
 						</Tooltip>
 					))}
 				</div>

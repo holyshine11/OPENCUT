@@ -26,6 +26,7 @@ import {
 import { cn } from "@/utils/ui";
 import { Separator } from "@/components/ui/separator";
 import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
+import { translateLabel, useMessages } from "@/i18n";
 
 export function StandaloneEffectTab({
 	element,
@@ -34,6 +35,7 @@ export function StandaloneEffectTab({
 	element: EffectElement;
 	trackId: string;
 }) {
+	const m = useMessages();
 	const { renderElement, previewUpdates, commit } = useElementPreview({
 		trackId,
 		elementId: element.id,
@@ -56,7 +58,7 @@ export function StandaloneEffectTab({
 	return (
 		<div className="flex flex-col h-full">
 			<div className="border-b px-3.5 h-11 shrink-0 flex items-center">
-				<SectionTitle>Effect</SectionTitle>
+				<SectionTitle>{m.properties.effect}</SectionTitle>
 			</div>
 			<EffectSection
 				effect={effect}
@@ -78,6 +80,7 @@ export function ClipEffectsTab({
 	const [dragIndex, setDragIndex] = useState<number | null>(null);
 	const [dropIndex, setDropIndex] = useState<number | null>(null);
 	const editor = useEditor();
+	const m = useMessages();
 	const { renderElement, previewUpdates, commit } = useElementPreview({
 		trackId,
 		elementId: element.id,
@@ -143,7 +146,7 @@ export function ClipEffectsTab({
 	return (
 		<div className="flex flex-col h-full">
 			<div className="border-b px-3.5 h-11 shrink-0 flex items-center">
-				<SectionTitle>Effects</SectionTitle>
+				<SectionTitle>{m.properties.effects}</SectionTitle>
 			</div>
 			{effects.length === 0 ? (
 				<EmptyView />
@@ -204,6 +207,7 @@ export function ClipEffectsTab({
 }
 
 function EmptyView() {
+	const m = useMessages();
 	const setActiveTab = useAssetsPanelStore((s) => s.setActiveTab);
 
 	return (
@@ -214,9 +218,11 @@ function EmptyView() {
 				strokeWidth={1}
 			/>
 			<div className="flex flex-col gap-2">
-				<h3 className="font-medium text-foreground">No effects</h3>
+				<h3 className="font-medium text-foreground">
+					{m.properties.noEffects}
+				</h3>
 				<p className="text-muted-foreground text-sm text-balance max-w-44">
-					Add effects to this layer from the Assets panel.
+					{m.properties.noEffectsHint}
 				</p>
 			</div>
 			<Button
@@ -224,7 +230,7 @@ function EmptyView() {
 				size="sm"
 				onClick={() => setActiveTab("effects")}
 			>
-				Open effects
+				{m.properties.openEffects}
 			</Button>
 		</div>
 	);
@@ -245,7 +251,9 @@ function EffectSection({
 	onToggle?: () => void;
 	onRemove?: () => void;
 }) {
+	const m = useMessages();
 	const definition = effectsRegistry.get(effect.type);
+	const name = translateLabel({ messages: m, label: definition.name });
 
 	return (
 		<Section
@@ -260,7 +268,7 @@ function EffectSection({
 							<Button
 								variant={effect.enabled ? "secondary" : "ghost"}
 								size="icon"
-								aria-label={`Toggle ${definition.name}`}
+								aria-label={m.properties.toggleEffect({ name })}
 								onClick={onToggle}
 							>
 								<HugeiconsIcon
@@ -270,7 +278,7 @@ function EffectSection({
 							<Button
 								variant="ghost"
 								size="icon"
-								aria-label={`Remove ${definition.name}`}
+								aria-label={m.properties.removeEffect({ name })}
 								onClick={onRemove}
 							>
 								<HugeiconsIcon icon={Delete02Icon} />
@@ -282,7 +290,7 @@ function EffectSection({
 				<SectionTitle
 					className={cn(onToggle && !effect.enabled && "text-muted-foreground")}
 				>
-					{definition.name}
+					{name}
 				</SectionTitle>
 			</SectionHeader>
 			<SectionContent

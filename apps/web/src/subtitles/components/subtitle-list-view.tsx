@@ -33,9 +33,11 @@ import {
 	retimeSubtitle,
 	splitSubtitle,
 } from "@/subtitles/list-actions";
+import { useMessages } from "@/i18n";
 
 /** 자막 그룹 하나를 시간순 목록으로 보여 주고, 텍스트 수정·분할·병합·시간 조정과 해당 시점 이동을 한다 */
 export function SubtitleListView() {
+	const m = useMessages();
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const groups = useMemo(
 		() => (scene ? listSubtitleGroups({ tracks: scene.tracks }) : []),
@@ -70,7 +72,7 @@ export function SubtitleListView() {
 
 	return (
 		<PanelView
-			title="Subtitle list"
+			title={m.assets.tabs.subtitles}
 			actions={
 				group && (
 					<div className="flex items-center gap-1">
@@ -78,8 +80,8 @@ export function SubtitleListView() {
 							type="button"
 							variant="ghost"
 							size="icon"
-							aria-label="Export SRT"
-							title="Export SRT"
+							aria-label={m.subtitleList.exportSrt}
+							title={m.subtitleList.exportSrt}
 							onClick={() => {
 								const srt = formatSrt({
 									cues: group.entries.map((entry) => {
@@ -104,8 +106,8 @@ export function SubtitleListView() {
 							type="button"
 							variant={isFinding ? "secondary" : "ghost"}
 							size="icon"
-							aria-label="Find and replace"
-							title="Find and replace"
+							aria-label={m.subtitleList.findReplace}
+							title={m.subtitleList.findReplace}
 							onClick={() => setIsFinding(!isFinding)}
 						>
 							<HugeiconsIcon icon={Search01Icon} size={16} />
@@ -116,19 +118,22 @@ export function SubtitleListView() {
 		>
 			{!group ? (
 				<p className="text-muted-foreground px-3 text-sm">
-					Generate or import captions in the Captions tab to edit them here.
+					{m.subtitleList.empty}
 				</p>
 			) : (
 				<div className="flex flex-col gap-2 px-3 pb-3">
 					{groups.length > 1 && (
 						<Select value={group.groupId} onValueChange={setSelectedGroupId}>
-							<SelectTrigger aria-label="Subtitle group">
+							<SelectTrigger aria-label={m.subtitleList.group}>
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
 								{groups.map((candidate, index) => (
 									<SelectItem key={candidate.groupId} value={candidate.groupId}>
-										{`Subtitles ${index + 1} (${candidate.entries.length})`}
+										{m.subtitleList.groupOption({
+											index: index + 1,
+											count: candidate.entries.length,
+										})}
 									</SelectItem>
 								))}
 							</SelectContent>
@@ -138,8 +143,8 @@ export function SubtitleListView() {
 						<div className="flex flex-col gap-1.5 border-b pb-2">
 							<div className="flex items-center gap-1">
 								<Input
-									aria-label="Find"
-									placeholder="Find"
+									aria-label={m.subtitleList.find}
+									placeholder={m.subtitleList.find}
 									value={query}
 									className="h-8 text-sm"
 									onChange={(event) => {
@@ -164,7 +169,7 @@ export function SubtitleListView() {
 									type="button"
 									variant="ghost"
 									size="icon"
-									aria-label="Previous match"
+									aria-label={m.subtitleList.previousMatch}
 									disabled={!matches.length}
 									onClick={() => goToMatch(matchIndex - 1)}
 								>
@@ -174,7 +179,7 @@ export function SubtitleListView() {
 									type="button"
 									variant="ghost"
 									size="icon"
-									aria-label="Next match"
+									aria-label={m.subtitleList.nextMatch}
 									disabled={!matches.length}
 									onClick={() => goToMatch(matchIndex + 1)}
 								>
@@ -183,8 +188,8 @@ export function SubtitleListView() {
 							</div>
 							<div className="flex items-center gap-1">
 								<Input
-									aria-label="Replace with"
-									placeholder="Replace with"
+									aria-label={m.subtitleList.replaceWith}
+									placeholder={m.subtitleList.replaceWith}
 									value={replacement}
 									className="h-8 text-sm"
 									onChange={(event) => setReplacement(event.target.value)}
@@ -204,7 +209,7 @@ export function SubtitleListView() {
 										})
 									}
 								>
-									Replace
+									{m.subtitleList.replace}
 								</Button>
 								<Button
 									type="button"
@@ -220,7 +225,7 @@ export function SubtitleListView() {
 										})
 									}
 								>
-									All
+									{m.subtitleList.replaceAll}
 								</Button>
 							</div>
 						</div>
@@ -263,6 +268,7 @@ function SubtitleRow({
 	onActivate: () => void;
 }) {
 	const editor = useEditor();
+	const m = useMessages();
 	const { element, trackId } = entry;
 	const cue = cueOf({ entry });
 	const [draft, setDraft] = useState<string | null>(null);
@@ -325,7 +331,9 @@ function SubtitleRow({
 				<button
 					type="button"
 					className="text-muted-foreground hover:text-foreground w-12 shrink-0 pt-1.5 text-left text-xs tabular-nums"
-					aria-label={`Go to ${formatCueTime({ seconds: cue.start })}`}
+					aria-label={m.subtitleList.goTo({
+						time: formatCueTime({ seconds: cue.start }),
+					})}
 					onClick={jumpTo}
 				>
 					{formatCueTime({ seconds: cue.start })}
@@ -353,7 +361,7 @@ function SubtitleRow({
 			{isActive && (
 				<div className="flex items-center gap-1 pl-14">
 					<CueTimeInput
-						label="Start"
+						label={m.subtitleList.start}
 						seconds={cue.start}
 						onCommit={(start) =>
 							retimeSubtitle({
@@ -367,7 +375,7 @@ function SubtitleRow({
 						}
 					/>
 					<CueTimeInput
-						label="End"
+						label={m.subtitleList.end}
 						seconds={cue.end}
 						onCommit={(end) =>
 							retimeSubtitle({
@@ -384,8 +392,8 @@ function SubtitleRow({
 						type="button"
 						variant="ghost"
 						size="icon"
-						aria-label="Split at cursor"
-						title="Split at cursor"
+						aria-label={m.subtitleList.splitAtCursor}
+						title={m.subtitleList.splitAtCursor}
 						// 텍스트 칸의 커서 위치를 잃지 않도록 포커스를 옮기지 않는다
 						onMouseDown={(event) => event.preventDefault()}
 						onClick={split}
@@ -396,8 +404,8 @@ function SubtitleRow({
 						type="button"
 						variant="ghost"
 						size="icon"
-						aria-label="Merge with next"
-						title="Merge with next"
+						aria-label={m.subtitleList.mergeWithNext}
+						title={m.subtitleList.mergeWithNext}
 						disabled={!next}
 						onClick={() =>
 							next && mergeSubtitles({ editor, first: entry, second: next })

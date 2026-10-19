@@ -30,8 +30,11 @@ import {
 	HappyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useMessages } from "@/i18n";
 
 export function StickersView() {
+	const m = useMessages();
+	const categoryLabels: Partial<Record<string, string>> = m.stickers.categories;
 	const {
 		browseContent,
 		browseStickers,
@@ -55,7 +58,7 @@ export function StickersView() {
 				<Input
 					size="sm"
 					variant="default"
-					placeholder="Search..."
+					placeholder={m.stickers.search}
 					value={searchQuery}
 					onChange={(e) => {
 						setSearchQuery({ query: e.target.value });
@@ -79,10 +82,10 @@ export function StickersView() {
 				variant="underline"
 				className="mt-2 flex min-h-0 flex-1 flex-col"
 			>
-				<TabsList aria-label="Sticker categories">
+				<TabsList aria-label={m.stickers.categoriesLabel}>
 					{Object.entries(STICKER_CATEGORIES).map(([key, label]) => (
 						<TabsTrigger key={key} value={key}>
-							{label}
+							{categoryLabels[key] ?? label}
 						</TabsTrigger>
 					))}
 				</TabsList>
@@ -134,6 +137,7 @@ function StickerRow({ items }: { items: StickerData[] }) {
 }
 
 function EmptyView({ message }: { message: string }) {
+	const m = useMessages();
 	return (
 		<div className="bg-background flex h-full flex-col items-center justify-center gap-3 p-4">
 			<HugeiconsIcon
@@ -141,7 +145,7 @@ function EmptyView({ message }: { message: string }) {
 				className="text-muted-foreground size-10"
 			/>
 			<div className="flex flex-col gap-2 text-center">
-				<p className="text-lg font-medium">No stickers found</p>
+				<p className="text-lg font-medium">{m.stickers.noneFound}</p>
 				<p className="text-muted-foreground text-sm text-balance">{message}</p>
 			</div>
 		</div>
@@ -172,6 +176,7 @@ function RegionBanner({ region }: { region: string }) {
 }
 
 function StickersContentView() {
+	const m = useMessages();
 	const {
 		browseContent,
 		clearRecentStickers,
@@ -205,7 +210,7 @@ function StickersContentView() {
 					{isRegionSearch && <RegionBanner region={regionLabel} />}
 					<div className="flex items-center justify-between">
 						<span className="text-muted-foreground text-sm">
-							{searchResults.total} results
+							{m.stickers.results({ count: searchResults.total })}
 						</span>
 					</div>
 					<StickerGrid items={searchResults.items} />
@@ -215,7 +220,9 @@ function StickersContentView() {
 
 		// "all" tab search — sections are in browseContent, fall through to section rendering below
 		if (selectedCategory !== "all" && searchQuery) {
-			return <EmptyView message={`No stickers found for "${searchQuery}"`} />;
+			return (
+				<EmptyView message={m.stickers.noneFoundFor({ query: searchQuery })} />
+			);
 		}
 	}
 
@@ -228,15 +235,15 @@ function StickersContentView() {
 	}
 
 	if (!browseContent?.sections.length) {
-		const categoryLabel = STICKER_CATEGORIES[selectedCategory];
+		const categoryLabel = m.stickers.categories[selectedCategory];
 		return (
 			<EmptyView
 				message={
 					viewMode === "search"
-						? `No stickers found for "${searchQuery}"`
+						? m.stickers.noneFoundFor({ query: searchQuery })
 						: selectedCategory === "all"
-							? "No stickers available yet."
-							: `No stickers available in ${categoryLabel.toLowerCase()} yet.`
+							? m.stickers.noneAvailable
+							: m.stickers.noneInCategory({ category: categoryLabel })
 				}
 			/>
 		);
@@ -267,6 +274,11 @@ function StickerSection({
 	onClearRecent: () => void;
 	onSeeAll: (category: StickerCategory) => void;
 }) {
+	const m = useMessages();
+	const sectionTitles: Partial<Record<string, string>> = {
+		...m.stickers.categories,
+		recent: m.stickers.recentlyUsed,
+	};
 	const hasHeader =
 		Boolean(section.title) || section.id === "recent" || section.action;
 
@@ -275,7 +287,9 @@ function StickerSection({
 			{hasHeader && (
 				<div className="flex items-center justify-between gap-2">
 					{section.title ? (
-						<p className="text-xs text-muted-foreground">{section.title}</p>
+						<p className="text-xs text-muted-foreground">
+							{sectionTitles[section.id] ?? section.title}
+						</p>
 					) : (
 						<div />
 					)}
@@ -288,7 +302,7 @@ function StickerSection({
 								size="sm"
 								className="h-auto gap-1 p-0 text-xs text-muted-foreground"
 							>
-								Clear
+								{m.stickers.clear}
 							</Button>
 						)}
 
@@ -301,7 +315,7 @@ function StickerSection({
 									onSeeAll(section.action?.category as StickerCategory);
 								}}
 							>
-								See all
+								{m.stickers.seeAll}
 							</Button>
 						)}
 					</div>
