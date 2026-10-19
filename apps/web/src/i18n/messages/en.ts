@@ -21,6 +21,17 @@ export const en = {
 		fontPreviewsFailed: "Failed to load font previews.",
 		retry: "Retry",
 		noFonts: "No fonts found.",
+		allFonts: "All fonts",
+		myFonts: "My fonts",
+		favoriteFonts: "Favorites",
+		searchFonts: ({ tab }: { tab: string }) => `Search ${tab.toLowerCase()}...`,
+		addToFavorites: "Add to favorites",
+		removeFromFavorites: "Remove from favorites",
+		noFavoriteFonts: "Click the heart on a font to keep it here.",
+		localFontsUnsupported:
+			"This browser can't list installed fonts. Use Chrome, Edge, or Whale.",
+		localFontsBlocked:
+			"Font access was blocked. Allow it in the site settings and try again.",
 		colorMode: "Select a mode",
 		customColors: "Custom",
 		savedColors: "Saved",

@@ -15,6 +15,17 @@ export const ko: Messages = {
 		fontPreviewsFailed: "글꼴 미리보기를 불러오지 못했습니다.",
 		retry: "다시 시도",
 		noFonts: "맞는 글꼴이 없습니다.",
+		allFonts: "모든 글꼴",
+		myFonts: "내 글꼴",
+		favoriteFonts: "즐겨찾기",
+		searchFonts: ({ tab }) => `${tab}에서 찾기...`,
+		addToFavorites: "즐겨찾기에 추가",
+		removeFromFavorites: "즐겨찾기에서 빼기",
+		noFavoriteFonts: "하트를 눌러 자주 쓰는 글꼴을 모아 두세요.",
+		localFontsUnsupported:
+			"이 브라우저는 설치된 글꼴 목록을 볼 수 없습니다. Chrome, Edge, Whale을 쓰세요.",
+		localFontsBlocked:
+			"글꼴 접근이 막혔습니다. 사이트 설정에서 허용한 뒤 다시 시도하세요.",
 		colorMode: "모드 선택",
 		customColors: "직접 고르기",
 		savedColors: "저장한 색",
