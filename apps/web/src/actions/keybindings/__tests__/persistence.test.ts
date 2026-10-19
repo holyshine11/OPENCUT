@@ -233,6 +233,8 @@ describe("v9 to v10 migration", () => {
 		});
 		expect(added?.keybindings.get("c")).toBe("split");
 		expect(added?.keybindings.get("s")).toBe("split");
+		expect(added?.keybindings.get("ctrl+g")).toBe("group-selected");
+		expect(added?.keybindings.get("ctrl+shift+g")).toBe("ungroup-selected");
 
 		const kept = decodePersistedKeybindingsState({
 			state: migratePersistedKeybindingsState({
