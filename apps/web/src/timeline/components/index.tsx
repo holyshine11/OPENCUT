@@ -728,6 +728,11 @@ function TrackLabelsPanel({
 											)}
 											<TrackToggleIcon
 												isOff={track.locked === true}
+												label={
+													track.locked
+														? m.timeline.unlockTrack
+														: m.timeline.lockTrack
+												}
 												icons={{
 													on: SquareUnlock02Icon,
 													off: LockIcon,
