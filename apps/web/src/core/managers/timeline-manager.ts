@@ -288,6 +288,7 @@ export class TimelineManager {
 			return;
 		}
 
+		const before = this.editor.scenes.getActiveSceneOrNull()?.tracks;
 		const command = new UpdateElementsCommand({
 			updates,
 		});
@@ -297,17 +298,26 @@ export class TimelineManager {
 			command.execute();
 		}
 		this.rememberTextStylesOf({
+			before,
 			elementIds: new Set(updates.map((update) => update.elementId)),
 		});
 	}
 
 	private rememberTextStylesOf({
+		before,
 		elementIds,
 	}: {
+		before: SceneTracks | undefined;
 		elementIds: ReadonlySet<string>;
 	}): void {
 		const tracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
-		if (tracks) rememberTextStyles({ tracks, elementIds });
+		if (!before || !tracks) return;
+		rememberTextStyles({
+			before,
+			tracks,
+			elementIds,
+			canvasSize: this.editor.project.getActive().settings.canvasSize,
+		});
 	}
 
 	addClipEffect({
@@ -771,7 +781,7 @@ export class TimelineManager {
 		this.previewOverlay.clear();
 		this.previewTracks = null;
 		this.updateTracks(afterTracks);
-		this.rememberTextStylesOf({ elementIds });
+		this.rememberTextStylesOf({ before: committedTracks, elementIds });
 	}
 
 	discardPreview(): void {
@@ -796,8 +806,13 @@ export class TimelineManager {
 
 			const nextElements = track.elements.map((element) => {
 				const overlay = this.previewOverlay.get(element.id);
+				// params는 실제 업데이트(applyElementUpdate)처럼 합친다. 덮어쓰면 글자만 고쳐도 스타일이 사라진다
 				return overlay
-					? ({ ...element, ...overlay } as TimelineElement)
+					? ({
+							...element,
+							...overlay,
+							params: { ...element.params, ...overlay.params },
+						} as TimelineElement)
 					: element;
 			});
 
@@ -856,7 +871,9 @@ export class TimelineManager {
 	}): void {
 		const shouldMute = elements.some(({ trackId, elementId }) => {
 			const element = this.getElementByRef({ trackId, elementId });
-			return element && canElementHaveAudio(element) && !isElementMuted({ element });
+			return (
+				element && canElementHaveAudio(element) && !isElementMuted({ element })
+			);
 		});
 
 		const nextUpdates = elements.flatMap(({ trackId, elementId }) => {

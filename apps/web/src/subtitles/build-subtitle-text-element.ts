@@ -20,7 +20,7 @@ import type { SubtitleCue, SubtitleStyleOverrides } from "./types";
 import type { ParamValues } from "@/params";
 import {
 	CAPTION_ELEMENT_NAME_PREFIX,
-	getRememberedTextStyle,
+	getRememberedCaptionStyle,
 	pickTextStyle,
 } from "@/text/style-memory";
 
@@ -316,7 +316,7 @@ export function buildSubtitleTextElement({
 	// ASS 같은 파일에 스타일이 있으면 그걸 따르고, 없으면 마지막에 쓴 자막 스타일을 쓴다
 	const remembered = caption.style
 		? {}
-		: getRememberedTextStyle({ slot: "caption" });
+		: getRememberedCaptionStyle({ canvasSize });
 	const style = resolveSubtitleStyle({
 		style: caption.style ?? rememberedStyleOverrides({ remembered }),
 		defaultFontSize: defaultSubtitleFontSize({ canvasSize }),
