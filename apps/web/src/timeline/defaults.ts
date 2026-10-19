@@ -3,6 +3,7 @@ import type { TTimelineViewState } from "@/project/types";
 import type { BlendMode, Transform } from "@/rendering";
 import { ZERO_MEDIA_TIME } from "@/wasm";
 import type { TextElement } from "./types";
+import { DEFAULT_TEXT_SHADOW } from "@/text/shadow";
 
 const defaultTransform: Transform = {
 	scaleX: 1,
@@ -63,6 +64,12 @@ const defaultTextElement: Omit<TextElement, "id"> = {
 		"stroke.enabled": defaultTextStroke.enabled,
 		"stroke.color": defaultTextStroke.color,
 		"stroke.width": defaultTextStroke.width,
+		"shadow.enabled": DEFAULT_TEXT_SHADOW.enabled,
+		"shadow.color": DEFAULT_TEXT_SHADOW.color,
+		"shadow.opacity": DEFAULT_TEXT_SHADOW.opacity,
+		"shadow.blur": DEFAULT_TEXT_SHADOW.blur,
+		"shadow.offsetX": DEFAULT_TEXT_SHADOW.offsetX,
+		"shadow.offsetY": DEFAULT_TEXT_SHADOW.offsetY,
 		"transform.positionX": defaultTransform.position.x,
 		"transform.positionY": defaultTransform.position.y,
 		"transform.scaleX": defaultTransform.scaleX,
@@ -91,6 +98,7 @@ export const DEFAULTS = {
 		lineHeight: defaultTextLineHeight,
 		background: defaultTextBackground,
 		stroke: defaultTextStroke,
+		shadow: DEFAULT_TEXT_SHADOW,
 		element: defaultTextElement,
 	},
 	timeline: {

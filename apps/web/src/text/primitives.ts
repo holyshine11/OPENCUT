@@ -9,6 +9,7 @@ import {
 	setCanvasLetterSpacing,
 } from "./layout";
 import { FONT_SIZE_SCALE_REFERENCE } from "./typography";
+import type { TextShadow } from "./shadow";
 
 export type TextAlign = "left" | "center" | "right";
 export type TextFontWeight = "normal" | "bold";
@@ -138,6 +139,31 @@ export function measureTextLayout({
 	};
 }
 
+/** Canvas shadows ignore the current transform, so scale the font-relative values by it */
+function applyTextShadow({
+	ctx,
+	shadow,
+	scaledFontSize,
+}: {
+	ctx: TextCanvasContext;
+	shadow: TextShadow;
+	scaledFontSize: number;
+}): void {
+	const matrix = ctx.getTransform();
+	const unit = (scaledFontSize / 100) * Math.hypot(matrix.a, matrix.b);
+	ctx.shadowColor = shadow.color;
+	ctx.shadowBlur = shadow.blur * unit;
+	ctx.shadowOffsetX = shadow.offsetX * unit;
+	ctx.shadowOffsetY = shadow.offsetY * unit;
+}
+
+function clearTextShadow({ ctx }: { ctx: TextCanvasContext }): void {
+	ctx.shadowColor = "transparent";
+	ctx.shadowBlur = 0;
+	ctx.shadowOffsetX = 0;
+	ctx.shadowOffsetY = 0;
+}
+
 export function drawMeasuredTextLayout({
 	ctx,
 	layout,
@@ -145,6 +171,7 @@ export function drawMeasuredTextLayout({
 	background,
 	backgroundColor,
 	stroke,
+	shadow,
 	textBaseline = "middle",
 }: {
 	ctx: TextCanvasContext;
@@ -154,6 +181,8 @@ export function drawMeasuredTextLayout({
 	backgroundColor?: string;
 	/** width is a percentage of the font size */
 	stroke?: { color: string; width: number } | null;
+	/** blur and offsets are percentages of the font size */
+	shadow?: TextShadow | null;
 	textBaseline?: CanvasTextBaseline;
 }): void {
 	ctx.font = layout.fontString;
@@ -202,14 +231,18 @@ export function drawMeasuredTextLayout({
 
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
+		// cast the shadow once per line, from the outline when there is one so it is not doubled
+		if (shadow) applyTextShadow({ ctx, shadow, scaledFontSize: layout.scaledFontSize });
 		if (stroke && stroke.width > 0) {
 			// stroke is centered on the glyph edge and the fill covers the inner half, so double it
 			ctx.strokeStyle = stroke.color;
 			ctx.lineWidth = ((layout.scaledFontSize * stroke.width) / 100) * 2;
 			ctx.lineJoin = "round";
 			ctx.strokeText(layout.lines[index], 0, lineY);
+			clearTextShadow({ ctx });
 		}
 		ctx.fillText(layout.lines[index], 0, lineY);
+		clearTextShadow({ ctx });
 		drawTextDecoration({
 			ctx,
 			textDecoration: layout.textDecoration,

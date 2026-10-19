@@ -5,6 +5,7 @@ import type { BlendMode, Transform } from "@/rendering";
 import { drawMeasuredTextLayout } from "@/text/primitives";
 import type { MeasuredTextElement } from "@/text/measure-element";
 import { DEFAULTS } from "@/timeline/defaults";
+import { resolveTextShadow } from "@/text/shadow";
 
 export type TextNodeParams = TextElement & {
 	transform: Transform;
@@ -56,6 +57,7 @@ export function renderTextToContext({
 		background: resolved.measuredText.resolvedBackground,
 		backgroundColor: resolved.backgroundColor,
 		stroke: resolveTextStroke({ params: node.params.params }),
+		shadow: resolveTextShadow({ params: node.params.params }),
 		textBaseline: baseline,
 	});
 

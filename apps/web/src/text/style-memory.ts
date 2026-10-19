@@ -24,6 +24,12 @@ export const TEXT_STYLE_PARAM_KEYS = [
 	"stroke.enabled",
 	"stroke.color",
 	"stroke.width",
+	"shadow.enabled",
+	"shadow.color",
+	"shadow.opacity",
+	"shadow.blur",
+	"shadow.offsetX",
+	"shadow.offsetY",
 	"transform.positionX",
 	"transform.positionY",
 ] as const;
