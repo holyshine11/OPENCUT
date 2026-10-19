@@ -8,7 +8,7 @@
 git clone https://github.com/holyshine11/OPENCUT.git
 ```
 
-받은 폴더에서 `start-mac.command`를 더블클릭한다. 처음 실행할 때는 Bun 설치와 빌드로 몇 분 걸리고, 준비되면 브라우저가 `http://localhost:3000/projects`를 연다. 그 뒤로는 실행할 때마다 최신 코드를 받아서 바뀐 게 있을 때만 다시 빌드한다. 끄려면 터미널 창에서 `Ctrl+C`.
+받은 폴더에서 `start-mac.command`를 더블클릭한다. 처음 실행할 때는 Bun 설치와 빌드로 몇 분 걸리고, 준비되면 브라우저가 `http://localhost:3000`(프로젝트 목록)을 연다. 그 뒤로는 실행할 때마다 최신 코드를 받아서 바뀐 게 있을 때만 다시 빌드한다. 업데이트에 실패하면(오프라인 등) 기존 버전으로 실행한다. 끄려면 터미널 창에서 `Ctrl+C`.
 
 `git`이 없으면 macOS가 Command Line Tools 설치 창을 띄운다. 설치하고 다시 실행하면 된다.
 
@@ -16,11 +16,10 @@ git clone https://github.com/holyshine11/OPENCUT.git
 
 ```sh
 bun install
-cp apps/web/.env.example apps/web/.env.local   # 처음 한 번
-bun dev:web                                     # http://localhost:3000
+bun dev:web   # http://localhost:3000
 ```
 
-로그인, 피드백, 효과음 검색(Freesound)은 Postgres/Redis와 API 키가 있어야 돌아간다. 편집 기능은 이것들 없이 동작한다.
+환경 변수, DB, Redis 없이 동작한다. 로그인·블로그·효과음 검색(Freesound)은 로컬 전용으로 바꾸면서 제거했다. 요구사항은 `docs/requirements/local-capcut.md`를 본다.
 
 upstream 변경 받기: `git fetch upstream && git merge upstream/main`
 
@@ -59,43 +58,14 @@ Thanks to [Vercel](https://vercel.com?utm_source=github-opencut&utm_campaign=oss
 
 ## Getting Started
 
-### Prerequisites
-
-- [Bun](https://bun.sh/docs/installation)
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-
-> **Note:** Docker is optional but recommended for running the local database and Redis. If you only want to work on frontend features, you can skip it.
-
 ### Setup
 
-1. Fork and clone the repository
+```bash
+bun install
+bun dev:web
+```
 
-2. Copy the environment file:
-
-   ```bash
-   # Unix/Linux/Mac
-   cp apps/web/.env.example apps/web/.env.local
-
-   # Windows PowerShell
-   Copy-Item apps/web/.env.example apps/web/.env.local
-   ```
-
-3. Start the database and Redis:
-
-   ```bash
-   docker compose up -d db redis serverless-redis-http
-   ```
-
-4. Install dependencies and start the dev server:
-
-   ```bash
-   bun install
-   bun dev:web
-   ```
-
-The application will be available at [http://localhost:3000](http://localhost:3000).
-
-The `.env.example` has sensible defaults that match the Docker Compose config — it should work out of the box.
+The application will be available at [http://localhost:3000](http://localhost:3000). No environment variables or services are required.
 
 ### Desktop setup
 
@@ -152,16 +122,6 @@ To switch `apps/web` back to the published package, run:
 cd apps/web
 bun add opencut-wasm
 ```
-
-### Self-Hosting with Docker
-
-To run everything (including a production build of the app) in Docker:
-
-```bash
-docker compose up -d
-```
-
-The app will be available at [http://localhost:3100](http://localhost:3100).
 
 ## Contributing
 

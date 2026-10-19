@@ -1,6 +1,4 @@
 import type { NextConfig } from "next";
-import { withBotId } from "botid/next/config";
-import { withContentCollections } from "@content-collections/next";
 
 const nextConfig: NextConfig = {
 	compiler: {
@@ -8,7 +6,6 @@ const nextConfig: NextConfig = {
 	},
 	reactStrictMode: true,
 	productionBrowserSourceMaps: true,
-	output: "standalone",
 	images: {
 		remotePatterns: [
 			{
@@ -18,10 +15,6 @@ const nextConfig: NextConfig = {
 			{
 				protocol: "https",
 				hostname: "images.unsplash.com",
-			},
-			{
-				protocol: "https",
-				hostname: "images.marblecms.com",
 			},
 			{
 				protocol: "https",
@@ -51,4 +44,4 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default withContentCollections(withBotId(nextConfig));
+export default nextConfig;
