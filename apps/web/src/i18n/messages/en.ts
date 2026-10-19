@@ -442,7 +442,7 @@ export const en = {
 			shortFormHint:
 				"Vertical project: short, one-line captions read best. Recommended values:",
 			longFormHint:
-				"Horizontal project: up to two longer lines read best. Recommended values:",
+				"Horizontal project: one longer line reads best. Recommended values:",
 			shortForm: "Short-form",
 			longForm: "Long-form",
 			fields: {

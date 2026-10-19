@@ -1,4 +1,6 @@
 import { FONT_SIZE_SCALE_REFERENCE } from "@/text/typography";
+import settings from "@/transcription/settings.json";
+import { captionFormOf } from "@/transcription/caption-layout-store";
 import {
 	getTextVisualRect,
 	measureTextBlock,
@@ -18,13 +20,12 @@ import type { SubtitleCue, SubtitleStyleOverrides } from "./types";
 import type { ParamValues } from "@/params";
 import {
 	CAPTION_ELEMENT_NAME_PREFIX,
-	getRememberedTextStyle,
+	getRememberedCaptionStyle,
 	pickTextStyle,
 } from "@/text/style-memory";
 
 const SUBTITLE_MAX_WIDTH_RATIO = 0.8;
 const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.05;
-const SUBTITLE_FONT_SIZE = 5;
 // 자막은 영상 위에서 읽혀야 해서 기본으로 검은 테두리를 켠다
 const SUBTITLE_DEFAULT_STROKE = {
 	"stroke.enabled": true,
@@ -140,8 +141,14 @@ function rememberedStyleOverrides({
 }: {
 	remembered: ParamValues;
 }): SubtitleStyleOverrides {
-	const { fontFamily, fontSize, fontWeight, fontStyle, letterSpacing, lineHeight } =
-		remembered;
+	const {
+		fontFamily,
+		fontSize,
+		fontWeight,
+		fontStyle,
+		letterSpacing,
+		lineHeight,
+	} = remembered;
 	return {
 		fontFamily: typeof fontFamily === "string" ? fontFamily : undefined,
 		fontSize: typeof fontSize === "number" ? fontSize : undefined,
@@ -149,15 +156,28 @@ function rememberedStyleOverrides({
 			fontWeight === "bold" || fontWeight === "normal" ? fontWeight : undefined,
 		fontStyle:
 			fontStyle === "italic" || fontStyle === "normal" ? fontStyle : undefined,
-		letterSpacing: typeof letterSpacing === "number" ? letterSpacing : undefined,
+		letterSpacing:
+			typeof letterSpacing === "number" ? letterSpacing : undefined,
 		lineHeight: typeof lineHeight === "number" ? lineHeight : undefined,
 	};
 }
 
+// 형식별 기본 글꼴 크기. 화면 높이 / FONT_SIZE_SCALE_REFERENCE 배로 커져서
+// 롱폼 5는 1920×1080에서 60px, 숏폼 3.75는 1080×1920에서 80px가 된다
+function defaultSubtitleFontSize({
+	canvasSize,
+}: {
+	canvasSize: { width: number; height: number };
+}): number {
+	return settings.captionFontSize[captionFormOf({ canvasSize })];
+}
+
 function resolveSubtitleStyle({
 	style,
+	defaultFontSize,
 }: {
 	style: SubtitleStyleOverrides | undefined;
+	defaultFontSize: number;
 }): {
 	fontFamily: string;
 	fontSize: number;
@@ -174,7 +194,7 @@ function resolveSubtitleStyle({
 	const fontSize =
 		style?.fontSizeRatioOfPlayHeight != null
 			? style.fontSizeRatioOfPlayHeight * FONT_SIZE_SCALE_REFERENCE
-			: (style?.fontSize ?? SUBTITLE_FONT_SIZE);
+			: (style?.fontSize ?? defaultFontSize);
 
 	return {
 		fontFamily: style?.fontFamily ?? "Pretendard",
@@ -296,9 +316,10 @@ export function buildSubtitleTextElement({
 	// ASS 같은 파일에 스타일이 있으면 그걸 따르고, 없으면 마지막에 쓴 자막 스타일을 쓴다
 	const remembered = caption.style
 		? {}
-		: getRememberedTextStyle({ slot: "caption" });
+		: getRememberedCaptionStyle({ canvasSize });
 	const style = resolveSubtitleStyle({
 		style: caption.style ?? rememberedStyleOverrides({ remembered }),
+		defaultFontSize: defaultSubtitleFontSize({ canvasSize }),
 	});
 	const fontFamily = quoteFontFamily({
 		fontFamily: style.fontFamily,
