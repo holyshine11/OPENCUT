@@ -1,8 +1,15 @@
 import type { TimelineTrack, TimelineElement } from "@/timeline";
 import type { ComputeDropTargetParams, DropTarget } from "@/timeline";
 import { resolveTrackPlacement } from "@/timeline/placement";
-import { TIMELINE_TRACK_GAP_PX } from "./layout";
-import { getTrackHeight } from "./track-layout";
+import {
+	getTrackFolderRows,
+	type TrackFolderRow,
+} from "@/timeline/track-folders";
+import {
+	getCumulativeHeightBefore,
+	getTrackHeight,
+	getTrackRowLayouts,
+} from "./track-layout";
 import {
 	mediaTime,
 	type MediaTime,
@@ -46,39 +53,41 @@ function findElementAtPosition({
 function getTrackAtY({
 	mouseY,
 	tracks,
+	folderRows,
 	verticalDragDirection,
 }: {
 	mouseY: number;
 	tracks: TimelineTrack[];
+	folderRows: readonly TrackFolderRow[];
 	verticalDragDirection?: "up" | "down" | null;
 }): { trackIndex: number; relativeY: number } | null {
-	let cumulativeHeight = 0;
+	const { rows } = getTrackRowLayouts({ tracks, folderRows });
+	let previous: number | null = null;
 
-	for (let i = 0; i < tracks.length; i++) {
-		const trackHeight = getTrackHeight({ type: tracks[i].type });
-		const trackTop = cumulativeHeight;
-		const trackBottom = trackTop + trackHeight;
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i];
+		if (row.hidden) continue;
 
-		if (mouseY >= trackTop && mouseY < trackBottom) {
-			return {
-				trackIndex: i,
-				relativeY: mouseY - trackTop,
-			};
-		}
-
-		if (i < tracks.length - 1 && verticalDragDirection) {
-			const gapTop = trackBottom;
-			const gapBottom = gapTop + TIMELINE_TRACK_GAP_PX;
-			if (mouseY >= gapTop && mouseY < gapBottom) {
+		// 앞 줄과 이 줄 사이 틈(폴더 머리 줄 포함)
+		const gapTop =
+			previous === null ? 0 : rows[previous].top + rows[previous].height;
+		if (mouseY >= gapTop && mouseY < row.top) {
+			if (previous !== null && verticalDragDirection) {
 				const isDraggingUp = verticalDragDirection === "up";
 				return {
-					trackIndex: isDraggingUp ? i : i + 1,
-					relativeY: isDraggingUp ? trackHeight - 1 : 0,
+					trackIndex: isDraggingUp ? previous : i,
+					relativeY: isDraggingUp ? rows[previous].height - 1 : 0,
 				};
+			}
+			if (row.folderHeaderTop !== null) {
+				return { trackIndex: i, relativeY: 0 };
 			}
 		}
 
-		cumulativeHeight += trackHeight + TIMELINE_TRACK_GAP_PX;
+		if (mouseY >= row.top && mouseY < row.top + row.height) {
+			return { trackIndex: i, relativeY: mouseY - row.top };
+		}
+		previous = i;
 	}
 
 	return null;
@@ -114,6 +123,7 @@ export function computeDropTarget({
 	startTimeOverride,
 	excludeElementId,
 	targetElementTypes,
+	trackFolders,
 }: ComputeDropTargetParams): DropTarget {
 	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
 	const mainTrackIndex = tracks.overlay.length;
@@ -133,7 +143,9 @@ export function computeDropTarget({
 		const placementResult = resolveTrackPlacement({
 			tracks,
 			elementType,
-			timeSpans: [{ startTime: xPosition, duration: elementDuration, excludeElementId }],
+			timeSpans: [
+				{ startTime: xPosition, duration: elementDuration, excludeElementId },
+			],
 			strategy: {
 				type: "preferIndex",
 				trackIndex: 0,
@@ -159,6 +171,10 @@ export function computeDropTarget({
 	const trackAtMouse = getTrackAtY({
 		mouseY,
 		tracks: orderedTracks,
+		folderRows: getTrackFolderRows({
+			tracks: orderedTracks,
+			folders: trackFolders,
+		}),
 		verticalDragDirection,
 	});
 
@@ -168,7 +184,9 @@ export function computeDropTarget({
 		const placementResult = resolveTrackPlacement({
 			tracks,
 			elementType,
-			timeSpans: [{ startTime: xPosition, duration: elementDuration, excludeElementId }],
+			timeSpans: [
+				{ startTime: xPosition, duration: elementDuration, excludeElementId },
+			],
 			strategy: {
 				type: "preferIndex",
 				trackIndex: isAboveAllTracks ? 0 : orderedTracks.length - 1,
@@ -218,7 +236,9 @@ export function computeDropTarget({
 	const placementResult = resolveTrackPlacement({
 		tracks,
 		elementType,
-		timeSpans: [{ startTime: xPosition, duration: elementDuration, excludeElementId }],
+		timeSpans: [
+			{ startTime: xPosition, duration: elementDuration, excludeElementId },
+		],
 		strategy: {
 			type: "preferIndex",
 			trackIndex,
@@ -257,19 +277,16 @@ export function computeDropTarget({
 export function getDropLineY({
 	dropTarget,
 	tracks,
+	folderRows,
 }: {
 	dropTarget: DropTarget;
 	tracks: TimelineTrack[];
+	folderRows?: readonly TrackFolderRow[];
 }): number {
-	const safeTrackIndex = Math.min(
-		Math.max(dropTarget.trackIndex, 0),
-		tracks.length,
-	);
-	let y = 0;
-
-	for (let i = 0; i < safeTrackIndex; i++) {
-		y += getTrackHeight({ type: tracks[i].type }) + TIMELINE_TRACK_GAP_PX;
-	}
-
-	return y;
+	const safeTrackIndex = Math.max(dropTarget.trackIndex, 0);
+	return getCumulativeHeightBefore({
+		tracks,
+		trackIndex: safeTrackIndex,
+		folderRows,
+	});
 }

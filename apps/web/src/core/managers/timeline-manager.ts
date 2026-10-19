@@ -8,8 +8,21 @@ import type {
 	TimelineElement,
 	RetimeConfig,
 	ElementRef,
+	TrackFolder,
 } from "@/timeline";
-import { calculateTotalDuration, excludeLockedElements } from "@/timeline";
+import {
+	calculateTotalDuration,
+	canTrackBeHidden,
+	canTrackHaveAudio,
+	excludeLockedElements,
+} from "@/timeline";
+import {
+	getFolderMembers,
+	getFolderToggleState,
+	groupTracksIntoFolder,
+	ungroupFolder,
+} from "@/timeline/track-folders";
+import { updateSceneInArray } from "@/timeline/scenes";
 import { TimelineDragSource } from "@/timeline/drag-source";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
 import { lastFrameMediaTime, type MediaTime, ZERO_MEDIA_TIME } from "@/wasm";
@@ -32,6 +45,7 @@ import {
 } from "@/animation";
 import { resolveAnimationTarget } from "@/timeline/animation-targets";
 import { BatchCommand } from "@/commands";
+import type { Command } from "@/commands/base-command";
 import { rememberTextStyles } from "@/text/style-memory";
 import {
 	AddTrackCommand,
@@ -39,6 +53,7 @@ import {
 	ToggleTrackMuteCommand,
 	ToggleTrackVisibilityCommand,
 	UpdateTrackCommand,
+	UpdateTrackFoldersCommand,
 	InsertElementCommand,
 	DeleteElementsCommand,
 	DuplicateElementsCommand,
@@ -210,14 +225,131 @@ export class TimelineManager {
 			patch: { locked: !track.locked },
 		});
 		this.editor.command.execute({ command });
+		this.deselectLockedElements();
+	}
 
-		// 방금 잠근 트랙의 클립이 선택돼 있으면 선택에서 뺀다
+	// 방금 잠근 트랙의 클립이 선택돼 있으면 선택에서 뺀다
+	private deselectLockedElements(): void {
 		const selected = this.editor.selection.getSelectedElements();
 		const tracks = this.editor.scenes.getActiveScene().tracks;
 		const unlocked = excludeLockedElements({ tracks, elements: selected });
 		if (unlocked.length !== selected.length) {
 			this.editor.selection.setSelectedElements({ elements: unlocked });
 		}
+	}
+
+	/** 고른 트랙(사이에 낀 트랙 포함)을 새 폴더로 묶는다. 이미 폴더에 든 트랙이 끼면 묶지 않는다 */
+	groupTracksIntoFolder({
+		trackIds,
+		name,
+	}: {
+		trackIds: string[];
+		name: string;
+	}): void {
+		const scene = this.editor.scenes.getActiveScene();
+		const folder: TrackFolder = { id: generateUUID(), name };
+		const canGroup = groupTracksIntoFolder({
+			tracks: scene.tracks,
+			folders: scene.trackFolders,
+			trackIds,
+			folder,
+		});
+		if (!canGroup) return;
+
+		const command = new UpdateTrackFoldersCommand(
+			(current) =>
+				groupTracksIntoFolder({
+					tracks: current.tracks,
+					folders: current.trackFolders,
+					trackIds,
+					folder,
+				}) ?? current,
+		);
+		this.editor.command.execute({ command });
+	}
+
+	ungroupTrackFolder({ folderId }: { folderId: string }): void {
+		const command = new UpdateTrackFoldersCommand((scene) =>
+			ungroupFolder({
+				tracks: scene.tracks,
+				folders: scene.trackFolders,
+				folderId,
+			}),
+		);
+		this.editor.command.execute({ command });
+	}
+
+	updateTrackFolder({
+		folderId,
+		patch,
+	}: {
+		folderId: string;
+		patch: Partial<Pick<TrackFolder, "name" | "color">>;
+	}): void {
+		const command = new UpdateTrackFoldersCommand((scene) => ({
+			tracks: scene.tracks,
+			trackFolders: scene.trackFolders?.map((folder) =>
+				folder.id === folderId ? { ...folder, ...patch } : folder,
+			),
+		}));
+		this.editor.command.execute({ command });
+	}
+
+	/** 접기는 보기만 바꾸므로 되돌리기 기록에 남기지 않는다 */
+	toggleTrackFolderCollapsed({ folderId }: { folderId: string }): void {
+		const scene = this.editor.scenes.getActiveScene();
+		this.editor.scenes.setScenes({
+			scenes: updateSceneInArray({
+				scenes: this.editor.scenes.getScenes(),
+				sceneId: scene.id,
+				updates: {
+					trackFolders: scene.trackFolders?.map((folder) =>
+						folder.id === folderId
+							? { ...folder, collapsed: !folder.collapsed }
+							: folder,
+					),
+				},
+			}),
+		});
+	}
+
+	/** 폴더 안 트랙 전체의 음소거·숨김·잠금을 한 번에 맞춘다. 되돌리기는 한 번 */
+	toggleTrackFolderFlag({
+		folderId,
+		flag,
+	}: {
+		folderId: string;
+		flag: "muted" | "hidden" | "locked";
+	}): void {
+		const members = getFolderMembers({
+			tracks: this.editor.scenes.getActiveScene().tracks,
+			folderId,
+		});
+		const turnOn = getFolderToggleState({ members })[flag] !== true;
+		const commands = members.flatMap<Command>((track) => {
+			if (flag === "locked") {
+				return (track.locked === true) === turnOn
+					? []
+					: [
+							new UpdateTrackCommand({
+								trackId: track.id,
+								patch: { locked: turnOn },
+							}),
+						];
+			}
+			if (flag === "muted") {
+				return canTrackHaveAudio(track) && track.muted !== turnOn
+					? [new ToggleTrackMuteCommand(track.id)]
+					: [];
+			}
+			return canTrackBeHidden(track) && track.hidden !== turnOn
+				? [new ToggleTrackVisibilityCommand(track.id)]
+				: [];
+		});
+		if (commands.length === 0) return;
+
+		this.editor.command.execute({ command: new BatchCommand(commands) });
+		if (flag === "locked") this.deselectLockedElements();
 	}
 
 	/** color가 없으면 트랙 색을 따르게 되돌린다 */

@@ -25,6 +25,7 @@ import type {
 	ElementType,
 	SceneTracks,
 	TimelineTrack,
+	TrackFolder,
 	CreateTimelineElement,
 } from "@/timeline";
 import type { TimelineDragData } from "@/timeline/drag";
@@ -42,6 +43,7 @@ export interface DragDropConfig {
 	getActiveProjectFps: () => FrameRate | null;
 	getActiveProjectId: () => string | null;
 	getSceneTracks: () => SceneTracks;
+	getTrackFolders: () => TrackFolder[] | undefined;
 	getCurrentPlayheadTime: () => MediaTime;
 	getMediaAssets: () => MediaAsset[];
 	dragSource: TimelineDragSource;
@@ -222,6 +224,7 @@ export class DragDropController {
 			pixelsPerSecond: BASE_TIMELINE_PIXELS_PER_SECOND,
 			zoomLevel: this.config.zoomLevel,
 			targetElementTypes,
+			trackFolders: this.config.getTrackFolders(),
 		});
 
 		const fps = this.config.getActiveProjectFps();
@@ -556,6 +559,7 @@ export class DragDropController {
 						elementDuration: duration,
 						pixelsPerSecond: BASE_TIMELINE_PIXELS_PER_SECOND,
 						zoomLevel: this.config.zoomLevel,
+						trackFolders: this.config.getTrackFolders(),
 					});
 
 					const trackType: TrackType =

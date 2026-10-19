@@ -1,9 +1,8 @@
 import type { TimelineTrack } from "@/timeline";
 import { timelineTimeToPixels } from "@/timeline/pixel-utils";
-import {
-	TIMELINE_CONTENT_TOP_PADDING_PX,
-} from "./layout";
-import { getCumulativeHeightBefore, getTrackHeight } from "./track-layout";
+import { TIMELINE_CONTENT_TOP_PADDING_PX } from "./layout";
+import type { TrackFolderRow } from "@/timeline/track-folders";
+import { getTrackRowLayouts } from "./track-layout";
 
 type TimelineElementRef = { trackId: string; elementId: string };
 
@@ -79,6 +78,7 @@ export function resolveTimelineElementIntersections({
 	container,
 	scrollContainer,
 	tracks,
+	folderRows,
 	zoomLevel,
 	startPos,
 	currentPos,
@@ -86,6 +86,7 @@ export function resolveTimelineElementIntersections({
 	container: HTMLElement;
 	scrollContainer: HTMLDivElement | null;
 	tracks: TimelineTrack[];
+	folderRows?: readonly TrackFolderRow[];
 	zoomLevel: number;
 	startPos: { x: number; y: number };
 	currentPos: { x: number; y: number };
@@ -98,18 +99,23 @@ export function resolveTimelineElementIntersections({
 	});
 	const selectedElements: TimelineElementRef[] = [];
 
+	const { rows } = getTrackRowLayouts({ tracks, folderRows });
+
 	for (const [trackIndex, track] of tracks.entries()) {
-		const trackTop = getCumulativeHeightBefore({
-			tracks,
-			trackIndex,
-		});
-		const trackHeight = getTrackHeight({ type: track.type });
-		const elementTop = TIMELINE_CONTENT_TOP_PADDING_PX + trackTop;
-		const elementBottom = elementTop + trackHeight;
+		const row = rows[trackIndex];
+		if (row.hidden) continue;
+		const elementTop = TIMELINE_CONTENT_TOP_PADDING_PX + row.top;
+		const elementBottom = elementTop + row.height;
 
 		for (const element of track.elements) {
-			const elementLeft = timelineTimeToPixels({ time: element.startTime, zoomLevel });
-			const elementRight = timelineTimeToPixels({ time: element.startTime + element.duration, zoomLevel });
+			const elementLeft = timelineTimeToPixels({
+				time: element.startTime,
+				zoomLevel,
+			});
+			const elementRight = timelineTimeToPixels({
+				time: element.startTime + element.duration,
+				zoomLevel,
+			});
 			const elementRectangle = {
 				left: elementLeft,
 				top: elementTop,

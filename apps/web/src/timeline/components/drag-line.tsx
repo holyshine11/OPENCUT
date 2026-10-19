@@ -1,10 +1,12 @@
 import { getDropLineY } from "./drop-target";
 import type { TimelineTrack, DropTarget } from "@/timeline";
+import type { TrackFolderRow } from "@/timeline/track-folders";
 import { TIMELINE_LAYERS } from "./layers";
 
 interface DragLineProps {
 	dropTarget: DropTarget | null;
 	tracks: TimelineTrack[];
+	folderRows?: readonly TrackFolderRow[];
 	isVisible: boolean;
 	headerHeight?: number;
 }
@@ -12,12 +14,13 @@ interface DragLineProps {
 export function DragLine({
 	dropTarget,
 	tracks,
+	folderRows,
 	isVisible,
 	headerHeight = 0,
 }: DragLineProps) {
 	if (!isVisible || !dropTarget) return null;
 
-	const y = getDropLineY({ dropTarget, tracks });
+	const y = getDropLineY({ dropTarget, tracks, folderRows });
 	const lineTop = y + headerHeight;
 
 	return (
