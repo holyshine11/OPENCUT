@@ -399,7 +399,7 @@ export const ko: Messages = {
 		layout: {
 			title: "자막 줄",
 			shortFormHint: "세로 영상은 짧은 한 줄 자막이 읽기 좋아요. 추천 값:",
-			longFormHint: "가로 영상은 조금 긴 두 줄까지가 읽기 좋아요. 추천 값:",
+			longFormHint: "가로 영상은 조금 긴 한 줄 자막이 읽기 좋아요. 추천 값:",
 			shortForm: "숏폼",
 			longForm: "롱폼",
 			fields: {
