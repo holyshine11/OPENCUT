@@ -31,6 +31,8 @@ export type TrackType = "video" | "text" | "audio" | "graphic" | "effect";
 interface BaseTrack {
 	id: string;
 	name: string;
+	/** 트랙 색. 없으면 트랙 종류의 기본색 */
+	color?: string;
 }
 
 export interface VideoTrack extends BaseTrack {
@@ -112,6 +114,8 @@ interface BaseTimelineElement {
 	sourceDuration?: MediaTime;
 	animations?: ElementAnimations;
 	params: ParamValues;
+	/** 클립 색. 없으면 트랙 색을 따른다 */
+	color?: string;
 }
 
 export interface VideoElement extends BaseTimelineElement {

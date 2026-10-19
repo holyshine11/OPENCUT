@@ -35,6 +35,7 @@ import {
 	RemoveTrackCommand,
 	ToggleTrackMuteCommand,
 	ToggleTrackVisibilityCommand,
+	UpdateTrackCommand,
 	InsertElementCommand,
 	DeleteElementsCommand,
 	DuplicateElementsCommand,
@@ -183,6 +184,35 @@ export class TimelineManager {
 	toggleTrackVisibility({ trackId }: { trackId: string }): void {
 		const command = new ToggleTrackVisibilityCommand(trackId);
 		this.editor.command.execute({ command });
+	}
+
+	/** color가 없으면 트랙 종류 기본색으로 되돌린다 */
+	setTrackColor({
+		trackId,
+		color,
+	}: {
+		trackId: string;
+		color: string | undefined;
+	}): void {
+		const command = new UpdateTrackCommand({ trackId, patch: { color } });
+		this.editor.command.execute({ command });
+	}
+
+	/** color가 없으면 트랙 색을 따르게 되돌린다 */
+	setElementsColor({
+		elements,
+		color,
+	}: {
+		elements: { trackId: string; elementId: string }[];
+		color: string | undefined;
+	}): void {
+		this.updateElements({
+			updates: elements.map(({ trackId, elementId }) => ({
+				trackId,
+				elementId,
+				patch: { color },
+			})),
+		});
 	}
 
 	splitElements({

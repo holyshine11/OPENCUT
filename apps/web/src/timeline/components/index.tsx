@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Delete02Icon,
 	MagicWand05Icon,
+	PaintBoardIcon,
 	MusicNote03Icon,
 	TaskAdd02Icon,
 	TextIcon,
@@ -59,7 +60,7 @@ import {
 	getCumulativeHeightBefore,
 	getTotalTracksHeight,
 } from "./track-layout";
-import { SELECTED_TRACK_ROW_CLASS } from "./theme";
+import { getTrackColor, SELECTED_TRACK_ROW_CLASS } from "./theme";
 import {
 	computeTrackExpansionHeight,
 	getTrackExpandedRows,
@@ -68,6 +69,10 @@ import {
 } from "./expanded-layout";
 import { TIMELINE_HORIZONTAL_WHEEL_STEP_PX } from "./interaction";
 import { TimelineToolbar } from "./timeline-toolbar";
+import {
+	AnchoredColorPopover,
+	TrackColorStrip,
+} from "./timeline-color-popover";
 import { useElementSelection } from "@/timeline/hooks/element/use-element-selection";
 import { useTimelineSeek } from "@/timeline/hooks/use-timeline-seek";
 import { useTimelineDragDrop } from "@/timeline/hooks/use-timeline-drag-drop";
@@ -660,7 +665,7 @@ function TrackLabelsPanel({
 									<div
 										key={track.id}
 										className={cn(
-											"group flex flex-col",
+											"group relative flex flex-col",
 											tracksWithSelection.has(track.id) &&
 												SELECTED_TRACK_ROW_CLASS,
 										)}
@@ -668,6 +673,7 @@ function TrackLabelsPanel({
 											height: `${baseHeight + getTrackExpansionHeight(index)}px`,
 										}}
 									>
+										<TrackColorStrip track={track} />
 										<div
 											className="flex shrink-0 items-center justify-end gap-2 px-3"
 											style={{ height: `${baseHeight}px` }}
@@ -755,6 +761,7 @@ function TimelineTrackRows({
 }) {
 	const m = useMessages();
 	const timeline = useEditor((e) => e.timeline);
+	const [colorTrackId, setColorTrackId] = useState<string | null>(null);
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const tracks = useMemo<TimelineTrack[]>(
 		() =>
@@ -836,9 +843,23 @@ function TimelineTrackRows({
 										: null
 								}
 							/>
+							<AnchoredColorPopover
+								open={colorTrackId === track.id}
+								onOpenChange={(open) => setColorTrackId(open ? track.id : null)}
+								color={getTrackColor({ track })}
+								canReset={track.color !== undefined}
+								resetLabel={m.timeline.resetColor}
+								onColorChange={(color) =>
+									timeline.setTrackColor({ trackId: track.id, color })
+								}
+							/>
 						</div>
 					</ContextMenuTrigger>
-					<ContextMenuContent className="w-40">
+					<ContextMenuContent
+						className="w-40"
+						// 메뉴가 닫히며 포커스를 되돌리면 막 연 색 팝오버가 바로 닫힌다
+						onCloseAutoFocus={(event) => event.preventDefault()}
+					>
 						<ContextMenuItem
 							icon={<HugeiconsIcon icon={TaskAdd02Icon} />}
 							onClick={(event: React.MouseEvent) => {
@@ -869,6 +890,15 @@ function TimelineTrackRows({
 							{canTrackBeHidden(track) && track.hidden
 								? m.timeline.showTrack
 								: m.timeline.hideTrack}
+						</ContextMenuItem>
+						<ContextMenuItem
+							icon={<HugeiconsIcon icon={PaintBoardIcon} />}
+							onClick={(event: React.MouseEvent) => {
+								event.stopPropagation();
+								setColorTrackId(track.id);
+							}}
+						>
+							{m.timeline.trackColor}
 						</ContextMenuItem>
 						{track.id !== mainTrackId && (
 							<ContextMenuItem
