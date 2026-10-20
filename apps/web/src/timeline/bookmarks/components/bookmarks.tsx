@@ -88,14 +88,14 @@ export function TimelineBookmarksRow({
 			className="relative flex-1 overflow-hidden"
 			style={{ height: TIMELINE_BOOKMARK_ROW_HEIGHT_PX }}
 		>
-			<button
-				className="relative w-full cursor-default select-none border-0 bg-transparent p-0"
+			{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- spatial gesture surface (bookmark row); bookmarks inside are their own buttons, so this can't be a <button>. Keyboard seeking is global timeline shortcuts. */}
+			<div
+				className="relative w-full cursor-default select-none"
 				style={{
 					height: TIMELINE_BOOKMARK_ROW_HEIGHT_PX,
 					width: `${dynamicTimelineWidth}px`,
 				}}
-				aria-label={m.timeline.ruler}
-				type="button"
+				title={m.timeline.ruler}
 				onWheel={handleWheel}
 				onClick={(event) => {
 					if (!event.currentTarget.contains(event.target as Node)) return;
@@ -116,7 +116,7 @@ export function TimelineBookmarksRow({
 						onBookmarkMouseDown={onBookmarkMouseDown}
 					/>
 				))}
-			</button>
+			</div>
 		</div>
 	);
 }
