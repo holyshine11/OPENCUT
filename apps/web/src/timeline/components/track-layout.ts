@@ -4,22 +4,29 @@ import {
 	KEYFRAME_LANE_HEIGHT_PX,
 	TIMELINE_FOLDER_HEADER_HEIGHT_PX,
 	TIMELINE_TRACK_GAP_PX,
+	TIMELINE_TRACK_HEIGHT_RANGE_PX,
 	TIMELINE_TRACK_HEIGHTS_PX,
 } from "./layout";
 
-export function getTrackHeight({ type }: { type: TrackType }): number {
-	return TIMELINE_TRACK_HEIGHTS_PX[type];
+type TrackSizing = { type: TrackType; height?: number };
+
+export function clampTrackHeight(height: number): number {
+	const { min, max } = TIMELINE_TRACK_HEIGHT_RANGE_PX;
+	return Math.round(Math.min(max, Math.max(min, height)));
+}
+
+/** 사용자가 바꾼 높이가 있으면 그 값, 없으면 트랙 종류의 기본 높이 */
+export function getTrackHeight({ type, height }: TrackSizing): number {
+	return height ?? TIMELINE_TRACK_HEIGHTS_PX[type];
 }
 
 export function getExpandedTrackHeight({
 	type,
+	height,
 	expandedLaneCount,
-}: {
-	type: TrackType;
-	expandedLaneCount: number;
-}): number {
+}: TrackSizing & { expandedLaneCount: number }): number {
 	return (
-		TIMELINE_TRACK_HEIGHTS_PX[type] +
+		getTrackHeight({ type, height }) +
 		expandedLaneCount * KEYFRAME_LANE_HEIGHT_PX
 	);
 }
@@ -39,7 +46,7 @@ export function getTrackRowLayouts({
 	getExtraHeight,
 	folderRows,
 }: {
-	tracks: Array<{ type: TrackType }>;
+	tracks: TrackSizing[];
 	getExtraHeight?: (trackIndex: number) => number;
 	folderRows?: readonly TrackFolderRow[];
 }): { rows: TrackRowLayout[]; totalHeight: number } {
@@ -66,8 +73,7 @@ export function getTrackRowLayouts({
 				folderHeaderTop,
 			};
 		}
-		const height =
-			getTrackHeight({ type: track.type }) + (getExtraHeight?.(i) ?? 0);
+		const height = getTrackHeight(track) + (getExtraHeight?.(i) ?? 0);
 		return { top: place(height), height, hidden: false, folderHeaderTop };
 	});
 
@@ -80,7 +86,7 @@ export function getCumulativeHeightBefore({
 	getExtraHeight,
 	folderRows,
 }: {
-	tracks: Array<{ type: TrackType }>;
+	tracks: TrackSizing[];
 	trackIndex: number;
 	getExtraHeight?: (trackIndex: number) => number;
 	folderRows?: readonly TrackFolderRow[];
@@ -100,7 +106,7 @@ export function getTotalTracksHeight({
 	getExtraHeight,
 	folderRows,
 }: {
-	tracks: Array<{ type: TrackType }>;
+	tracks: TrackSizing[];
 	getExtraHeight?: (trackIndex: number) => number;
 	folderRows?: readonly TrackFolderRow[];
 }): number {

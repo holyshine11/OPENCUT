@@ -26,6 +26,7 @@ import { buildCrossfadeToggleUpdates } from "@/timeline/audio-state";
 import { DEFAULTS } from "@/timeline/defaults";
 import { getMessages } from "@/i18n";
 import { toast } from "sonner";
+import { getGroupableTrackIds } from "@/timeline/track-folders";
 import {
 	activateScope,
 	clearActiveScope,
@@ -454,6 +455,26 @@ export function useEditorActions() {
 	useActionHandler(
 		"group-selected",
 		() => {
+			// 클립을 고르지 않고 트랙만 골랐으면 트랙을 폴더로 묶는다
+			const trackIds = editor.selection.getSelectedTrackIds();
+			if (selectedElements.length === 0 && trackIds.length > 0) {
+				const scene = editor.scenes.getActiveScene();
+				if (
+					!getGroupableTrackIds({
+						tracks: scene.tracks,
+						folders: scene.trackFolders,
+						trackIds,
+					})
+				) {
+					toast.info(getMessages().timeline.cannotGroupFolder);
+					return;
+				}
+				editor.timeline.groupTracksIntoFolder({
+					trackIds,
+					name: getMessages().timeline.newFolder,
+				});
+				return;
+			}
 			editor.timeline.groupElements({ elements: selectedElements });
 		},
 		undefined,
@@ -462,6 +483,19 @@ export function useEditorActions() {
 	useActionHandler(
 		"ungroup-selected",
 		() => {
+			const trackIds = editor.selection.getSelectedTrackIds();
+			if (selectedElements.length === 0 && trackIds.length > 0) {
+				const folderIds = new Set(
+					editor.scenes
+						.getActiveScene()
+						.tracks.filter(({ id }) => trackIds.includes(id))
+						.flatMap(({ folderId }) => (folderId ? [folderId] : [])),
+				);
+				for (const folderId of folderIds) {
+					editor.timeline.ungroupTrackFolder({ folderId });
+				}
+				return;
+			}
 			editor.timeline.ungroupElements({ elements: selectedElements });
 		},
 		undefined,

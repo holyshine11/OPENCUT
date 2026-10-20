@@ -254,6 +254,10 @@ function getPressedKey(ev: KeyboardEvent): Key | null {
 		if (isKey(digit)) return digit;
 	}
 
+	// Shift를 누르면 key가 +, _로 바뀌어 자판 위치로 읽는다
+	if (code === "Equal") return "=";
+	if (code === "Minus") return "-";
+
 	if (isKey(raw)) return raw;
 	return null;
 }

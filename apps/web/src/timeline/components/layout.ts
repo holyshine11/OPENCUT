@@ -8,6 +8,10 @@ export const TIMELINE_TRACK_HEIGHTS_PX: Record<TrackType, number> = {
 	effect: 25,
 } as const;
 
+/** 트랙 높이를 끌거나 Shift +/-로 바꿀 때의 범위와 한 번에 바뀌는 양 */
+export const TIMELINE_TRACK_HEIGHT_RANGE_PX = { min: 20, max: 200 } as const;
+export const TIMELINE_TRACK_HEIGHT_STEP_PX = 10;
+
 export const KEYFRAME_LANE_HEIGHT_PX = 20;
 export const KEYFRAME_DIAMOND_SIZE_PX = 14;
 export const EXPANDED_GROUP_HEADER_HEIGHT_PX = 18;

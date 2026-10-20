@@ -170,6 +170,14 @@ export const ACTIONS = {
 		description: "Zoom out timeline",
 		category: "timeline",
 	},
+	"track-height-increase": {
+		description: "Increase track height",
+		category: "timeline",
+	},
+	"track-height-decrease": {
+		description: "Decrease track height",
+		category: "timeline",
+	},
 	undo: {
 		description: "Undo",
 		category: "history",
@@ -222,6 +230,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["toggle-loop", ["/"]],
 	["timeline-zoom-in", ["h"]],
 	["timeline-zoom-out", ["g"]],
+	["track-height-increase", ["shift+="]],
+	["track-height-decrease", ["shift+-"]],
 	["undo", ["ctrl+z"]],
 	["redo", ["ctrl+shift+z", "ctrl+y"]],
 ] as const satisfies ReadonlyArray<

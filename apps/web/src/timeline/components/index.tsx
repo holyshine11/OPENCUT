@@ -53,6 +53,7 @@ import {
 	TIMELINE_SCROLLBAR_SIZE_PX,
 	TIMELINE_CONTENT_TOP_PADDING_PX,
 	TIMELINE_TRACK_GAP_PX,
+	TIMELINE_TRACK_HEIGHT_STEP_PX,
 	TIMELINE_TRACK_LABELS_COLUMN_WIDTH_PX,
 	TIMELINE_FOLDER_HEADER_HEIGHT_PX,
 	KEYFRAME_LANE_HEIGHT_PX,
@@ -66,6 +67,7 @@ import {
 } from "@/timeline";
 import { timelineTimeToPixels } from "@/timeline/pixel-utils";
 import {
+	clampTrackHeight,
 	getTrackHeight,
 	getTotalTracksHeight,
 	getTrackRowLayouts,
@@ -114,6 +116,7 @@ import { useScrollPosition } from "@/timeline/hooks/use-scroll-position";
 import { useTimelinePlayhead } from "@/timeline/hooks/use-timeline-playhead";
 import { DragLine } from "./drag-line";
 import { invokeAction } from "@/actions";
+import { useActionHandler } from "@/actions/use-action-handler";
 import { resolveTimelineElementIntersections } from "./selection-hit-testing";
 import { cn } from "@/utils/ui";
 import { translateLabel, useMessages } from "@/i18n";
@@ -767,6 +770,85 @@ function TrackLabelsPanel({
 			editor.timeline.moveTrack({ trackId, toIndex }),
 	});
 
+	// 고른 트랙이 없으면 모든 트랙
+	const stepTrackHeights = (delta: number) =>
+		editor.timeline.resizeTracks({
+			trackIds:
+				pickedTrackIds.length > 0 ? pickedTrackIds : tracks.map(({ id }) => id),
+			getHeight: (track) => clampTrackHeight(getTrackHeight(track) + delta),
+		});
+	useActionHandler(
+		"track-height-increase",
+		() => stepTrackHeights(TIMELINE_TRACK_HEIGHT_STEP_PX),
+		undefined,
+	);
+	useActionHandler(
+		"track-height-decrease",
+		() => stepTrackHeights(-TIMELINE_TRACK_HEIGHT_STEP_PX),
+		undefined,
+	);
+
+	/** 헤더 위·아래 끝을 끌어 높이를 바꾼다. 고른 트랙을 끌면 고른 트랙이 함께 바뀐다 */
+	const startTrackResize = ({
+		event,
+		trackId,
+		edge,
+	}: {
+		event: React.PointerEvent<HTMLDivElement>;
+		trackId: string;
+		edge: "top" | "bottom";
+	}) => {
+		event.preventDefault();
+		event.stopPropagation();
+		const handle = event.currentTarget;
+		handle.setPointerCapture(event.pointerId);
+		const before = tracks;
+		const trackIds = pickedTrackIds.includes(trackId)
+			? pickedTrackIds
+			: [trackId];
+		const startHeights = new Map(
+			before.map((track) => [track.id, getTrackHeight(track)]),
+		);
+		const startY = event.clientY;
+		// 위 끝은 위로 끌수록 커진다
+		const direction = edge === "top" ? -1 : 1;
+		let moved = false;
+		const resize = ({
+			clientY,
+			preview,
+		}: {
+			clientY: number;
+			preview: boolean;
+		}) =>
+			editor.timeline.resizeTracks({
+				trackIds,
+				preview,
+				getHeight: (track) =>
+					clampTrackHeight(
+						(startHeights.get(track.id) ?? getTrackHeight(track)) +
+							direction * (clientY - startY),
+					),
+			});
+		const onMove = (moveEvent: PointerEvent) => {
+			moved = true;
+			resize({ clientY: moveEvent.clientY, preview: true });
+		};
+		const onEnd = (endEvent: PointerEvent) => {
+			handle.removeEventListener("pointermove", onMove);
+			handle.removeEventListener("pointerup", onEnd);
+			handle.removeEventListener("pointercancel", onEnd);
+			if (!moved) return;
+			// 끄는 동안 바꾼 값을 되돌리고 실행 취소 기록 하나로 다시 적용한다
+			editor.timeline.updateTracks(before);
+			if (endEvent.type === "pointerup") {
+				resize({ clientY: endEvent.clientY, preview: false });
+			}
+		};
+		handle.addEventListener("pointermove", onMove);
+		handle.addEventListener("pointerup", onEnd);
+		handle.addEventListener("pointercancel", onEnd);
+	};
+
 	const expandedElementIds = useTimelineStore((s) => s.expandedElementIds);
 	const trackExpandedRowsMap = useMemo(
 		() =>
@@ -809,7 +891,7 @@ function TrackLabelsPanel({
 									label: track.name,
 								});
 								const isRenaming = renamingTrackId === track.id;
-								const baseHeight = getTrackHeight({ type: track.type });
+								const baseHeight = getTrackHeight(track);
 								const folderHeader = folderRows[index]?.header;
 
 								return (
@@ -852,7 +934,31 @@ function TrackLabelsPanel({
 													onClick={(event) => {
 														if (reorder.shouldSuppressClick()) return;
 														// 헤더 클릭은 트랙을 고르는 동작이라 클립 선택을 풀어 Delete가 트랙에 가게 한다
-														editor.selection.setSelectedElements({ elements: [] });
+														editor.selection.setSelectedElements({
+															elements: [],
+														});
+														// Shift는 마지막에 고른 트랙부터 여기까지 한꺼번에 고른다
+														const anchorId = pickedTrackIds.at(-1);
+														const anchorIndex = tracks.findIndex(
+															({ id }) => id === anchorId,
+														);
+														if (
+															event.shiftKey &&
+															anchorId &&
+															anchorIndex >= 0
+														) {
+															const rangeIds = tracks
+																.slice(
+																	Math.min(anchorIndex, index),
+																	Math.max(anchorIndex, index) + 1,
+																)
+																.map(({ id }) => id)
+																.filter((id) => id !== anchorId);
+															editor.selection.setSelectedTrackIds({
+																trackIds: [...rangeIds, anchorId],
+															});
+															return;
+														}
 														editor.selection.selectTrack({
 															trackId: track.id,
 															isMultiKey:
@@ -867,6 +973,25 @@ function TrackLabelsPanel({
 															setRenamingTrackId(track.id);
 													}}
 												/>
+												{(["top", "bottom"] as const).map((edge) => (
+													<div
+														key={edge}
+														aria-hidden
+														title={m.timeline.resizeTrack}
+														className={cn(
+															"hover:bg-primary/60 absolute inset-x-0 z-10 h-1 cursor-row-resize",
+															edge === "top" ? "top-0" : "bottom-0",
+														)}
+														onPointerDown={(event) =>
+															startTrackResize({
+																event,
+																trackId: track.id,
+																edge,
+															})
+														}
+														onClick={(event) => event.stopPropagation()}
+													/>
+												))}
 												<TrackColorStrip track={track} />
 												<div
 													className="pointer-events-none relative flex shrink-0 items-center justify-end gap-2 pr-3 pl-2.5 [&>*]:pointer-events-auto"

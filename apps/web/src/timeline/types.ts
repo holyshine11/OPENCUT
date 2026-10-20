@@ -47,6 +47,8 @@ interface BaseTrack {
 	locked?: boolean;
 	/** 속한 트랙 폴더 */
 	folderId?: string;
+	/** 사용자가 바꾼 트랙 높이(px). 없으면 트랙 종류의 기본 높이 */
+	height?: number;
 }
 
 export interface VideoTrack extends BaseTrack {

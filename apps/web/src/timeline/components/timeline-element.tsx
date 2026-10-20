@@ -356,7 +356,7 @@ export function TimelineElement({
 		element.type === "video" && isSourceAudioSeparated({ element });
 	const hasKeyframes = elementKeyframes.length > 0;
 	const expansionHeight = getExpansionHeight({ rows: expandedRows });
-	const baseTrackHeight = getTrackHeight({ type: track.type });
+	const baseTrackHeight = getTrackHeight(track);
 
 	const expandedContent =
 		isExpanded && expandedRows.length > 0 ? (
@@ -693,7 +693,8 @@ function ElementInner({
 			{/* 길이 조절 핸들보다 뒤에 그려야 위쪽 모서리에서 페이드 핸들이 먼저 잡힌다 */}
 			{canFade &&
 				pixelsPerSecond !== null &&
-				(visibleElement.type === "audio" || visibleElement.type === "video") && (
+				(visibleElement.type === "audio" ||
+					visibleElement.type === "video") && (
 					<div
 						className="pointer-events-none absolute inset-x-0 top-0"
 						style={{ height: `${baseTrackHeight}px` }}
@@ -1004,7 +1005,9 @@ function TextElementContent({
 	return (
 		<div className="flex size-full items-center justify-start pl-2">
 			<span className="truncate text-xs text-white">
-				{typeof element.params.content === "string" ? element.params.content : ""}
+				{typeof element.params.content === "string"
+					? element.params.content
+					: ""}
 			</span>
 		</div>
 	);
@@ -1208,7 +1211,7 @@ function TiledMediaContent({
 		);
 	}
 
-	const trackHeight = getTrackHeight({ type: track.type });
+	const trackHeight = getTrackHeight(track);
 	const tileWidth = trackHeight * THUMBNAIL_ASPECT_RATIO;
 
 	return (

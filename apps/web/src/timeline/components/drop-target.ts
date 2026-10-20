@@ -231,7 +231,7 @@ export function computeDropTarget({
 		}
 	}
 
-	const trackHeight = getTrackHeight({ type: track.type });
+	const trackHeight = getTrackHeight(track);
 	const placementResult = resolveTrackPlacement({
 		tracks,
 		elementType,

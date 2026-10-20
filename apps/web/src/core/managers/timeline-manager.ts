@@ -253,6 +253,34 @@ export class TimelineManager {
 		this.editor.command.execute({ command });
 	}
 
+	/**
+	 * 고른 트랙들의 높이를 바꾼다. preview면 실행 취소 기록 없이 화면에만 반영한다(끄는 중).
+	 * 끌기를 마칠 때는 시작 상태로 되돌린 뒤 preview 없이 한 번 더 불러 기록을 하나만 남긴다
+	 */
+	resizeTracks({
+		trackIds,
+		getHeight,
+		preview = false,
+	}: {
+		trackIds: string[];
+		getHeight: (track: TimelineTrack) => number;
+		preview?: boolean;
+	}): void {
+		const before = this.editor.scenes.getActiveSceneOrNull()?.tracks;
+		if (!before) return;
+		const ids = new Set(trackIds);
+		const after = before.map((track) =>
+			ids.has(track.id) ? { ...track, height: getHeight(track) } : track,
+		);
+		if (preview) {
+			this.updateTracks(after);
+			return;
+		}
+		this.editor.command.execute({
+			command: new TracksSnapshotCommand({ before, after }),
+		});
+	}
+
 	toggleTrackLock({ trackId }: { trackId: string }): void {
 		const track = this.getTrackById({ trackId });
 		if (!track) return;
