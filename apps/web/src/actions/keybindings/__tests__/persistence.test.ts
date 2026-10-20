@@ -245,3 +245,24 @@ describe("v9 to v10 migration", () => {
 		expect(kept?.keybindings.get("c")).toBe("undo");
 	});
 });
+
+describe("v13 to v14 migration", () => {
+	test("restores group shortcuts missed by users who passed v10 early", () => {
+		const added = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { c: "split" }, isCustomized: false },
+				fromVersion: 13,
+			}),
+		});
+		expect(added?.keybindings.get("ctrl+g")).toBe("group-selected");
+		expect(added?.keybindings.get("ctrl+shift+g")).toBe("ungroup-selected");
+
+		const kept = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { "ctrl+g": "undo" }, isCustomized: true },
+				fromVersion: 13,
+			}),
+		});
+		expect(kept?.keybindings.get("ctrl+g")).toBe("undo");
+	});
+});
