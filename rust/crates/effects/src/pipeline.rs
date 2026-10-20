@@ -11,6 +11,10 @@ const GAUSSIAN_BLUR_SHADER_ID: &str = "gaussian-blur";
 const GAUSSIAN_BLUR_SHADER_SOURCE: &str = include_str!("shaders/gaussian_blur.wgsl");
 const COLOR_ADJUST_SHADER_ID: &str = "color-adjust";
 const COLOR_ADJUST_SHADER_SOURCE: &str = include_str!("shaders/color_adjust.wgsl");
+const STYLIZE_SHADER_ID: &str = "stylize";
+const STYLIZE_SHADER_SOURCE: &str = include_str!("shaders/stylize.wgsl");
+// Shaders that take every value through one u_params vector.
+const PARAM_SHADER_IDS: [&str; 2] = [COLOR_ADJUST_SHADER_ID, STYLIZE_SHADER_ID];
 const COLOR_ADJUST_PARAM_COUNT: usize = 28;
 const COLOR_ADJUST_PARAM_VEC4_COUNT: usize = COLOR_ADJUST_PARAM_COUNT / 4;
 
@@ -145,6 +149,10 @@ impl EffectPipeline {
             (
                 COLOR_ADJUST_SHADER_ID.to_string(),
                 create_pipeline(COLOR_ADJUST_SHADER_ID, COLOR_ADJUST_SHADER_SOURCE),
+            ),
+            (
+                STYLIZE_SHADER_ID.to_string(),
+                create_pipeline(STYLIZE_SHADER_ID, STYLIZE_SHADER_SOURCE),
             ),
         ]);
 
@@ -282,7 +290,7 @@ fn pack_effect_uniforms(
     height: u32,
 ) -> Result<EffectUniformBuffer, EffectsError> {
     let resolution = [width as f32, height as f32];
-    if pass.shader == COLOR_ADJUST_SHADER_ID {
+    if PARAM_SHADER_IDS.contains(&pass.shader.as_str()) {
         ensure_known_uniforms(pass, &["u_params"])?;
         let values = read_vector_uniform(pass, "u_params", COLOR_ADJUST_PARAM_COUNT)?;
         let mut params = [[0.0; 4]; COLOR_ADJUST_PARAM_VEC4_COUNT];
@@ -383,6 +391,18 @@ mod tests {
         assert_eq!(packed.resolution, [1920.0, 1080.0]);
         assert_eq!(packed.params[0], [0.0, 1.0, 2.0, 3.0]);
         assert_eq!(packed.params[6], [24.0, 25.0, 26.0, 27.0]);
+    }
+
+    #[test]
+    fn packs_stylize_params_like_color_adjust() {
+        let pass = EffectPass {
+            shader: STYLIZE_SHADER_ID.to_string(),
+            uniforms: HashMap::from([(
+                "u_params".to_string(),
+                UniformValue::Vector(vec![1.0; COLOR_ADJUST_PARAM_COUNT]),
+            )]),
+        };
+        assert_eq!(pack_effect_uniforms(&pass, 1, 1).unwrap().params[6], [1.0; 4]);
     }
 
     #[test]

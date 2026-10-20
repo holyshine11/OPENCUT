@@ -19,6 +19,7 @@ import {
 	findMatchingAdjustPreset,
 } from "@/effects/definitions/adjust-presets";
 import { EffectPreviewCanvas } from "./effect-preview-canvas";
+import { SavePresetButton, UserPresetStrip } from "./effect-controls";
 import { AdjustFavoriteButton } from "./adjust-favorite-button";
 import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
 import {
@@ -80,6 +81,11 @@ export function AdjustControls({
 	return (
 		<div className="flex flex-col">
 			<div className="flex flex-col gap-3 px-4 pt-1 pb-3">
+				<UserPresetStrip
+					effectType={ADJUST_EFFECT_TYPE}
+					params={params}
+					onSelect={applyAll}
+				/>
 				<PresetStrip
 					activePresetId={activePreset?.id ?? null}
 					onSelect={(preset) =>
@@ -110,6 +116,11 @@ export function AdjustControls({
 						{m.properties.adjust.resetAll}
 					</Button>
 				</div>
+				<SavePresetButton
+					effectType={ADJUST_EFFECT_TYPE}
+					defaultName={m.assets.adjustmentLayer}
+					params={params}
+				/>
 			</div>
 			{ADJUST_SECTIONS.map((section) => (
 				<AdjustSection
@@ -190,7 +201,7 @@ function PresetStrip({
 	);
 }
 
-function CompareButton({
+export function CompareButton({
 	onHoldStart,
 	onHoldEnd,
 }: {
@@ -309,7 +320,7 @@ function AdjustSection({
 	);
 }
 
-function SliderRow({
+export function SliderRow({
 	slider,
 	value,
 	onPreview,

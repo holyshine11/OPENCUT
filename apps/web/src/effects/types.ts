@@ -32,9 +32,13 @@ export interface EffectRendererConfig {
 	}) => EffectPass[];
 }
 
+/** Groups effects in the Effects tab. */
+export type EffectCategory = "blur" | "distort" | "glitch" | "stylize" | "retro" | "color";
+
 export interface EffectDefinition {
 	type: string;
 	name: string;
+	category?: EffectCategory;
 	keywords: string[];
 	params: ParamDefinition[];
 	renderer: EffectRendererConfig;

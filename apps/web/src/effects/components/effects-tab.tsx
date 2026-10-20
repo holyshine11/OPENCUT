@@ -12,9 +12,7 @@ import {
 	SectionContent,
 	SectionHeader,
 	SectionTitle,
-	SectionFields,
 } from "@/components/section";
-import { PropertyParamField } from "@/components/editor/panels/properties/components/property-param-field";
 import { Button } from "@/components/ui/button";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -24,11 +22,11 @@ import {
 	MagicWand05Icon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/utils/ui";
-import { Separator } from "@/components/ui/separator";
 import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
 import { translateLabel, useMessages } from "@/i18n";
 import { ADJUST_EFFECT_TYPE } from "@/effects/definitions/adjust";
 import { AdjustControls } from "./adjust-controls";
+import { EffectControls } from "./effect-controls";
 
 export function StandaloneEffectTab({
 	element,
@@ -304,21 +302,13 @@ function EffectSection({
 						onDiscard={() => editor.timeline.discardPreview()}
 					/>
 				) : (
-					<SectionFields>
-						{definition.params.map((param) => (
-							<div key={param.key} className="flex flex-col gap-3.5">
-								<div className="px-4">
-									<PropertyParamField
-										param={param}
-										value={renderParams[param.key] ?? param.default}
-										onPreview={(value) => previewParams({ [param.key]: value })}
-										onCommit={onCommit}
-									/>
-								</div>
-								<Separator />
-							</div>
-						))}
-					</SectionFields>
+					<EffectControls
+						definition={definition}
+						params={renderParams}
+						onPreview={previewParams}
+						onCommit={onCommit}
+						onDiscard={() => editor.timeline.discardPreview()}
+					/>
 				)}
 			</SectionContent>
 		</Section>
