@@ -1,5 +1,5 @@
 import type { TimeRange } from "@/transcription/speech-regions";
-import type { AutocutSettings, CutProposal } from "./silence";
+import type { AutocutSettings } from "./silence";
 
 /**
  * RGBA 두 프레임의 평균 밝기 차이(0~255). 가로 160px 기준으로 손이 들어오면 10~30,
@@ -23,12 +23,27 @@ export function frameDifference({
 	return sum / Math.max(1, next.length / 4);
 }
 
+/** 문자열 유니언으로 둔다(enum 금지 규칙). 지점 바로 뒤에 무엇이 시작되는지다 */
+export type EditPointReason = "speechStart" | "speechEnd" | "motionStart" | "motionStop" | "event";
+
+/** 클립을 나눌 지점 하나. 시간은 소스 기준(초) */
+export interface EditPoint {
+	id: string;
+	time: number;
+	reason: EditPointReason;
+	enabled: boolean;
+}
+
+// 같은 자리에 겹친 지점은 말 경계를 먼저 남긴다
+const PRIORITY: Record<EditPointReason, number> = { speechStart: 3, speechEnd: 3, event: 2, motionStart: 1, motionStop: 1 };
+
 /**
- * 말이 없는 구간을 화면 움직임으로 나눠 편집점을 제안한다. 고정 카메라 요리 영상처럼
- * 배경 소음 때문에 무음이 하나도 없는 영상을 위한 규칙이다.
- * - 말(VAD·자막 단어)과 그 앞뒤 여유는 남긴다
- * - 말 사이가 `minGapSeconds`보다 짧으면 자연스러운 쉼으로 보고 남긴다
- * - 그보다 긴 빈 구간에서 화면이 멈춘 곳은 컷, 움직이는 곳(젓기·끓이기)은 배속으로 제안한다
+ * 말과 화면 움직임으로 클립을 나눌 지점을 찾는다. 자르거나 빠르게 넘길지는 정하지 않고 쪼갤 자리만 준다.
+ * - 말 한 마디(`pauseSeconds`보다 짧은 쉼은 한 마디)마다 시작 조금 앞과 끝 조금 뒤. `minUtteranceSeconds`보다 짧은 말(VAD 블립)은 말로 안 치고,
+ *   `minPieceSeconds`보다 짧은 말은 시작 앞 한 지점만 낸다
+ * - 말이 없는 구간에서 화면이 멈추거나 움직이기 시작하는 곳(`minRunSeconds`보다 짧은 덩어리는 무시)
+ * - 말이 없는 구간에서 움직임이 `eventAbove`를 넘어서는 순간(손이 들어오거나 재료를 넣는 때)
+ * - 지점 사이가 `minPieceSeconds`보다 짧으면 우선순위가 높은 쪽만 남기고, 같으면(말 사이 짧은 쉼 등) 가운데 한 지점으로 합친다
  *
  * `motion[i]`는 i번째와 i+1번째 샘플 프레임 사이의 `frameDifference`
  */
@@ -44,58 +59,60 @@ export function proposeEditPoints({
 	speech: readonly TimeRange[];
 	frameSeconds?: number;
 	settings: AutocutSettings;
-}): CutProposal[] {
+}): EditPoint[] {
 	const { editPoints: rules, motion: motionSettings } = settings;
 	const totalSeconds = motion.length * motionSeconds;
-	const kept = mergeRanges(
-		speech.map((range) => ({
-			start: Math.max(0, range.start - rules.speechBeforeSeconds),
-			end: Math.min(totalSeconds, range.end + rules.speechAfterSeconds),
-		})),
+	const utterances = mergeRanges({ ranges: speech, joinWithin: rules.pauseSeconds }).filter(
+		(utterance) => utterance.end - utterance.start >= rules.minUtteranceSeconds,
 	);
-
 	const smoothed = medianFilter({ values: motion, size: rules.smoothWindows });
-	const proposals: CutProposal[] = [];
-	for (const gap of complementRanges({ ranges: kept, totalSeconds })) {
-		if (gap.end - gap.start < rules.minGapSeconds) continue;
-		for (const run of splitByMotion({
-			gap,
-			smoothed,
-			motionSeconds,
-			staticBelow: motionSettings.staticBelow,
-			minRunSeconds: rules.minGapSeconds,
-		})) {
-			// 프레임에 맞출 때는 제안 구간이 줄어드는 쪽으로 반올림한다
-			const start = frameSeconds ? Math.ceil(run.start / frameSeconds - 1e-9) * frameSeconds : run.start;
-			const end = frameSeconds ? Math.floor(run.end / frameSeconds + 1e-9) * frameSeconds : run.end;
-			if (end <= start) continue;
-			if (!run.moving) {
-				proposals.push({ id: `static:${start.toFixed(3)}`, start, end, reason: "static", enabled: true });
-				continue;
+
+	const candidates: { time: number; reason: EditPointReason }[] = [];
+	utterances.forEach((utterance, index) => {
+		// 앞뒤 여유는 쉼의 절반을 넘지 않아 이웃 말의 지점과 순서가 뒤집히지 않는다
+		const before = index > 0 ? (utterance.start - utterances[index - 1].end) / 2 : Number.POSITIVE_INFINITY;
+		const after = index < utterances.length - 1 ? (utterances[index + 1].start - utterance.end) / 2 : Number.POSITIVE_INFINITY;
+		const start = utterance.start - Math.min(rules.speechBeforeSeconds, before);
+		const end = utterance.end + Math.min(rules.speechAfterSeconds, after);
+		candidates.push({ time: start, reason: "speechStart" });
+		if (end - start >= rules.minPieceSeconds) candidates.push({ time: end, reason: "speechEnd" });
+	});
+	for (const gap of complementRanges({ ranges: utterances, totalSeconds })) {
+		const runs = splitByMotion({ gap, smoothed, motionSeconds, staticBelow: motionSettings.staticBelow, minRunSeconds: rules.minRunSeconds });
+		for (const run of runs.slice(1)) candidates.push({ time: run.start, reason: run.moving ? "motionStart" : "motionStop" });
+		const from = Math.ceil(gap.start / motionSeconds - 1e-9);
+		const to = Math.min(smoothed.length, Math.floor(gap.end / motionSeconds + 1e-9));
+		for (let i = Math.max(1, from); i < to; i++) {
+			if (smoothed[i] >= rules.eventAbove && smoothed[i - 1] < rules.eventAbove) {
+				candidates.push({ time: i * motionSeconds, reason: "event" });
 			}
-			const rate = fitRate({ seconds: end - start, rules });
-			if (rate < rules.minRate) continue;
-			proposals.push({ id: `process:${start.toFixed(3)}`, start, end, reason: "process", enabled: true, rate });
 		}
 	}
-	return proposals;
+
+	const snap = (time: number) => (frameSeconds ? Math.round(time / frameSeconds) * frameSeconds : time);
+	const points: EditPoint[] = [];
+	for (const candidate of candidates.map((c) => ({ ...c, time: snap(c.time) })).sort((a, b) => a.time - b.time)) {
+		if (candidate.time < rules.minPieceSeconds || candidate.time > totalSeconds - rules.minPieceSeconds) continue;
+		const last = points.at(-1);
+		if (last && candidate.time - last.time < rules.minPieceSeconds) {
+			const gap = PRIORITY[candidate.reason] - PRIORITY[last.reason];
+			if (gap > 0) points[points.length - 1] = toPoint(candidate);
+			else if (gap === 0) points[points.length - 1] = toPoint({ ...candidate, time: snap((last.time + candidate.time) / 2) });
+			continue;
+		}
+		points.push(toPoint(candidate));
+	}
+	return points;
 }
 
-/** 구간이 `targetSeconds` 안팎이 되는 배속. `rateStep` 단위로 내리고 `maxRate`를 넘지 않는다. `minRate`보다 작을 수 있다 */
-export function fitRate({ seconds, rules }: { seconds: number; rules: AutocutSettings["editPoints"] }): number {
-	return Math.min(rules.maxRate, Math.floor(seconds / rules.targetSeconds / rules.rateStep) * rules.rateStep);
-}
+const toPoint = ({ time, reason }: { time: number; reason: EditPointReason }): EditPoint => ({
+	id: `${reason}:${time.toFixed(3)}`,
+	time,
+	reason,
+	enabled: true,
+});
 
-/** 고를 수 있는 배속 목록 (`minRate`부터 `maxRate`까지 `rateStep` 간격) */
-export function rateChoices({ rules }: { rules: AutocutSettings["editPoints"] }): number[] {
-	const count = Math.floor((rules.maxRate - rules.minRate) / rules.rateStep + 1e-9) + 1;
-	return Array.from({ length: count }, (_, i) => rules.minRate + i * rules.rateStep);
-}
-
-/**
- * 빈 구간 하나를 멈춤/움직임 덩어리로 나눈다. `minRunSeconds`보다 짧은 덩어리는 앞 덩어리에 붙여
- * 손이 잠깐 들어온 정도로 구간이 잘게 쪼개지지 않게 한다
- */
+/** 빈 구간 하나를 멈춤/움직임 덩어리로 나눈다. `minRunSeconds`보다 짧은 덩어리는 앞 덩어리에 붙인다 */
 function splitByMotion({
 	gap,
 	smoothed,
@@ -149,11 +166,12 @@ function medianFilter({ values, size }: { values: ArrayLike<number>; size: numbe
 	return out;
 }
 
-function mergeRanges(ranges: readonly TimeRange[]): TimeRange[] {
+/** 겹치거나 `joinWithin`초 안에 이어지는 구간을 합친다 */
+function mergeRanges({ ranges, joinWithin }: { ranges: readonly TimeRange[]; joinWithin: number }): TimeRange[] {
 	const merged: TimeRange[] = [];
 	for (const range of [...ranges].sort((a, b) => a.start - b.start)) {
 		const last = merged.at(-1);
-		if (last && range.start <= last.end) last.end = Math.max(last.end, range.end);
+		if (last && range.start <= last.end + joinWithin) last.end = Math.max(last.end, range.end);
 		else merged.push({ ...range });
 	}
 	return merged;

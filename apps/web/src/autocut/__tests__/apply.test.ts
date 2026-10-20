@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { AudioTrack, SceneTracks, TextElement, VideoElement } from "@/timeline/types";
 import { floatToFrameRate } from "@/fps/utils";
 import { mediaTimeFromSeconds as t, TICKS_PER_SECOND, ZERO_MEDIA_TIME } from "@/wasm";
-import { applyTimelineEdits, collectSubtitleWords, sourceCutsToTimeline } from "../apply";
+import { splitElementAtTimes } from "@/timeline/split-element";
+import { applyTimelineEdits, collectSubtitleWords, sourceCutsToTimeline, sourcePointsToTimeline } from "../apply";
 
 const seconds = (ticks: number) => Number((ticks / TICKS_PER_SECOND).toFixed(3));
 const round = (values: number[] | undefined) => values?.map((value) => Number(value.toFixed(3)));
@@ -107,8 +108,6 @@ describe("applyTimelineEdits 컷", () => {
 		],
 		shouldEdit: (track) => track.id !== "bgm",
 		crossfadeSeconds: 0.02,
-		maintainPitch: true,
-		fps,
 	});
 	const [subs, main, bgm] = result;
 
@@ -145,45 +144,6 @@ describe("applyTimelineEdits 컷", () => {
 	});
 
 	test("고르지 않은 트랙(배경음악)은 그대로 둔다", () => {
-		expect(bgm).toBe(music);
-	});
-});
-
-describe("applyTimelineEdits 배속", () => {
-	// 2~6초(4초)를 4배속으로: 1초로 줄고 뒤는 3초 당겨진다
-	const [subs, main, bgm] = applyTimelineEdits({
-		tracks: tracks(),
-		edits: [{ start: t({ seconds: 2 }), end: t({ seconds: 6 }), rate: 4 }],
-		shouldEdit: (track) => track.id !== "bgm",
-		crossfadeSeconds: 0.02,
-		maintainPitch: true,
-		fps,
-	});
-
-	test("클립을 구간 경계에서 나누고 가운데 조각만 빠르게 한다", () => {
-		expect(main.elements.map(span)).toEqual([
-			[0, 2],
-			[2, 3],
-			[3, 7],
-		]);
-		expect(main.elements.map((element) => seconds(element.trimStart))).toEqual([0, 2, 6]);
-		expect(
-			main.elements.map((element) => (element.type === "video" ? element.retime : undefined)),
-		).toEqual([undefined, { rate: 4, maintainPitch: true }, undefined]);
-		expect(main.elements[0].id).toBe("v");
-	});
-
-	test("원본 없는 요소는 시작과 끝을 줄어든 구간에 맞춰 옮긴다", () => {
-		expect(subs.elements.map((element) => [element.id, ...span(element)])).toEqual([
-			["a", 1, 2],
-			["d", 2.125, 2.375],
-			["b", 2.375, 2.625],
-			["e", 2.625, 2.875],
-			["c", 2.875, 4.5],
-		]);
-	});
-
-	test("배경음악은 그대로 둔다", () => {
 		expect(bgm).toBe(music);
 	});
 });
@@ -237,5 +197,34 @@ describe("collectSubtitleWords", () => {
 			[6, 7],
 			[7, 8],
 		]);
+	});
+});
+
+describe("splitElementAtTimes", () => {
+	test("여러 시각에서 차례로 나누고, 이름은 그대로, 첫 조각이 원래 id를 지킨다", () => {
+		const pieces = splitElementAtTimes({
+			element: video(),
+			times: [t({ seconds: 7 }), t({ seconds: 3 }), t({ seconds: 3 }), t({ seconds: 12 })],
+		});
+		expect(pieces.map(span)).toEqual([
+			[0, 3],
+			[3, 7],
+			[7, 10],
+		]);
+		expect(pieces.map((piece) => seconds(piece.trimStart))).toEqual([0, 3, 7]);
+		expect(pieces.map((piece) => piece.name)).toEqual(["clip", "clip", "clip"]);
+		expect(pieces[0].id).toBe("v");
+	});
+});
+
+describe("sourcePointsToTimeline", () => {
+	test("2배속 클립의 소스 시각을 타임라인으로 옮기고 클립 경계와 밖은 버린다", () => {
+		const element = video({ startTime: t({ seconds: 1 }), trimStart: t({ seconds: 2 }), duration: t({ seconds: 4 }), retime: { rate: 2 } });
+		const points = sourcePointsToTimeline({
+			element,
+			points: [{ time: 2 }, { time: 4 }, { time: 10 }, { time: 11 }],
+			fps,
+		});
+		expect(points.map((point) => seconds(point.time))).toEqual([2]);
 	});
 });

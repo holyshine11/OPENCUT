@@ -1,11 +1,8 @@
 import { detectSpeechRegions, type TimeRange } from "@/transcription/speech-regions";
 import type settingsFile from "./settings.json";
 
-/**
- * 문자열 유니언으로 둔다(enum 금지 규칙).
- * static은 말 없이 화면이 멈춘 구간, process는 말 없이 젓기·끓이기가 이어지는 구간
- */
-export type CutReason = "silence" | "filler" | "retake" | "static" | "process";
+/** 문자열 유니언으로 둔다(enum 금지 규칙) */
+export type CutReason = "silence" | "filler";
 
 /** 잘라 내거나 빠르게 넘길 것을 제안하는 구간. 시간은 소스 기준(초) */
 export interface CutProposal {
@@ -14,10 +11,6 @@ export interface CutProposal {
 	end: number;
 	reason: CutReason;
 	enabled: boolean;
-	/** 있으면 자르지 않고 이 배속으로 넘긴다 */
-	rate?: number;
-	/** 목록에 보여 줄 한 줄 설명 */
-	note?: string;
 }
 
 export type AutocutSettings = typeof settingsFile;

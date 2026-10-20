@@ -1,4 +1,4 @@
-import { DEFAULT_RETIME_RATE, getClipTimeAtSourceTime, getSourceTimeAtClipTime } from "@/retime";
+import { getClipTimeAtSourceTime, getSourceTimeAtClipTime } from "@/retime";
 import { isRetimableElement } from "@/timeline/element-utils";
 import { splitElementAtTime } from "@/timeline/split-element";
 import type { SceneTracks, TimelineElement, TimelineTrack } from "@/timeline/types";
@@ -10,7 +10,6 @@ import {
 	mediaTimeFromSeconds,
 	mediaTimeToSeconds,
 	roundFrameTime,
-	roundMediaTime,
 	subMediaTime,
 } from "@/wasm";
 
@@ -19,14 +18,29 @@ export interface TimelineRange {
 	end: MediaTime;
 }
 
-export interface TimelineEdit extends TimelineRange {
-	/** 있으면 지우지 않고 이 배속으로 빠르게 넘긴다 */
-	rate?: number;
-}
-
 const seconds = (time: MediaTime) => mediaTimeToSeconds({ time });
 
-/** 소스 시간(초)으로 된 컷을 클립이 놓인 타임라인 구간으로 바꾼다. 클립 밖은 버리고 프레임에 맞춘다. 컷의 다른 필드는 그대로 둔다 */
+/** 클립 원본 시각(초)을 타임라인 시각으로. 클립 밖은 클립 끝에 붙이고 프레임에 맞춘다. 배속이 걸린 클립도 맞춘다 */
+export function sourceToTimeline({
+	element,
+	sourceSeconds,
+	fps,
+}: {
+	element: TimelineElement;
+	sourceSeconds: number;
+	fps: FrameRate;
+}): MediaTime {
+	const retime = isRetimableElement(element) ? element.retime : undefined;
+	const clipStart = seconds(element.startTime);
+	const clipEnd = clipStart + seconds(element.duration);
+	const clipTime = getClipTimeAtSourceTime({ sourceTime: sourceSeconds - seconds(element.trimStart), retime });
+	return roundFrameTime({
+		time: mediaTimeFromSeconds({ seconds: Math.min(clipEnd, Math.max(clipStart, clipStart + clipTime)) }),
+		fps,
+	});
+}
+
+/** 소스 시간(초)으로 된 컷을 클립이 놓인 타임라인 구간으로 바꾼다. 클립 밖은 버린다. 컷의 다른 필드는 그대로 둔다 */
 export function sourceCutsToTimeline<TCut extends { start: number; end: number }>({
 	element,
 	cuts,
@@ -36,27 +50,29 @@ export function sourceCutsToTimeline<TCut extends { start: number; end: number }
 	cuts: readonly TCut[];
 	fps: FrameRate;
 }): (Omit<TCut, "start" | "end"> & TimelineRange)[] {
-	const retime = isRetimableElement(element) ? element.retime : undefined;
-	const trimStart = seconds(element.trimStart);
-	const clipStart = seconds(element.startTime);
-	const clipEnd = clipStart + seconds(element.duration);
-	const toTimeline = (sourceSeconds: number) =>
-		roundFrameTime({
-			time: mediaTimeFromSeconds({
-				seconds: Math.min(
-					clipEnd,
-					Math.max(
-						clipStart,
-						clipStart + getClipTimeAtSourceTime({ sourceTime: sourceSeconds - trimStart, retime }),
-					),
-				),
-			}),
-			fps,
-		});
-
 	return cuts
-		.map((cut) => ({ ...cut, start: toTimeline(cut.start), end: toTimeline(cut.end) }))
+		.map((cut) => ({
+			...cut,
+			start: sourceToTimeline({ element, sourceSeconds: cut.start, fps }),
+			end: sourceToTimeline({ element, sourceSeconds: cut.end, fps }),
+		}))
 		.filter((range) => range.end > range.start);
+}
+
+/** 소스 시간(초)으로 된 지점을 클립 안쪽 타임라인 시각으로 바꾼다. 클립 경계와 밖은 버린다. 지점의 다른 필드는 그대로 둔다 */
+export function sourcePointsToTimeline<TPoint extends { time: number }>({
+	element,
+	points,
+	fps,
+}: {
+	element: TimelineElement;
+	points: readonly TPoint[];
+	fps: FrameRate;
+}): (Omit<TPoint, "time"> & { time: MediaTime })[] {
+	const elementEnd = addMediaTime({ a: element.startTime, b: element.duration });
+	return points
+		.map((point) => ({ ...point, time: sourceToTimeline({ element, sourceSeconds: point.time, fps }) }))
+		.filter((point) => point.time > element.startTime && point.time < elementEnd);
 }
 
 /**
@@ -110,133 +126,37 @@ export function collectSubtitleWords({
 }
 
 /**
- * 고른 트랙들에서 구간을 지우거나 배속으로 줄이고 뒤 요소를 당긴다(리플).
- * 구간에 걸친 요소는 나눠서 걸친 부분만 바꾼다. 고르지 않은 트랙(배경음악 등)은 그대로 둔다
+ * 고른 트랙들에서 구간을 지우고 뒤 요소를 당긴다(리플).
+ * 구간에 걸친 요소는 나눠서 걸친 부분만 지운다. 고르지 않은 트랙(배경음악 등)은 그대로 둔다
  */
 export function applyTimelineEdits({
 	tracks,
 	edits,
 	shouldEdit,
 	crossfadeSeconds,
-	maintainPitch,
-	fps,
 }: {
 	tracks: SceneTracks;
-	edits: readonly TimelineEdit[];
+	edits: readonly TimelineRange[];
 	shouldEdit: (track: TimelineTrack) => boolean;
 	crossfadeSeconds: number;
-	maintainPitch: boolean;
-	fps: FrameRate;
 }): SceneTracks {
 	// 뒤 구간부터 바꿔야 앞 구간의 위치가 바뀌지 않는다
 	const sorted = [...edits].sort((a, b) => b.start - a.start);
-	return tracks.map((track) =>
-		shouldEdit(track)
-			? editTrack({ track, edits: sorted, crossfadeSeconds, maintainPitch, fps })
-			: track,
-	);
+	return tracks.map((track) => (shouldEdit(track) ? editTrack({ track, edits: sorted, crossfadeSeconds }) : track));
 }
 
 function editTrack<TTrack extends TimelineTrack>({
 	track,
 	edits,
 	crossfadeSeconds,
-	maintainPitch,
-	fps,
 }: {
 	track: TTrack;
-	edits: readonly TimelineEdit[];
+	edits: readonly TimelineRange[];
 	crossfadeSeconds: number;
-	maintainPitch: boolean;
-	fps: FrameRate;
 }): TTrack {
 	let elements: TimelineElement[] = track.elements;
-	for (const edit of edits) {
-		const newLength = edit.rate ? speedLength({ range: edit, rate: edit.rate, fps }) : null;
-		elements = elements.flatMap((element) =>
-			newLength === null
-				? removeRange({ element, range: edit, crossfadeSeconds })
-				: speedRange({ element, range: edit, newLength, maintainPitch }),
-		);
-	}
+	for (const edit of edits) elements = elements.flatMap((element) => removeRange({ element, range: edit, crossfadeSeconds }));
 	return { ...track, elements } as TTrack;
-}
-
-/** 배속을 건 구간의 새 길이. 뒤 요소가 프레임에서 벗어나지 않게 프레임에 맞춘다 */
-function speedLength({ range, rate, fps }: { range: TimelineRange; rate: number; fps: FrameRate }): MediaTime {
-	const length = subMediaTime({ a: range.end, b: range.start });
-	const rounded = roundFrameTime({ time: roundMediaTime({ time: length / rate }), fps });
-	return rounded > 0 ? rounded : length;
-}
-
-/**
- * 구간을 `newLength`로 줄인다. 영상·오디오는 구간 경계에서 나눠 가운데 조각에 배속을 걸고,
- * 원본이 없는 요소(자막·스티커 등)는 시작과 끝 시각만 줄어든 구간에 맞춰 옮긴다
- */
-function speedRange({
-	element,
-	range,
-	newLength,
-	maintainPitch,
-}: {
-	element: TimelineElement;
-	range: TimelineRange;
-	newLength: MediaTime;
-	maintainPitch: boolean;
-}): TimelineElement[] {
-	const length = subMediaTime({ a: range.end, b: range.start });
-	const removed = subMediaTime({ a: length, b: newLength });
-	const elementEnd = addMediaTime({ a: element.startTime, b: element.duration });
-	if (elementEnd <= range.start) return [element];
-	if (element.startTime >= range.end) {
-		return [{ ...element, startTime: subMediaTime({ a: element.startTime, b: removed }) }];
-	}
-	const move = (time: MediaTime): MediaTime => {
-		if (time <= range.start) return time;
-		if (time >= range.end) return subMediaTime({ a: time, b: removed });
-		return addMediaTime({
-			a: range.start,
-			b: roundMediaTime({ time: ((time - range.start) * newLength) / length }),
-		});
-	};
-
-	if (!isRetimableElement(element)) {
-		// ponytail: 구간 안에 걸린 자막 단어·키프레임 시각은 비례로 옮기지 않는다. 말 없는 구간에만 배속을 거니 드물다
-		const start = move(element.startTime);
-		return [{ ...element, startTime: start, duration: subMediaTime({ a: move(elementEnd), b: start }) }];
-	}
-
-	// 나눈 왼쪽 조각이 원래 id를 지키므로 맨 앞 조각이 선택을 이어받는다
-	const pieces: TimelineElement[] = [];
-	let middle: TimelineElement = element;
-	let tail: TimelineElement | null = null;
-	if (element.startTime < range.start) {
-		const halves = splitElementAtTime({ element: middle, splitTime: range.start });
-		if (halves) {
-			pieces.push({ ...halves.left, name: element.name });
-			middle = halves.right;
-		}
-	}
-	if (elementEnd > range.end) {
-		const halves = splitElementAtTime({ element: middle, splitTime: range.end });
-		if (halves) {
-			middle = halves.left;
-			tail = halves.right;
-		}
-	}
-	if (isRetimableElement(middle)) {
-		const start = move(middle.startTime);
-		const duration = subMediaTime({
-			a: move(addMediaTime({ a: middle.startTime, b: middle.duration })),
-			b: start,
-		});
-		const rate = ((middle.retime?.rate ?? DEFAULT_RETIME_RATE) * middle.duration) / duration;
-		pieces.push({ ...middle, name: element.name, startTime: start, duration, retime: { rate, maintainPitch } });
-	}
-	if (tail) {
-		pieces.push({ ...tail, name: element.name, startTime: subMediaTime({ a: tail.startTime, b: removed }) });
-	}
-	return pieces;
 }
 
 const SOURCELESS_TYPES = new Set<TimelineElement["type"]>(["text", "sticker", "graphic", "effect"]);

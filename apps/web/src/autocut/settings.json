@@ -25,17 +25,16 @@
 		"staticBelow": 3
 	},
 	"editPoints": {
-		"speechBeforeSeconds": 0.5,
-		"speechAfterSeconds": 1,
-		"minGapSeconds": 3,
+		"speechBeforeSeconds": 0.3,
+		"speechAfterSeconds": 0.5,
+		"pauseSeconds": 0.6,
+		"minUtteranceSeconds": 0.3,
+		"minPieceSeconds": 1,
+		"minRunSeconds": 1.5,
 		"smoothWindows": 3,
-		"targetSeconds": 3,
-		"minRate": 2,
-		"maxRate": 5,
-		"rateStep": 1
+		"eventAbove": 12
 	},
 	"apply": {
-		"crossfadeSeconds": 0.02,
-		"maintainPitch": true
+		"crossfadeSeconds": 0.02
 	}
 }

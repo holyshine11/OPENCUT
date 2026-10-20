@@ -91,3 +91,24 @@ export function splitElementAtTime({
 		},
 	};
 }
+
+/**
+ * 요소 하나를 여러 타임라인 시각에서 차례로 나눈다. 요소 밖이거나 겹치는 시각은 건너뛴다.
+ * 조각 이름은 모두 원래 이름이고, 첫 조각이 원래 id를 지킨다
+ */
+export function splitElementAtTimes({
+	element,
+	times,
+}: {
+	element: TimelineElement;
+	times: readonly MediaTime[];
+}): TimelineElement[] {
+	const pieces: TimelineElement[] = [element];
+	for (const splitTime of [...times].sort((a, b) => a - b)) {
+		const last = pieces[pieces.length - 1];
+		const halves = splitElementAtTime({ element: last, splitTime });
+		if (!halves) continue;
+		pieces.splice(-1, 1, { ...halves.left, name: element.name }, { ...halves.right, name: element.name });
+	}
+	return pieces;
+}

@@ -3,7 +3,7 @@
 // 사용: bun scripts/autocut-bench.ts <영상>...
 //   모델은 앱과 같은 public/models 를 쓴다 (bun run models 로 받아 둔다)
 // 결과: 영상마다 컷 개수, 줄어든 길이, 처리 시간. <영상>.cuts.tsv에 무음 구간(시작, 끝),
-//   <영상>.edits.tsv에 편집점 제안(시작, 끝, 이유, 배속). 확장자를 .srt로 바꾼 자막 파일이 있으면
+//   <영상>.points.tsv에 편집점(시각, 이유). 확장자를 .srt로 바꾼 자막 파일이 있으면
 //   앱에서 자막 단어를 합치듯 그 자막 구간도 말로 본다
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
@@ -86,7 +86,7 @@ for (const video of videos) {
 
 	const motionStartedAt = performance.now();
 	const motion = await decodeMotion({ file: video });
-	const edits = proposeEditPoints({
+	const points = proposeEditPoints({
 		motion,
 		motionSeconds: 1 / settings.motion.sampleFps,
 		speech: collectSpeechRanges({
@@ -102,18 +102,12 @@ for (const video of videos) {
 		frameSeconds: 1 / 30,
 		settings,
 	});
-	const editedLength = edits.reduce(
-		(sum, edit) => sum - (edit.end - edit.start) + (edit.rate ? (edit.end - edit.start) / edit.rate : 0),
-		total,
-	);
 	await writeFile(
-		`${video}.edits.tsv`,
-		edits.map((edit) => `${edit.start.toFixed(3)}\t${edit.end.toFixed(3)}\t${edit.reason}\t${edit.rate ?? ""}`).join("\n"),
+		`${video}.points.tsv`,
+		points.map((point) => `${point.time.toFixed(3)}\t${point.reason}`).join("\n"),
 	);
 	console.log(
-		`  편집점 ${edits.length}개 → ${editedLength.toFixed(1)}초, 움직임 분석 ${((performance.now() - motionStartedAt) / 1000).toFixed(1)}초`,
+		`  편집점 ${points.length}개 → 조각 ${points.length + 1}개, 움직임 분석 ${((performance.now() - motionStartedAt) / 1000).toFixed(1)}초`,
 	);
-	for (const edit of edits) {
-		console.log(`  ${edit.start.toFixed(1)}-${edit.end.toFixed(1)} ${edit.reason}${edit.rate ? ` ${edit.rate}x` : ""}`);
-	}
+	for (const point of points) console.log(`  ${point.time.toFixed(1)} ${point.reason}`);
 }
