@@ -2,6 +2,7 @@ import { EditorCore } from "@/core";
 import { Command, type CommandResult } from "@/commands/base-command";
 import { isMaskableElement, updateElementInSceneTracks } from "@/timeline";
 import type { SceneTracks, MaskableElement } from "@/timeline";
+import { dropMaskAnimations } from "@/masks/keyframes";
 
 function removeMaskFromElement({
 	element,
@@ -12,7 +13,11 @@ function removeMaskFromElement({
 }): MaskableElement {
 	const currentMasks = element.masks ?? [];
 	const filteredMasks = currentMasks.filter((mask) => mask.id !== maskId);
-	return { ...element, masks: filteredMasks };
+	return {
+		...element,
+		masks: filteredMasks,
+		animations: dropMaskAnimations({ animations: element.animations, maskId }),
+	};
 }
 
 export class RemoveMaskCommand extends Command {

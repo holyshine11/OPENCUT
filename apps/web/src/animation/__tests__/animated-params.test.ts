@@ -227,6 +227,23 @@ describe("animated params", () => {
 				},
 			}),
 		).toEqual({ min: 0, max: 1, step: 0.1 });
+		// 화면 단위로 적힌 범위는 저장 단위로 바뀌어야 0.4 같은 값이 반올림되지 않는다
+		const percentParam = {
+			key: "centerX",
+			label: "X",
+			type: "number" as const,
+			default: 0,
+			min: -100,
+			max: 100,
+			step: 1,
+			displayMultiplier: 100,
+		};
+		expect(getParamNumericRange({ param: percentParam })).toEqual({
+			min: -1,
+			max: 1,
+			step: 0.01,
+		});
+		expect(coerceParamValue({ param: percentParam, value: 0.4 })).toBeCloseTo(0.4, 5);
 		expect(
 			getParamNumericRange({
 				param: { key: "c", label: "C", type: "color", default: "#fff" },

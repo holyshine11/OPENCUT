@@ -47,6 +47,8 @@ import {
 import { resolveAnimationTarget } from "@/timeline/animation-targets";
 import { BatchCommand } from "@/commands";
 import type { Command } from "@/commands/base-command";
+import type { Mask } from "@/masks/types";
+import { mergeElementPatch } from "@/timeline/update-pipeline";
 import { rememberTextStyles } from "@/text/style-memory";
 import {
 	AddTrackCommand,
@@ -601,13 +603,41 @@ export class TimelineManager {
 		trackId: string;
 		elementId: string;
 		maskId: string;
-	}): void {
+	}): Command {
 		const command = new RemoveMaskCommand({
 			trackId,
 			elementId,
 			maskId,
 		});
+		command.label = "Delete mask";
 		this.editor.command.execute({ command });
+		return command;
+	}
+
+	/** 마스크 목록을 통째로 바꾼다. 추가·복제·숨기기·순서 변경이 모두 이 한 명령으로 undo된다 */
+	updateMasks({
+		trackId,
+		elementId,
+		masks,
+		label,
+	}: {
+		trackId: string;
+		elementId: string;
+		masks: Mask[];
+		label: string;
+	}): Command {
+		const command = new UpdateElementsCommand({
+			updates: [
+				{
+					trackId,
+					elementId,
+					patch: { masks } as Partial<TimelineElement>,
+				},
+			],
+		});
+		command.label = label;
+		this.editor.command.execute({ command });
+		return command;
 	}
 
 	deleteFreeformPathMaskPoints({
@@ -710,13 +740,15 @@ export class TimelineManager {
 		trackId: string;
 		elementId: string;
 		maskId: string;
-	}): void {
+	}): Command {
 		const command = new ToggleMaskInvertedCommand({
 			trackId,
 			elementId,
 			maskId,
 		});
+		command.label = "Invert mask";
 		this.editor.command.execute({ command });
+		return command;
 	}
 
 	reorderClipEffects({
@@ -976,18 +1008,20 @@ export class TimelineManager {
 		let changedOverlayCount = 0;
 		for (const { elementId, updates: elementUpdates } of updates) {
 			const existingOverlay = this.previewOverlay.get(elementId);
-			const changed = Object.entries(elementUpdates).some(([key, value]) => {
-				return !Object.is(
-					existingOverlay?.[key as keyof TimelineElement],
-					value,
-				);
-			});
+			const existingValues = new Map<string, unknown>(
+				Object.entries(existingOverlay ?? {}),
+			);
+			const changed = Object.entries(elementUpdates).some(
+				([key, value]) => !Object.is(existingValues.get(key), value),
+			);
 			if (changed) {
 				changedOverlayCount += 1;
-				const mergedOverlay = {
-					...existingOverlay,
-					...elementUpdates,
-				} as Partial<TimelineElement>;
+				// 스프레드는 종류별 Partial 합집합을 섞어 타입이 깨져서 Object.assign으로 합친다
+				const mergedOverlay: Partial<TimelineElement> = Object.assign(
+					{},
+					existingOverlay,
+					elementUpdates,
+				);
 				this.previewOverlay.set(elementId, mergedOverlay);
 			}
 		}
@@ -1002,7 +1036,7 @@ export class TimelineManager {
 		this.notify();
 	}
 
-	commitPreview(): void {
+	commitPreview({ label }: { label?: string } = {}): void {
 		if (this.previewOverlay.size === 0) return;
 		const committedTracks = this.editor.scenes.getActiveSceneOrNull()?.tracks;
 		if (!committedTracks) {
@@ -1014,6 +1048,7 @@ export class TimelineManager {
 			before: committedTracks,
 			after: afterTracks,
 		});
+		command.label = label;
 		this.editor.command.push({ command });
 		const elementIds = new Set(this.previewOverlay.keys());
 		this.previewOverlay.clear();
@@ -1046,11 +1081,7 @@ export class TimelineManager {
 				const overlay = this.previewOverlay.get(element.id);
 				// params는 실제 업데이트(applyElementUpdate)처럼 합친다. 덮어쓰면 글자만 고쳐도 스타일이 사라진다
 				return overlay
-					? ({
-							...element,
-							...overlay,
-							params: { ...element.params, ...overlay.params },
-						} as TimelineElement)
+					? mergeElementPatch({ element, patch: overlay })
 					: element;
 			});
 

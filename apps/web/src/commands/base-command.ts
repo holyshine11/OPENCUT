@@ -19,6 +19,9 @@ export function createElementSelectionResult(
 }
 
 export abstract class Command {
+	/** 실행 취소 버튼 툴팁에 보여 줄 영어 라벨. translateLabel로 옮겨 쓴다 */
+	label?: string;
+
 	abstract execute(): CommandResult | undefined;
 
 	undo(): void {

@@ -5,6 +5,7 @@ import type {
 	EditorSelectionPatch,
 	EditorSelectionSnapshot,
 	SelectedMaskPointSelection,
+	SelectedMaskRef,
 } from "@/selection/editor-selection";
 import type { ElementRef } from "@/timeline/types";
 import { excludeLockedElements } from "@/timeline/track-capabilities";
@@ -14,6 +15,8 @@ export class SelectionManager {
 	private selectedKeyframes: SelectedKeyframeRef[] = [];
 	private keyframeSelectionAnchor: SelectedKeyframeRef | null = null;
 	private selectedMaskPoints: SelectedMaskPointSelection | null = null;
+	// undo 스냅샷에는 넣지 않는다. 클립·키프레임 선택이 바뀌면 함께 풀린다
+	private selectedMask: SelectedMaskRef | null = null;
 	// 트랙 선택은 클립 선택과 따로 간다. 클립을 골라도 트랙 선택은 그대로 둔다
 	private selectedTrackIds: string[] = [];
 	private listeners = new Set<() => void>();
@@ -34,6 +37,15 @@ export class SelectionManager {
 
 	getSelectedMaskPointSelection(): SelectedMaskPointSelection | null {
 		return this.selectedMaskPoints;
+	}
+
+	getSelectedMask(): SelectedMaskRef | null {
+		return this.selectedMask;
+	}
+
+	setSelectedMask({ mask }: { mask: SelectedMaskRef | null }): void {
+		this.selectedMask = mask;
+		this.notify();
 	}
 
 	getSelectedTrackIds(): string[] {
@@ -71,6 +83,9 @@ export class SelectionManager {
 		if ((this.selectedMaskPoints?.pointIds.length ?? 0) > 0) {
 			return "mask-points";
 		}
+		if (this.selectedMask) {
+			return "mask";
+		}
 		if (this.selectedKeyframes.length > 0) {
 			return "keyframes";
 		}
@@ -99,6 +114,7 @@ export class SelectionManager {
 		this.selectedKeyframes = [];
 		this.keyframeSelectionAnchor = null;
 		this.selectedMaskPoints = null;
+		this.selectedMask = null;
 		this.notify();
 	}
 
@@ -116,6 +132,7 @@ export class SelectionManager {
 			this.keyframeSelectionAnchor = null;
 		}
 		this.selectedMaskPoints = null;
+		if (keyframes.length > 0) this.selectedMask = null;
 		this.notify();
 	}
 
@@ -141,6 +158,7 @@ export class SelectionManager {
 		this.selectedKeyframes = [];
 		this.keyframeSelectionAnchor = null;
 		this.selectedMaskPoints = null;
+		this.selectedMask = null;
 		this.notify();
 	}
 
@@ -162,6 +180,10 @@ export class SelectionManager {
 		const activeSelectionKind = this.getActiveSelectionKind();
 		if (activeSelectionKind === "mask-points") {
 			this.clearMaskPointSelection();
+			return true;
+		}
+		if (activeSelectionKind === "mask") {
+			this.setSelectedMask({ mask: null });
 			return true;
 		}
 		if (activeSelectionKind === "keyframes") {
@@ -202,6 +224,7 @@ export class SelectionManager {
 	}
 
 	restoreSnapshot({ snapshot }: { snapshot: EditorSelectionSnapshot }): void {
+		this.selectedMask = null;
 		this.selectedElements = [...snapshot.selectedElements];
 		this.selectedKeyframes = [...snapshot.selectedKeyframes];
 		this.keyframeSelectionAnchor = snapshot.keyframeSelectionAnchor;

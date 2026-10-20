@@ -17,6 +17,14 @@ import type { Mask, MaskHandleId, MaskInteractionResult } from "@/masks/types";
 import type { MaskableElement } from "@/timeline";
 import { isMaskableElement } from "@/timeline/element-utils";
 import { registerCanceller } from "@/editor/cancel-interaction";
+import { getElementLocalTime } from "@/animation";
+import { resolveMaskAtTime } from "@/animation/mask-param-channel";
+import { buildMaskEditUpdates } from "@/masks/keyframes";
+import { mediaTime } from "@/wasm";
+import {
+	resolveActiveMask,
+	useActiveMaskStore,
+} from "@/masks/active-mask-store";
 
 interface DragState {
 	trackId: string;
@@ -117,6 +125,7 @@ export function useMaskHandles({
 	const selectedMaskPointSelection = useEditor((e) =>
 		e.selection.getSelectedMaskPointSelection(),
 	);
+	const activeMaskId = useActiveMaskStore((state) => state.activeMaskId);
 
 	const elementsWithBounds = getVisibleElementsWithBounds({
 		tracks,
@@ -138,7 +147,7 @@ export function useMaskHandles({
 					const element = entry.element;
 					const masks = element.masks ?? [];
 					if (masks.length === 0) return null;
-					const activeMaskId = masks.some((mask) =>
+					const pointSelectionMaskId = masks.some((mask) =>
 						isMaskSelectionForElement({
 							trackId: entry.trackId,
 							elementId: entry.elementId,
@@ -146,12 +155,32 @@ export function useMaskHandles({
 							selection: selectedMaskPointSelection,
 						}),
 					)
-						? selectedMaskPointSelection?.maskId
-						: masks[0].id;
-					const mask =
-						masks.find((candidate) => candidate.id === activeMaskId) ??
-						masks[0];
-					return { ...entry, element, mask };
+						? (selectedMaskPointSelection?.maskId ?? null)
+						: null;
+					const mask = resolveActiveMask({
+						masks,
+						activeMaskId: pointSelectionMaskId ?? activeMaskId,
+					});
+					// 숨긴 마스크는 화면에 없으니 핸들도 띄우지 않는다
+					if (!mask || mask.hidden) return null;
+					// 키프레임이 걸린 마스크는 지금 시점 값으로 핸들을 놓는다
+					const localTime = mediaTime({
+						ticks: getElementLocalTime({
+							timelineTime: currentTime,
+							elementStartTime: element.startTime,
+							elementDuration: element.duration,
+						}),
+					});
+					return {
+						...entry,
+						element,
+						localTime,
+						mask: resolveMaskAtTime({
+							mask,
+							animations: element.animations,
+							localTime,
+						}),
+					};
 				})()
 			: null;
 
@@ -346,6 +375,13 @@ export function useMaskHandles({
 			if (!selectedWithMask) return;
 			if (event.button !== 0) return;
 			event.stopPropagation();
+			editor.selection.setSelectedMask({
+				mask: {
+					trackId: selectedWithMask.trackId,
+					elementId: selectedWithMask.elementId,
+					maskId: selectedWithMask.mask.id,
+				},
+			});
 			const anchorHandle =
 				selectedWithMask.mask.type === "freeform" && handleId.kind === "anchor"
 					? handleId
@@ -568,21 +604,30 @@ export function useMaskHandles({
 
 			onSnapLinesChange?.(activeLines);
 
-			const updatedMask = withUpdatedMaskParams({
-				mask: selectedWithMask.mask,
-				params: nextParams as typeof selectedWithMask.mask.params,
-			});
+			// 이 핸들이 다루는 값만 넘겨야 키프레임 걸린 다른 값에 키프레임이 덧붙지 않는다
+			const startParams = new Map<string, unknown>(
+				Object.entries(drag.startParams),
+			);
+			const handledKeys = new Set(Object.keys(rawParams));
+			const patch = Object.fromEntries(
+				Object.entries(nextParams).filter(
+					([key, value]) =>
+						handledKeys.has(key) || value !== startParams.get(key),
+				),
+			);
 			editor.timeline.previewElements({
 				updates: [
 					{
 						trackId: drag.trackId,
 						elementId: drag.elementId,
-						updates: {
-							masks: replaceElementMask({
-								masks: selectedWithMask.element.masks,
-								updatedMask,
-							}),
-						} as Partial<MaskableElement>,
+						updates: buildMaskEditUpdates({
+							masks: selectedWithMask.element.masks ?? [],
+							animations: selectedWithMask.element.animations,
+							maskId: selectedWithMask.mask.id,
+							patch,
+							localTime: selectedWithMask.localTime,
+							isPlayheadWithinElementRange: true,
+						}) as Partial<MaskableElement>,
 					},
 				],
 			});
@@ -617,7 +662,7 @@ export function useMaskHandles({
 		}
 
 		if (dragStateRef.current) {
-			editor.timeline.commitPreview();
+			editor.timeline.commitPreview({ label: "Edit mask" });
 			clearMaskHandleState();
 		}
 		releaseCapturedPointer();

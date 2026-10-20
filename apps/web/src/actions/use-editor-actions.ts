@@ -19,6 +19,7 @@ import {
 import { useKeyframeSelection } from "@/timeline/hooks/element/use-keyframe-selection";
 import { getElementsAtTime, hasMediaId } from "@/timeline";
 import { cancelInteraction } from "@/editor/cancel-interaction";
+import { deleteMaskWithToast } from "@/masks/delete-mask";
 import { invokeAction } from "@/actions";
 import { canToggleSourceAudio } from "@/timeline/audio-separation";
 import { buildCrossfadeToggleUpdates } from "@/timeline/audio-state";
@@ -332,6 +333,13 @@ export function useEditorActions() {
 						pointIds: selectedMaskPointSelection.pointIds,
 					});
 					return;
+				case "mask": {
+					const selectedMask = editor.selection.getSelectedMask();
+					if (!selectedMask) return;
+					editor.selection.setSelectedMask({ mask: null });
+					deleteMaskWithToast({ editor, ...selectedMask });
+					return;
+				}
 				case "keyframes":
 					if (selectedKeyframes.length === 0) {
 						return;

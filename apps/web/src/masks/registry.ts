@@ -1,4 +1,5 @@
 import { MAX_FEATHER } from "@/masks/feather";
+import { DEFAULT_FILL_STRENGTH } from "@/masks/fill";
 import type { ParamDefinition } from "@/params";
 import type {
 	BaseMaskParams,
@@ -46,6 +47,15 @@ export const BASE_MASK_PARAM_DEFINITIONS: ParamDefinition<
 		type: "number",
 		default: 0,
 		min: 0,
+		max: 100,
+		step: 1,
+	},
+	{
+		key: "fillStrength",
+		label: "Strength",
+		type: "number",
+		default: DEFAULT_FILL_STRENGTH,
+		min: 1,
 		max: 100,
 		step: 1,
 	},

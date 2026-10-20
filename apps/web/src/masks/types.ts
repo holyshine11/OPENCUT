@@ -20,12 +20,20 @@ export type BuiltinMaskType =
 
 export type MaskType = BuiltinMaskType | "freeform";
 
+/** 여러 마스크를 겹칠 때 앞선 마스크들과 합치는 방식. 첫 마스크는 무시한다 */
+export type MaskBlendMode = "add" | "subtract" | "intersect";
+
+/** clip은 영역 밖을 가리고, mosaic·blur는 영역 안에만 효과를 입힌다 */
+export type MaskFill = "clip" | "mosaic" | "blur";
+
 export interface BaseMaskParams {
 	feather: number;
 	inverted: boolean;
 	strokeColor: string;
 	strokeWidth: number;
 	strokeAlign: "inside" | "center" | "outside";
+	/** mosaic이면 칸 크기(px), blur면 블러 강도. 없으면 기본값 */
+	fillStrength?: number;
 }
 
 export interface SplitMaskParams extends BaseMaskParams {
@@ -131,7 +139,15 @@ export interface FreeformPathMask {
 	params: FreeformPathMaskParams;
 }
 
-export type Mask = BuiltinShapeMask | FreeformPathMask;
+/** 마스크 종류와 상관없이 목록에서 다루는 값. 모두 선택 필드라 예전 프로젝트도 그대로 읽힌다 */
+export interface MaskMeta {
+	name?: string;
+	hidden?: boolean;
+	blend?: MaskBlendMode;
+	fill?: MaskFill;
+}
+
+export type Mask = (BuiltinShapeMask | FreeformPathMask) & MaskMeta;
 
 export type MaskByType<TType extends MaskType> = Extract<Mask, { type: TType }>;
 export type MaskParamsByType<TType extends MaskType> =

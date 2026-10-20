@@ -40,6 +40,8 @@ import {
 	Layers01Icon,
 	Chart03Icon,
 	Unlink02Icon,
+	Undo02Icon,
+	Redo02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { OcRippleIcon } from "@/components/icons";
@@ -153,6 +155,8 @@ function ToolbarLeftSection() {
 	return (
 		<div className="flex items-center gap-1">
 			<TooltipProvider delayDuration={500}>
+				<UndoRedoButtons onAction={handleAction} />
+				<div className="bg-border mx-1 h-6 w-px" />
 				<ToolbarButton
 					icon={<HugeiconsIcon icon={ScissorIcon} />}
 					tooltip={m.timeline.splitElement}
@@ -369,6 +373,56 @@ function ToolbarRightSection({
 				</ActionTooltip>
 			</div>
 		</div>
+	);
+}
+
+function UndoRedoButtons({
+	onAction,
+}: {
+	onAction: (args: {
+		action: TActionWithOptionalArgs;
+		event: React.MouseEvent;
+	}) => void;
+}) {
+	const m = useMessages();
+	const canUndo = useEditor((e) => e.command.canUndo());
+	const canRedo = useEditor((e) => e.command.canRedo());
+	const undoLabel = useEditor((e) => e.command.peekUndo()?.label);
+	const redoLabel = useEditor((e) => e.command.peekRedo()?.label);
+
+	return (
+		<>
+			<ToolbarButton
+				icon={<HugeiconsIcon icon={Undo02Icon} />}
+				tooltip={
+					!canUndo
+						? m.common.nothingToUndo
+						: undoLabel
+							? m.common.undoWithLabel({
+									label: translateLabel({ messages: m, label: undoLabel }),
+								})
+							: m.common.undo
+				}
+				action="undo"
+				disabled={!canUndo}
+				onClick={({ event }) => onAction({ action: "undo", event })}
+			/>
+			<ToolbarButton
+				icon={<HugeiconsIcon icon={Redo02Icon} />}
+				tooltip={
+					!canRedo
+						? m.common.nothingToRedo
+						: redoLabel
+							? m.common.redoWithLabel({
+									label: translateLabel({ messages: m, label: redoLabel }),
+								})
+							: m.common.redo
+				}
+				action="redo"
+				disabled={!canRedo}
+				onClick={({ event }) => onAction({ action: "redo", event })}
+			/>
+		</>
 	);
 }
 

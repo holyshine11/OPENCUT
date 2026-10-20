@@ -303,10 +303,20 @@ export function getParamNumericRange({
 		return undefined;
 	}
 
+	return getStoredNumberRange({ param });
+}
+
+/** displayMultiplier가 있으면 min·max·step이 화면 단위라서 저장 단위로 나눠 돌려준다 */
+function getStoredNumberRange({
+	param,
+}: {
+	param: NumberParamDefinition;
+}): { min: number; max?: number; step: number } {
+	const multiplier = param.displayMultiplier ?? 1;
 	return {
-		min: param.min,
-		max: param.max,
-		step: param.step,
+		min: param.min / multiplier,
+		max: param.max === undefined ? undefined : param.max / multiplier,
+		step: param.step / multiplier,
 	};
 }
 
@@ -323,9 +333,10 @@ export function coerceParamValue({
 				return null;
 			}
 
-			const steppedValue = snapToStep({ value, step: param.step });
-			const maxValue = param.max ?? Number.POSITIVE_INFINITY;
-			return Math.min(maxValue, Math.max(param.min, steppedValue));
+			const range = getStoredNumberRange({ param });
+			const steppedValue = snapToStep({ value, step: range.step });
+			const maxValue = range.max ?? Number.POSITIVE_INFINITY;
+			return Math.min(maxValue, Math.max(range.min, steppedValue));
 		}
 		case "boolean":
 			return typeof value === "boolean" ? value : null;

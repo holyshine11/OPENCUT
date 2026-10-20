@@ -1,13 +1,43 @@
 "use client";
 
 import type { MaskableElement } from "@/timeline";
-import type { Mask, MaskType, TextMask } from "@/masks/types";
-import type { NumberParamDefinition, SelectParamDefinition } from "@/params";
+import type {
+	Mask,
+	MaskBlendMode,
+	MaskFill,
+	MaskType,
+	TextMask,
+} from "@/masks/types";
 import {
-	buildDefaultMaskInstance,
-	getMaskDefinition,
-	getMaskDefinitionsForMenu,
-} from "@/masks";
+	buildMaskWithFill,
+	duplicateMaskInList,
+	moveMaskInList,
+	nextMaskName,
+	patchMaskMeta,
+	resetMaskInList,
+} from "@/masks/list-ops";
+import {
+	DEFAULT_FILL_STRENGTH,
+	getMaskBlend,
+	getMaskFill,
+	isEffectFill,
+} from "@/masks/fill";
+import {
+	resolveActiveMask,
+	useActiveMaskStore,
+} from "@/masks/active-mask-store";
+import { toastUndoable } from "@/editor/undo-toast";
+import { buildMaskParamPath } from "@/animation";
+import { resolveMaskAtTime } from "@/animation/mask-param-channel";
+import {
+	buildMaskEditUpdates,
+	getMaskKeyframesAtTime,
+} from "@/masks/keyframes";
+import { useElementPlayhead } from "@/components/editor/panels/properties/hooks/use-element-playhead";
+import { KeyframeToggle } from "@/components/editor/panels/properties/components/keyframe-toggle";
+import { Input } from "@/components/ui/input";
+import type { NumberParamDefinition, SelectParamDefinition } from "@/params";
+import { getMaskDefinition, getMaskDefinitionsForMenu } from "@/masks";
 import { useEditor } from "@/editor/use-editor";
 import { translateLabel, useMessages } from "@/i18n";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
@@ -15,21 +45,37 @@ import { useMenuPreview } from "@/editor/use-menu-preview";
 import { getVisibleElementsWithBounds } from "@/preview/element-bounds";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+	ArrowDown01Icon,
 	ArrowExpandIcon,
+	ArrowUp01Icon,
+	BlurIcon,
+	Copy01Icon,
 	Delete02Icon,
 	FeatherIcon,
+	GridViewIcon,
+	MoreHorizontalIcon,
+	PencilEdit02Icon,
 	PlusSignIcon,
+	RefreshIcon,
 	RotateClockwiseIcon,
 	TextFontIcon,
+	ViewIcon,
+	ViewOffSlashIcon,
+	UnfoldLessIcon,
+	UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { MediaTime } from "@/wasm";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { FontPicker } from "@/components/ui/font-picker";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { NumberField } from "@/components/ui/number-field";
@@ -42,11 +88,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
 	clamp,
 	formatNumberForDisplay,
 	getFractionDigitsForStep,
@@ -57,7 +98,6 @@ import {
 	SectionContent,
 	SectionField,
 	SectionFields,
-	SectionHeader,
 	SectionTitle,
 } from "@/components/section";
 import { usePropertyDraft } from "@/components/editor/panels/properties/hooks/use-property-draft";
@@ -75,11 +115,40 @@ type MasksTabProps = {
 };
 
 type MaskItemProps = {
-	trackId: string;
-	elementId: string;
 	mask: Mask;
+	name: string;
+	index: number;
+	count: number;
+	isActive: boolean;
+	isSelected: boolean;
+	isExpanded: boolean;
+	onActivate: () => void;
+	onToggleExpanded: () => void;
 	previewParam: (key: string) => (value: number | string | boolean) => void;
 	onCommit: () => void;
+	onToggleHidden: () => void;
+	onRename: (name: string) => void;
+	onDuplicate: () => void;
+	onReset: () => void;
+	onInvert: () => void;
+	onMove: (offset: number) => void;
+	onDelete: () => void;
+	onFillChange: (fill: MaskFill) => void;
+	onBlendChange: (blend: MaskBlendMode) => void;
+	keyframeToggle: KeyframeToggleRenderer;
+};
+
+type KeyframeToggleRenderer = (args: {
+	keys: readonly string[];
+	label: string;
+}) => React.ReactNode;
+
+type MaskKeyframeContext = {
+	trackId: string;
+	elementId: string;
+	animations: MaskableElement["animations"];
+	localTime: MediaTime;
+	isPlayheadWithinElementRange: boolean;
 };
 
 type EmptyViewProps = {
@@ -96,46 +165,14 @@ function isTextMask(mask: Mask): mask is TextMask {
 	return mask.type === "text";
 }
 
-function withPreviewedMaskParam({
-	mask,
-	key,
-	value,
-}: {
-	mask: Mask;
-	key: string;
-	value: number | string | boolean;
-}): Mask {
-	switch (mask.type) {
-		case "split":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "cinematic-bars":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "rectangle":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "ellipse":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "heart":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "diamond":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "star":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "text":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-		case "freeform":
-			return { ...mask, params: { ...mask.params, [key]: value } };
-	}
-}
-
 export function MasksTab({ element, trackId }: MasksTabProps) {
 	const editor = useEditor();
 	const m = useMessages();
-	const { renderElement, previewUpdates, commit } =
-		useElementPreview<MaskableElement>({
-			trackId,
-			elementId: element.id,
-			fallback: element,
-		});
+	const { renderElement, previewUpdates } = useElementPreview<MaskableElement>({
+		trackId,
+		elementId: element.id,
+		fallback: element,
+	});
 	const maskDefs = getMaskDefinitionsForMenu();
 	const tracks = useEditor(
 		(e) => e.timeline.getPreviewTracks() ?? e.scenes.getActiveScene().tracks,
@@ -147,9 +184,42 @@ export function MasksTab({ element, trackId }: MasksTabProps) {
 	);
 	const masks = element.masks ?? [];
 	const renderMasks = renderElement.masks ?? masks;
-	const hasMask = masks.length > 0;
+	const animations = renderElement.animations;
+	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
+		startTime: element.startTime,
+		duration: element.duration,
+	});
 	const { onPointerLeave, onOpenChange, markCommitted } = useMenuPreview();
 	const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+	const activeMaskId = useActiveMaskStore((state) => state.activeMaskId);
+	const setActiveMaskId = useActiveMaskStore((state) => state.setActiveMaskId);
+	const activeMask = resolveActiveMask({ masks, activeMaskId });
+	const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
+		() => new Set(activeMask ? [activeMask.id] : []),
+	);
+	const setExpanded = ({
+		maskId,
+		expanded,
+	}: {
+		maskId: string;
+		expanded: boolean;
+	}) =>
+		setExpandedIds((current) => {
+			const next = new Set(current);
+			if (expanded) next.add(maskId);
+			else next.delete(maskId);
+			return next;
+		});
+	// 고른 마스크만 펼쳐서 목록이 길어지지 않게 한다. 여러 개를 같이 보려면 화살표로 펼친다
+	const activateMask = (maskId: string) => {
+		setActiveMaskId(maskId);
+		setExpandedIds(new Set([maskId]));
+		editor.selection.setSelectedMask({
+			mask: { trackId, elementId: element.id, maskId },
+		});
+	};
+	const selectedMask = useEditor((e) => e.selection.getSelectedMask());
+	const isAllCollapsed = masks.every((mask) => !expandedIds.has(mask.id));
 	const elementBounds = useMemo(() => {
 		const clampedTime = Math.min(
 			Math.max(currentTime, element.startTime),
@@ -176,230 +246,768 @@ export function MasksTab({ element, trackId }: MasksTabProps) {
 		trackId,
 		tracks,
 	]);
+	const elementSize = elementBounds
+		? { width: elementBounds.width, height: elementBounds.height }
+		: undefined;
+
+	const getMaskName = (mask: Mask) =>
+		mask.name ??
+		translateLabel({
+			messages: m,
+			label: getMaskDefinition(mask.type).name,
+		});
+
+	const buildNewMask = ({
+		maskType,
+		fill,
+	}: {
+		maskType: MaskType;
+		fill: MaskFill;
+	}) => {
+		const baseName =
+			fill === "mosaic"
+				? m.masks.presetMosaic
+				: fill === "blur"
+					? m.masks.presetBlur
+					: translateLabel({
+							messages: m,
+							label: getMaskDefinition(maskType).name,
+						});
+		return buildMaskWithFill({
+			maskType,
+			fill,
+			name: nextMaskName({ masks, baseName }),
+			elementSize,
+		});
+	};
 
 	const handleDropdownOpenChange = (open: boolean) => {
-		if (hasMask && open) return;
 		setIsDropdownOpen(open);
 		onOpenChange(open);
 	};
 
-	const previewMask = ({ maskType }: { maskType: MaskType }) => {
+	const previewMask = (args: { maskType: MaskType; fill: MaskFill }) => {
 		editor.timeline.previewElements({
 			updates: [
 				{
 					trackId,
 					elementId: element.id,
 					updates: {
-						masks: [
-							buildDefaultMaskInstance({
-								maskType,
-								elementSize: elementBounds
-									? {
-											width: elementBounds.width,
-											height: elementBounds.height,
-										}
-									: undefined,
-							}),
-						],
+						masks: [...masks, buildNewMask(args)],
 					} as Partial<MaskableElement>,
 				},
 			],
 		});
 	};
 
-	const commitMask = ({ maskType }: { maskType: MaskType }) => {
-		if (editor.timeline.isPreviewActive()) {
-			editor.timeline.commitPreview();
-		} else {
-			editor.timeline.updateElements({
-				updates: [
-					{
-						trackId,
-						elementId: element.id,
-						patch: {
-							masks: [
-								buildDefaultMaskInstance({
-									maskType,
-									elementSize: elementBounds
-										? {
-												width: elementBounds.width,
-												height: elementBounds.height,
-											}
-										: undefined,
-								}),
-							],
-						} as Partial<MaskableElement>,
-					},
-				],
-			});
-		}
+	const commitMask = (args: { maskType: MaskType; fill: MaskFill }) => {
+		// 미리보기를 그대로 확정하면 라벨 없는 스냅샷이 남아서, 버리고 라벨 붙은 명령으로 다시 넣는다
+		editor.timeline.discardPreview();
+		const mask = buildNewMask(args);
+		const command = editor.timeline.updateMasks({
+			trackId,
+			elementId: element.id,
+			masks: [...masks, mask],
+			label: "Add mask",
+		});
+		activateMask(mask.id);
+		toastUndoable({
+			message: m.masks.added({ name: getMaskName(mask) }),
+			command,
+		});
 		markCommitted();
 		setIsDropdownOpen(false);
+	};
+
+	const applyMasks = ({
+		nextMasks,
+		label,
+		toastMessage,
+	}: {
+		nextMasks: Mask[];
+		label: string;
+		toastMessage?: string;
+	}) => {
+		const command = editor.timeline.updateMasks({
+			trackId,
+			elementId: element.id,
+			masks: nextMasks,
+			label,
+		});
+		if (toastMessage) {
+			toastUndoable({ message: toastMessage, command });
+		}
 	};
 
 	const previewMaskParam =
 		({ index, key }: { index: number; key: string }) =>
 		(value: number | string | boolean) => {
-			if (!renderMasks[index]) {
+			const target = renderMasks[index];
+			if (!target) {
 				return;
 			}
 
-			const updatedMasks = renderMasks.map((existingMask, maskIndex) =>
-				maskIndex !== index
-					? existingMask
-					: withPreviewedMaskParam({ mask: existingMask, key, value }),
+			previewUpdates(
+				buildMaskEditUpdates({
+					masks: renderMasks,
+					animations,
+					maskId: target.id,
+					patch: { [key]: value },
+					localTime,
+					isPlayheadWithinElementRange,
+				}) as Partial<MaskableElement>,
 			);
-
-			previewUpdates({ masks: updatedMasks });
 		};
+
+	const keyframeContext: MaskKeyframeContext = {
+		trackId,
+		elementId: element.id,
+		animations,
+		localTime,
+		isPlayheadWithinElementRange,
+	};
+
+	const menuItem = ({
+		maskType,
+		fill,
+		label,
+		icon,
+	}: {
+		maskType: MaskType;
+		fill: MaskFill;
+		label: string;
+		icon: React.ReactNode;
+	}) => (
+		<DropdownMenuItem
+			key={`${fill}:${maskType}`}
+			onPointerEnter={() => previewMask({ maskType, fill })}
+			onClick={() => commitMask({ maskType, fill })}
+		>
+			{icon}
+			{label}
+		</DropdownMenuItem>
+	);
 
 	return (
 		<div className="flex flex-col h-full">
 			<div className="border-b px-3.5 h-11 shrink-0 flex items-center justify-between gap-2">
 				<SectionTitle>{m.masks.title}</SectionTitle>
-				<DropdownMenu
-					open={hasMask ? false : isDropdownOpen}
-					onOpenChange={handleDropdownOpenChange}
-				>
-					{hasMask ? (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<span className="inline-flex">
-									<Button
-										variant="ghost"
-										size="icon"
-										disabled
-										aria-label={m.masks.addMask}
-									>
-										<HugeiconsIcon icon={PlusSignIcon} className="size-3.5!" />
-									</Button>
-								</span>
-							</TooltipTrigger>
-							<TooltipContent className="max-w-56 text-balance">
-								{m.masks.singleMaskHint}
-							</TooltipContent>
-						</Tooltip>
-					) : (
+				<div className="flex items-center">
+					{masks.length > 1 ? (
+						<Button
+							variant="ghost"
+							size="icon"
+							aria-label={
+								isAllCollapsed ? m.masks.expandAll : m.masks.collapseAll
+							}
+							title={isAllCollapsed ? m.masks.expandAll : m.masks.collapseAll}
+							onClick={() =>
+								setExpandedIds(
+									isAllCollapsed
+										? new Set(masks.map((mask) => mask.id))
+										: new Set(),
+								)
+							}
+						>
+							<HugeiconsIcon
+								icon={isAllCollapsed ? UnfoldMoreIcon : UnfoldLessIcon}
+								className="size-3.5!"
+							/>
+						</Button>
+					) : null}
+					<DropdownMenu
+						open={isDropdownOpen}
+						onOpenChange={handleDropdownOpenChange}
+					>
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="icon" aria-label={m.masks.addMask}>
 								<HugeiconsIcon icon={PlusSignIcon} className="size-3.5!" />
 							</Button>
 						</DropdownMenuTrigger>
-					)}
-					<DropdownMenuContent className="w-40" onPointerLeave={onPointerLeave}>
-						{maskDefs.map((definition) => (
-							<DropdownMenuItem
-								key={definition.type}
-								onPointerEnter={() =>
-									previewMask({ maskType: definition.type })
-								}
-								onClick={() => commitMask({ maskType: definition.type })}
-							>
-								<HugeiconsIcon {...definition.icon} />
-								{translateLabel({ messages: m, label: definition.name })}
-							</DropdownMenuItem>
-						))}
-					</DropdownMenuContent>
-				</DropdownMenu>
+						<DropdownMenuContent
+							className="w-44"
+							onPointerLeave={onPointerLeave}
+						>
+							<DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+								{m.masks.privacy}
+							</DropdownMenuLabel>
+							{menuItem({
+								maskType: "rectangle",
+								fill: "mosaic",
+								label: m.masks.presetMosaic,
+								icon: <HugeiconsIcon icon={GridViewIcon} />,
+							})}
+							{menuItem({
+								maskType: "ellipse",
+								fill: "blur",
+								label: m.masks.presetBlur,
+								icon: <HugeiconsIcon icon={BlurIcon} />,
+							})}
+							<DropdownMenuSeparator />
+							<DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+								{m.masks.shapes}
+							</DropdownMenuLabel>
+							{maskDefs.map((definition) =>
+								menuItem({
+									maskType: definition.type,
+									fill: "clip",
+									label: translateLabel({
+										messages: m,
+										label: definition.name,
+									}),
+									icon: <HugeiconsIcon {...definition.icon} />,
+								}),
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
 			</div>
 
 			{masks.length === 0 ? (
 				<EmptyView onAddMask={() => setIsDropdownOpen(true)} />
 			) : (
-				masks.map((mask, index) => (
-					<MaskItem
-						key={mask.id}
-						trackId={trackId}
-						elementId={element.id}
-						mask={renderMasks[index] ?? mask}
-						previewParam={(paramKey) =>
-							previewMaskParam({ index, key: paramKey })
-						}
-						onCommit={commit}
-					/>
-				))
+				<div className="flex-1 overflow-y-auto">
+					{masks.map((mask, index) => (
+						<MaskItem
+							key={mask.id}
+							mask={resolveMaskAtTime({
+								mask: renderMasks[index] ?? mask,
+								animations,
+								localTime,
+							})}
+							keyframeToggle={({ keys, label }) => (
+								<MaskKeyframeToggle
+									context={keyframeContext}
+									mask={renderMasks[index] ?? mask}
+									keys={keys}
+									label={label}
+								/>
+							)}
+							name={getMaskName(mask)}
+							index={index}
+							count={masks.length}
+							isActive={activeMask?.id === mask.id}
+							isSelected={
+								selectedMask?.elementId === element.id &&
+								selectedMask.maskId === mask.id
+							}
+							isExpanded={expandedIds.has(mask.id)}
+							onActivate={() => activateMask(mask.id)}
+							onToggleExpanded={() =>
+								setExpanded({
+									maskId: mask.id,
+									expanded: !expandedIds.has(mask.id),
+								})
+							}
+							previewParam={(paramKey) =>
+								previewMaskParam({ index, key: paramKey })
+							}
+							onCommit={() =>
+								editor.timeline.commitPreview({ label: "Edit mask" })
+							}
+							onToggleHidden={() =>
+								applyMasks({
+									nextMasks: patchMaskMeta({
+										masks,
+										maskId: mask.id,
+										patch: { hidden: !mask.hidden },
+									}),
+									label: mask.hidden ? "Show mask" : "Hide mask",
+									toastMessage: mask.hidden
+										? m.masks.shown({ name: getMaskName(mask) })
+										: m.masks.hidden({ name: getMaskName(mask) }),
+								})
+							}
+							onRename={(name) =>
+								applyMasks({
+									nextMasks: patchMaskMeta({
+										masks,
+										maskId: mask.id,
+										patch: { name },
+									}),
+									label: "Rename mask",
+								})
+							}
+							onDuplicate={() => {
+								const result = duplicateMaskInList({
+									masks,
+									maskId: mask.id,
+									name: nextMaskName({ masks, baseName: getMaskName(mask) }),
+								});
+								applyMasks({
+									nextMasks: result.masks,
+									label: "Duplicate mask",
+									toastMessage: m.masks.duplicated({ name: getMaskName(mask) }),
+								});
+								if (result.newId) activateMask(result.newId);
+							}}
+							onReset={() =>
+								applyMasks({
+									nextMasks: resetMaskInList({
+										masks,
+										maskId: mask.id,
+										elementSize,
+									}),
+									label: "Reset mask",
+									toastMessage: m.masks.resetDone({ name: getMaskName(mask) }),
+								})
+							}
+							onInvert={() => {
+								const command = editor.timeline.toggleMaskInverted({
+									trackId,
+									elementId: element.id,
+									maskId: mask.id,
+								});
+								toastUndoable({
+									message: m.masks.inverted({ name: getMaskName(mask) }),
+									command,
+								});
+							}}
+							onMove={(offset) =>
+								applyMasks({
+									nextMasks: moveMaskInList({
+										masks,
+										maskId: mask.id,
+										offset,
+									}),
+									label: "Reorder masks",
+								})
+							}
+							onDelete={() => {
+								const command = editor.timeline.removeMask({
+									trackId,
+									elementId: element.id,
+									maskId: mask.id,
+								});
+								toastUndoable({
+									message: m.masks.removed({ name: getMaskName(mask) }),
+									command,
+								});
+							}}
+							onFillChange={(fill) =>
+								applyMasks({
+									nextMasks: patchMaskMeta({
+										masks,
+										maskId: mask.id,
+										patch: { fill },
+									}),
+									label: "Change mask fill",
+								})
+							}
+							onBlendChange={(blend) =>
+								applyMasks({
+									nextMasks: patchMaskMeta({
+										masks,
+										maskId: mask.id,
+										patch: { blend },
+									}),
+									label: "Change mask blend",
+								})
+							}
+						/>
+					))}
+				</div>
 			)}
 		</div>
 	);
 }
 
-function MaskItem({
-	trackId,
-	elementId,
+/** 필드 묶음(위치면 X·Y)에 키프레임을 한꺼번에 넣거나 뺀다 */
+function MaskKeyframeToggle({
+	context,
 	mask,
-	previewParam,
-	onCommit,
-}: MaskItemProps) {
+	keys,
+	label,
+}: {
+	context: MaskKeyframeContext;
+	mask: Mask;
+	keys: readonly string[];
+	label: string;
+}) {
 	const editor = useEditor();
 	const m = useMessages();
-	const definition = getMaskDefinition(mask.type);
-	const name = translateLabel({ messages: m, label: definition.name });
+	const {
+		trackId,
+		elementId,
+		animations,
+		localTime,
+		isPlayheadWithinElementRange,
+	} = context;
+	const keyframesAtTime = getMaskKeyframesAtTime({
+		animations,
+		maskId: mask.id,
+		keys,
+		localTime,
+	});
+	const resolvedParams = new Map<string, unknown>(
+		Object.entries(resolveMaskAtTime({ mask, animations, localTime }).params),
+	);
+
+	const toggle = () => {
+		if (keyframesAtTime.length > 0) {
+			editor.timeline.removeKeyframes({
+				keyframes: keyframesAtTime.map((keyframe) => ({
+					trackId,
+					elementId,
+					...keyframe,
+				})),
+			});
+			return;
+		}
+		editor.timeline.upsertKeyframes({
+			keyframes: keys.flatMap((key) => {
+				const value = resolvedParams.get(key) ?? DEFAULT_FILL_STRENGTH;
+				return typeof value === "number"
+					? [
+							{
+								trackId,
+								elementId,
+								propertyPath: buildMaskParamPath({
+									maskId: mask.id,
+									paramKey: key,
+								}),
+								time: localTime,
+								value,
+							},
+						]
+					: [];
+			}),
+		});
+	};
 
 	return (
-		<Section sectionKey={`mask-item:${mask.id}`} showTopBorder={false}>
-			<SectionHeader
-				trailing={
-					<div className="flex items-center gap-1">
+		<KeyframeToggle
+			isActive={keyframesAtTime.length > 0}
+			isDisabled={!isPlayheadWithinElementRange}
+			title={m.properties.toggleKeyframe({ name: label })}
+			onToggle={toggle}
+		/>
+	);
+}
+
+function MaskItem({
+	mask,
+	name,
+	index,
+	count,
+	isActive,
+	isSelected,
+	isExpanded,
+	onActivate,
+	onToggleExpanded,
+	previewParam,
+	onCommit,
+	onToggleHidden,
+	onRename,
+	onDuplicate,
+	onReset,
+	onInvert,
+	onMove,
+	onDelete,
+	onFillChange,
+	onBlendChange,
+	keyframeToggle,
+}: MaskItemProps) {
+	const m = useMessages();
+	const definition = getMaskDefinition(mask.type);
+	const [isRenaming, setIsRenaming] = useState(false);
+	const renameInputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (isRenaming) renameInputRef.current?.select();
+	}, [isRenaming]);
+	const fill = getMaskFill(mask);
+	const fillLabel =
+		fill === "mosaic"
+			? m.masks.fillMosaic
+			: fill === "blur"
+				? m.masks.fillBlur
+				: null;
+
+	const finishRename = (value: string) => {
+		setIsRenaming(false);
+		const trimmed = value.trim();
+		if (trimmed && trimmed !== name) onRename(trimmed);
+	};
+
+	return (
+		<Section showTopBorder={false}>
+			<div
+				className={cn(
+					"flex h-11 w-full items-center gap-1 px-2",
+					isActive && "bg-accent/40",
+					isSelected && "bg-primary/10 ring-1 ring-inset ring-primary/40",
+				)}
+			>
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={
+						mask.hidden ? m.masks.show({ name }) : m.masks.hide({ name })
+					}
+					aria-pressed={!mask.hidden}
+					onClick={onToggleHidden}
+				>
+					<HugeiconsIcon icon={mask.hidden ? ViewOffSlashIcon : ViewIcon} />
+				</Button>
+				{isRenaming ? (
+					<Input
+						ref={renameInputRef}
+						defaultValue={name}
+						className="h-7 flex-1"
+						onBlur={(event) => finishRename(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter")
+								finishRename(event.currentTarget.value);
+							if (event.key === "Escape") setIsRenaming(false);
+						}}
+					/>
+				) : (
+					<button
+						type="button"
+						className={cn(
+							"min-w-0 flex-1 flex items-center gap-2 h-full cursor-pointer text-left",
+							mask.hidden && "opacity-50",
+						)}
+						onClick={onActivate}
+						onDoubleClick={() => setIsRenaming(true)}
+					>
+						<HugeiconsIcon {...definition.icon} size={14} />
+						<span
+							className={cn(
+								"truncate text-sm",
+								isActive
+									? "text-foreground font-medium"
+									: "text-muted-foreground",
+							)}
+						>
+							{name}
+						</span>
+						{fillLabel ? (
+							<span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[10px]">
+								{fillLabel}
+							</span>
+						) : null}
+						{mask.hidden ? (
+							<span className="text-muted-foreground shrink-0 text-[10px]">
+								{m.masks.hiddenBadge}
+							</span>
+						) : null}
+					</button>
+				)}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
 						<Button
 							variant="ghost"
 							size="icon"
-							aria-label={m.masks.toggleInversion({ name })}
-							onClick={() =>
-								editor.timeline.toggleMaskInverted({
-									trackId,
-									elementId,
-									maskId: mask.id,
-								})
-							}
+							aria-label={m.masks.moreActions({ name })}
 						>
+							<HugeiconsIcon icon={MoreHorizontalIcon} />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end" className="w-40">
+						<DropdownMenuItem onClick={() => setIsRenaming(true)}>
+							<HugeiconsIcon icon={PencilEdit02Icon} />
+							{m.masks.rename}
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={onDuplicate}>
+							<HugeiconsIcon icon={Copy01Icon} />
+							{m.masks.duplicate}
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={onInvert}>
 							<OcMirrorIcon
 								className={cn(mask.params.inverted && "-scale-x-100")}
 							/>
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							aria-label={m.masks.remove({ name })}
-							onClick={() =>
-								editor.timeline.removeMask({
-									trackId,
-									elementId,
-									maskId: mask.id,
-								})
-							}
+							{m.masks.invert}
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={onReset}>
+							<HugeiconsIcon icon={RefreshIcon} />
+							{m.masks.reset}
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem disabled={index === 0} onClick={() => onMove(-1)}>
+							<HugeiconsIcon icon={ArrowUp01Icon} />
+							{m.masks.moveUp}
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							disabled={index === count - 1}
+							onClick={() => onMove(1)}
 						>
+							<HugeiconsIcon icon={ArrowDown01Icon} />
+							{m.masks.moveDown}
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem variant="destructive" onClick={onDelete}>
 							<HugeiconsIcon icon={Delete02Icon} />
-						</Button>
-					</div>
-				}
-			>
-				<div className="flex items-center gap-2">
-					<HugeiconsIcon {...definition.icon} size={14} />
-					<SectionTitle className="capitalize font-normal">{name}</SectionTitle>
-				</div>
-			</SectionHeader>
-			<SectionContent>
-				<MaskParamsFields
-					mask={mask}
-					definition={definition}
-					previewParam={previewParam}
-					onCommit={onCommit}
-				/>
-			</SectionContent>
+							{m.masks.delete}
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+				<Button
+					variant="ghost"
+					size="icon"
+					aria-label={
+						isExpanded ? m.common.collapseSection : m.common.expandSection
+					}
+					aria-expanded={isExpanded}
+					onClick={onToggleExpanded}
+				>
+					<HugeiconsIcon
+						icon={ArrowDown01Icon}
+						className={cn(
+							"transition-transform duration-200",
+							!isExpanded && "-rotate-90 text-muted-foreground",
+						)}
+					/>
+				</Button>
+			</div>
+			{isExpanded ? (
+				<SectionContent>
+					<SectionFields>
+						<MaskFillFields
+							mask={mask}
+							showBlend={index > 0 && fill === "clip"}
+							previewParam={previewParam}
+							onCommit={onCommit}
+							onFillChange={onFillChange}
+							onBlendChange={onBlendChange}
+							keyframeToggle={keyframeToggle}
+						/>
+					</SectionFields>
+					<MaskParamsFields
+						mask={mask}
+						definition={definition}
+						previewParam={previewParam}
+						onCommit={onCommit}
+						keyframeToggle={keyframeToggle}
+					/>
+				</SectionContent>
+			) : null}
 		</Section>
 	);
 }
+
+function MaskFillFields({
+	mask,
+	showBlend,
+	previewParam,
+	onCommit,
+	onFillChange,
+	onBlendChange,
+	keyframeToggle,
+}: {
+	mask: Mask;
+	showBlend: boolean;
+	previewParam: PreviewParamHandler;
+	onCommit: () => void;
+	onFillChange: (fill: MaskFill) => void;
+	onBlendChange: (blend: MaskBlendMode) => void;
+	keyframeToggle?: KeyframeToggleRenderer;
+}) {
+	const m = useMessages();
+	const fill = getMaskFill(mask);
+	const strength = mask.params.fillStrength ?? DEFAULT_FILL_STRENGTH;
+	const fillOptions: Array<{ value: MaskFill; label: string }> = [
+		{ value: "clip", label: m.masks.fillClip },
+		{ value: "mosaic", label: m.masks.fillMosaic },
+		{ value: "blur", label: m.masks.fillBlur },
+	];
+	const blendOptions: Array<{ value: MaskBlendMode; label: string }> = [
+		{ value: "add", label: m.masks.blendAdd },
+		{ value: "subtract", label: m.masks.blendSubtract },
+		{ value: "intersect", label: m.masks.blendIntersect },
+	];
+
+	return (
+		<>
+			<SectionField label={m.masks.fill}>
+				<Select
+					value={fill}
+					onValueChange={(value) =>
+						onFillChange(
+							fillOptions.find((option) => option.value === value)?.value ??
+								"clip",
+						)
+					}
+				>
+					<SelectTrigger className="w-full">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{fillOptions.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</SectionField>
+			{isEffectFill(fill) ? (
+				<SectionField
+					label={m.masks.strength}
+					beforeLabel={keyframeToggle?.({
+						keys: ["fillStrength"],
+						label: m.masks.strength,
+					})}
+				>
+					<div className="flex items-center gap-3">
+						<Slider
+							aria-label={m.masks.strength}
+							value={[strength]}
+							min={FILL_STRENGTH_MIN}
+							max={FILL_STRENGTH_MAX}
+							step={1}
+							onValueChange={([value]) => previewParam("fillStrength")(value)}
+							onValueCommit={onCommit}
+						/>
+						<span className="text-muted-foreground w-8 shrink-0 text-right text-xs tabular-nums">
+							{Math.round(strength)}
+						</span>
+					</div>
+				</SectionField>
+			) : null}
+			{showBlend ? (
+				<SectionField label={m.masks.blend}>
+					<Select
+						value={getMaskBlend(mask)}
+						onValueChange={(value) =>
+							onBlendChange(
+								blendOptions.find((option) => option.value === value)?.value ??
+									"add",
+							)
+						}
+					>
+						<SelectTrigger className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{blendOptions.map((option) => (
+								<SelectItem key={option.value} value={option.value}>
+									{option.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</SectionField>
+			) : null}
+		</>
+	);
+}
+
+const FILL_STRENGTH_MIN = 1;
+const FILL_STRENGTH_MAX = 100;
 
 function MaskParamsFields({
 	mask,
 	definition,
 	previewParam,
 	onCommit,
+	keyframeToggle,
 }: {
 	mask: Mask;
 	definition: RegisteredMaskDefinition;
 	previewParam: PreviewParamHandler;
 	onCommit: () => void;
+	keyframeToggle?: KeyframeToggleRenderer;
 }) {
 	const m = useMessages();
 	const featherParam = getNumberParamDefinition({
@@ -434,7 +1042,13 @@ function MaskParamsFields({
 			{definition.features.hasPosition &&
 				"centerX" in mask.params &&
 				"centerY" in mask.params && (
-					<SectionField label={m.masks.position}>
+					<SectionField
+						label={m.masks.position}
+						beforeLabel={keyframeToggle?.({
+							keys: ["centerX", "centerY"],
+							label: m.masks.position,
+						})}
+					>
 						<div className="flex items-center gap-2">
 							<MaskNumberField
 								className="flex-1"
@@ -471,7 +1085,13 @@ function MaskParamsFields({
 			{definition.features.sizeMode === "width-height" &&
 				"width" in mask.params &&
 				"height" in mask.params && (
-					<SectionField label={m.masks.size}>
+					<SectionField
+						label={m.masks.size}
+						beforeLabel={keyframeToggle?.({
+							keys: ["width", "height"],
+							label: m.masks.size,
+						})}
+					>
 						<div className="flex items-center gap-2">
 							<MaskNumberField
 								className="flex-1"
@@ -507,7 +1127,13 @@ function MaskParamsFields({
 
 			{definition.features.sizeMode === "height-only" &&
 				"height" in mask.params && (
-					<SectionField label={m.masks.height}>
+					<SectionField
+						label={m.masks.height}
+						beforeLabel={keyframeToggle?.({
+							keys: ["height"],
+							label: m.masks.height,
+						})}
+					>
 						<MaskNumberField
 							icon="H"
 							param={getNumberParamDefinition({
@@ -526,7 +1152,13 @@ function MaskParamsFields({
 
 			{definition.features.sizeMode === "width-only" &&
 				"width" in mask.params && (
-					<SectionField label={m.masks.width}>
+					<SectionField
+						label={m.masks.width}
+						beforeLabel={keyframeToggle?.({
+							keys: ["width"],
+							label: m.masks.width,
+						})}
+					>
 						<MaskNumberField
 							icon="W"
 							param={getNumberParamDefinition({
@@ -544,7 +1176,13 @@ function MaskParamsFields({
 				)}
 
 			{definition.features.sizeMode === "uniform" && "scale" in mask.params && (
-				<SectionField label={m.masks.scale}>
+				<SectionField
+					label={m.masks.scale}
+					beforeLabel={keyframeToggle?.({
+						keys: ["scale"],
+						label: m.masks.scale,
+					})}
+				>
 					<MaskNumberField
 						icon={
 							isTextMask(mask) ? <HugeiconsIcon icon={ArrowExpandIcon} /> : "S"
@@ -564,7 +1202,13 @@ function MaskParamsFields({
 			)}
 
 			{definition.features.hasRotation && "rotation" in mask.params && (
-				<SectionField label={m.masks.rotation}>
+				<SectionField
+					label={m.masks.rotation}
+					beforeLabel={keyframeToggle?.({
+						keys: ["rotation"],
+						label: m.masks.rotation,
+					})}
+				>
 					<MaskNumberField
 						icon={<HugeiconsIcon icon={RotateClockwiseIcon} />}
 						param={getNumberParamDefinition({
@@ -581,7 +1225,13 @@ function MaskParamsFields({
 				</SectionField>
 			)}
 
-			<SectionField label={m.masks.feather}>
+			<SectionField
+				label={m.masks.feather}
+				beforeLabel={keyframeToggle?.({
+					keys: ["feather"],
+					label: m.masks.feather,
+				})}
+			>
 				<MaskNumberField
 					icon={<HugeiconsIcon icon={FeatherIcon} />}
 					param={featherParam}

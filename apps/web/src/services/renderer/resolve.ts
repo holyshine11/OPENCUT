@@ -1,3 +1,4 @@
+import { resolveMaskAtTime } from "@/animation/mask-param-channel";
 import { mediaTimeToSeconds, roundMediaTime } from "@/wasm";
 import { getElementLocalTime } from "@/animation";
 import { resolveEffectParamsAtTime } from "@/animation/effect-param-channel";
@@ -181,6 +182,13 @@ function resolveVisualState({
 			width: effectWidth,
 			height: effectHeight,
 		}),
+		masks: (params.masks ?? []).map((mask) =>
+			resolveMaskAtTime({
+				mask,
+				animations: params.animations,
+				localTime,
+			}),
+		),
 	};
 }
 

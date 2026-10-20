@@ -1,5 +1,15 @@
 import { drawCssBackground } from "@/gradients";
 import { getMaskDefinition } from "@/masks";
+import type { Mask, MaskBlendMode } from "@/masks/types";
+import { getVisibleMasks } from "@/masks/list-ops";
+import {
+	fillStrengthToPixels,
+	getMaskBlend,
+	getMaskFill,
+	isEffectFill,
+} from "@/masks/fill";
+import type { EffectPass } from "@/effects/types";
+import { buildGaussianBlurPasses } from "@/effects/definitions/blur";
 import { incrementCounter } from "@/diagnostics/render-perf";
 import type { AnyBaseNode } from "../nodes/base-node";
 import type { CanvasRenderer } from "../canvas-renderer";
@@ -254,7 +264,7 @@ async function collectVisualSourceNode({
 		sourceWidth,
 		sourceHeight,
 	});
-	const { mask, strokeLayer } = buildMaskArtifacts({
+	const { mask, clipMasks, effectMasks, strokeLayers } = buildMaskArtifacts({
 		node,
 		renderer,
 		path,
@@ -271,9 +281,22 @@ async function collectVisualSourceNode({
 		effectPassGroups: node.resolved.effectPasses,
 		mask,
 	});
-	if (strokeLayer) {
-		items.push(strokeLayer);
-	}
+	items.push(
+		...buildEffectMaskLayers({
+			node,
+			renderer,
+			path,
+			transform,
+			textures,
+			source,
+			sourceTextureId: textureId,
+			sourceWidth,
+			sourceHeight,
+			clipMasks,
+			effectMasks,
+		}),
+		...strokeLayers,
+	);
 }
 
 function collectTextNode({
@@ -369,6 +392,25 @@ function fullCanvasTransform(
 	};
 }
 
+type MaskOwnerNode = VideoNode | ImageNode | StickerNode | GraphicNode;
+
+/** smoothstep(-f/2, f/2)의 10~90% 전이 폭(0.608f)과 가우시안 10~90% 폭(2.563σ)을 맞춘 비율 */
+const FEATHER_TO_BLUR_SIGMA = 0.237;
+
+const BLEND_COMPOSITE_OPS: Record<
+	MaskBlendMode,
+	GlobalCompositeOperation
+> = {
+	add: "source-over",
+	subtract: "destination-out",
+	intersect: "destination-in",
+};
+
+/**
+ * 보이는 마스크를 clip과 효과(mosaic·blur)로 나눠 처리한다.
+ * clip 마스크가 하나뿐이면 예전처럼 GPU 페더를 쓰는 단일 마스크 경로를 그대로 탄다.
+ * 여러 개면 마스크마다 페더·반전을 미리 구운 뒤 캔버스에서 합성 방식대로 합친다
+ */
 function buildMaskArtifacts({
 	node,
 	renderer,
@@ -376,160 +418,442 @@ function buildMaskArtifacts({
 	transform,
 	textures,
 }: {
-	node: VideoNode | ImageNode | StickerNode | GraphicNode;
+	node: MaskOwnerNode;
 	renderer: CanvasRenderer;
 	path: string;
 	transform: QuadTransformDescriptor;
 	textures: Map<string, TextureUploadDescriptor>;
 }): {
 	mask: LayerMaskDescriptor | null;
-	strokeLayer: FrameItemDescriptor | null;
+	clipMasks: Mask[];
+	effectMasks: Mask[];
+	strokeLayers: FrameItemDescriptor[];
 } {
-	const mask = node.params.masks?.[0];
-	if (!mask) {
-		return { mask: null, strokeLayer: null };
+	const activeMasks = getVisibleMasks(node.resolved?.masks).filter(
+		(mask) =>
+			getMaskDefinition(mask.type).isActive?.(mask.params) !== false,
+	);
+	const clipMasks = activeMasks.filter(
+		(mask) => !isEffectFill(getMaskFill(mask)),
+	);
+	const effectMasks = activeMasks.filter((mask) =>
+		isEffectFill(getMaskFill(mask)),
+	);
+	const strokeLayers = activeMasks.flatMap((mask) => {
+		const layer = buildStrokeLayer({ mask, renderer, path, transform, textures });
+		return layer ? [layer] : [];
+	});
+
+	if (clipMasks.length === 0) {
+		return { mask: null, clipMasks, effectMasks, strokeLayers };
 	}
 
-	const definition = getMaskDefinition(mask.type);
-
-	if (definition.isActive?.(mask.params) === false) {
-		return { mask: null, strokeLayer: null };
+	if (clipMasks.length === 1) {
+		return {
+			mask: buildSingleMaskTexture({
+				mask: clipMasks[0],
+				textureId: `${path}:mask`,
+				renderer,
+				transform,
+				textures,
+			}),
+			clipMasks,
+			effectMasks,
+			strokeLayers,
+		};
 	}
 
-	const { body } = definition.renderer;
+	const textureId = `${path}:mask`;
+	const { width, height } = renderer;
+	textures.set(textureId, {
+		kind: "rendered",
+		id: textureId,
+		contentHash: `masks:${maskSetHash(clipMasks)}:${transformHash(transform)}:${width}x${height}`,
+		width,
+		height,
+		draw: (ctx) => {
+			ctx.drawImage(
+				composeClipMasks({ masks: clipMasks, transform, width, height }),
+				0,
+				0,
+			);
+		},
+	});
+	return {
+		mask: { textureId, feather: 0, inverted: false },
+		clipMasks,
+		effectMasks,
+		strokeLayers,
+	};
+}
+
+/**
+ * 모자이크·블러 마스크마다 같은 원본을 효과를 입혀 한 장 더 그리고 그 마스크로 자른다.
+ * clip 마스크가 있으면 그 바깥까지 효과가 새지 않도록 clip 결과와 겹친 곳만 남긴다
+ */
+function buildEffectMaskLayers({
+	node,
+	renderer,
+	path,
+	transform,
+	textures,
+	source,
+	sourceTextureId,
+	sourceWidth,
+	sourceHeight,
+	clipMasks,
+	effectMasks,
+}: {
+	node: MaskOwnerNode;
+	renderer: CanvasRenderer;
+	path: string;
+	transform: QuadTransformDescriptor;
+	textures: Map<string, TextureUploadDescriptor>;
+	source: CanvasImageSource;
+	sourceTextureId: string;
+	sourceWidth: number;
+	sourceHeight: number;
+	clipMasks: Mask[];
+	effectMasks: Mask[];
+}): FrameItemDescriptor[] {
+	if (!node.resolved) return [];
+	const { width, height } = renderer;
+
+	return effectMasks.map((mask) => {
+		const fill = getMaskFill(mask);
+		const strengthPx = fillStrengthToPixels({
+			strength: mask.params.fillStrength,
+			canvasWidth: width,
+		});
+		const maskTextureId = `${path}:effect-mask:${mask.id}`;
+		const maskDescriptor: LayerMaskDescriptor =
+			clipMasks.length === 0
+				? buildSingleMaskTexture({
+						mask,
+						textureId: maskTextureId,
+						renderer,
+						transform,
+						textures,
+					})
+				: (() => {
+						textures.set(maskTextureId, {
+							kind: "rendered",
+							id: maskTextureId,
+							contentHash: `effect-mask:${maskSetHash([mask])}:${maskSetHash(clipMasks)}:${transformHash(transform)}:${width}x${height}`,
+							width,
+							height,
+							draw: (ctx) => {
+								ctx.drawImage(
+									renderBakedMask({ mask, transform, width, height }),
+									0,
+									0,
+								);
+								ctx.globalCompositeOperation = "destination-in";
+								ctx.drawImage(
+									composeClipMasks({
+										masks: clipMasks,
+										transform,
+										width,
+										height,
+									}),
+									0,
+									0,
+								);
+								ctx.globalCompositeOperation = "source-over";
+							},
+						});
+						return { textureId: maskTextureId, feather: 0, inverted: false };
+					})();
+
+		let textureId = sourceTextureId;
+		let extraPasses: EffectPass[][] = [];
+		if (fill === "mosaic") {
+			// 화면 기준 칸 크기를 원본 픽셀로 바꿔서, 원본을 줄였다가 계단지게 다시 키운다
+			const blockPx = Math.max(
+				1,
+				(strengthPx * sourceWidth) / Math.max(1, transform.width),
+			);
+			textureId = `${path}:mosaic:${mask.id}`;
+			textures.set(textureId, {
+				kind: "rendered",
+				id: textureId,
+				contentHash: `mosaic:${identityKey(source)}:${blockPx}:${sourceWidth}x${sourceHeight}`,
+				width: sourceWidth,
+				height: sourceHeight,
+				draw: (ctx) => {
+					const small = createCanvasSurface({
+						width: Math.max(1, Math.ceil(sourceWidth / blockPx)),
+						height: Math.max(1, Math.ceil(sourceHeight / blockPx)),
+					});
+					small.context.drawImage(
+						source,
+						0,
+						0,
+						small.canvas.width,
+						small.canvas.height,
+					);
+					ctx.imageSmoothingEnabled = false;
+					ctx.drawImage(small.canvas, 0, 0, sourceWidth, sourceHeight);
+				},
+			});
+		} else {
+			const sigma = (strengthPx * sourceWidth) / Math.max(1, transform.width);
+			extraPasses = [buildGaussianBlurPasses({ sigmaX: sigma, sigmaY: sigma })];
+		}
+
+		return {
+			type: "layer",
+			textureId,
+			transform,
+			opacity: node.resolved?.opacity ?? 1,
+			blendMode: node.params.blendMode ?? "normal",
+			effectPassGroups: [...(node.resolved?.effectPasses ?? []), ...extraPasses],
+			mask: maskDescriptor,
+		};
+	});
+}
+
+function maskSetHash(masks: Mask[]): string {
+	return masks
+		.map(
+			(mask) =>
+				`${mask.type}:${mask.blend ?? "add"}:${JSON.stringify(mask.params)}`,
+		)
+		.join("|");
+}
+
+/** drawWithFeather 마스크는 캔버스 그림에 페더가 이미 들어 있어 GPU 페더를 건너뛴다 */
+function getGpuFeather(mask: Mask): number {
+	const { body } = getMaskDefinition(mask.type).renderer;
+	return body.kind === "drawWithFeather" ? 0 : mask.params.feather;
+}
+
+/** 요소 크기 캔버스에 마스크 모양을 흰색으로 그린다 */
+function drawElementMaskShape({
+	mask,
+	transform,
+}: {
+	mask: Mask;
+	transform: QuadTransformDescriptor;
+}): OffscreenCanvas {
+	const { body } = getMaskDefinition(mask.type).renderer;
 	const usesOpaqueFastPath =
 		body.kind === "drawWithFeather" &&
 		mask.params.feather === 0 &&
 		Boolean(body.opaqueFastPath);
-	// drawWithFeather renderers encode feathering analytically in their canvas output
-	// (e.g. split mask uses a linear gradient instead of JFA). The descriptor feather is
-	// zeroed so the GPU compositor copies the mask texture as-is and does not run a second
-	// JFA feather pass on top of an already-soft texture.
-	const feather = body.kind === "drawWithFeather" ? 0 : mask.params.feather;
+	const { canvas, context } = createCanvasSurface({
+		width: Math.max(1, Math.round(transform.width)),
+		height: Math.max(1, Math.round(transform.height)),
+	});
 
-	const maskTextureId = `${path}:mask`;
-	const { width: canvasWidth, height: canvasHeight } = renderer;
-	const maskContentHash = `mask:${mask.type}:${JSON.stringify(mask.params)}:${transformHash(transform)}:${canvasWidth}x${canvasHeight}:body=${body.kind}:fastPath=${usesOpaqueFastPath}`;
-	const drawMask: TextureCanvasDrawFn = (ctx) => {
-		const { canvas: elementMaskCanvas, context: elementMaskCtx } =
-			createCanvasSurface({
+	switch (body.kind) {
+		case "fillPath": {
+			const path2d = body.buildPath({
+				resolvedParams: mask.params,
+				width: transform.width,
+				height: transform.height,
+			});
+			context.fillStyle = "white";
+			context.fill(path2d);
+			break;
+		}
+		case "drawOpaque":
+			body.drawOpaque({
+				resolvedParams: mask.params,
+				ctx: context,
 				width: Math.round(transform.width),
 				height: Math.round(transform.height),
 			});
-
-		switch (body.kind) {
-			case "fillPath": {
-				const path2d = body.buildPath({
+			break;
+		case "drawWithFeather":
+			if (usesOpaqueFastPath && body.opaqueFastPath) {
+				const path2d = body.opaqueFastPath.buildPath({
 					resolvedParams: mask.params,
 					width: transform.width,
 					height: transform.height,
 				});
-				elementMaskCtx.fillStyle = "white";
-				elementMaskCtx.fill(path2d);
-				break;
-			}
-			case "drawOpaque":
-				body.drawOpaque({
+				context.fillStyle = "white";
+				context.fill(path2d);
+			} else {
+				body.drawWithFeather({
 					resolvedParams: mask.params,
-					ctx: elementMaskCtx,
+					ctx: context,
 					width: Math.round(transform.width),
 					height: Math.round(transform.height),
+					feather: mask.params.feather,
 				});
-				break;
-			case "drawWithFeather":
-				if (usesOpaqueFastPath && body.opaqueFastPath) {
-					const path2d = body.opaqueFastPath.buildPath({
-						resolvedParams: mask.params,
-						width: transform.width,
-						height: transform.height,
-					});
-					elementMaskCtx.fillStyle = "white";
-					elementMaskCtx.fill(path2d);
-				} else {
-					body.drawWithFeather({
-						resolvedParams: mask.params,
-						ctx: elementMaskCtx,
-						width: Math.round(transform.width),
-						height: Math.round(transform.height),
-						feather: mask.params.feather,
-					});
-				}
-				break;
-		}
-
-		drawTransformedCanvas({ ctx, source: elementMaskCanvas, transform });
-	};
-	textures.set(maskTextureId, {
-		kind: "rendered",
-		id: maskTextureId,
-		contentHash: maskContentHash,
-		width: canvasWidth,
-		height: canvasHeight,
-		draw: drawMask,
-	});
-
-	const stroke = definition.renderer.stroke;
-	const hasStroke = mask.params.strokeWidth > 0 && Boolean(stroke);
-	let strokeLayer: FrameItemDescriptor | null = null;
-	if (hasStroke && stroke) {
-		const strokeTextureId = `${path}:mask-stroke`;
-		const strokeContentHash = `stroke:${mask.type}:${JSON.stringify(mask.params)}:${transformHash(transform)}:${canvasWidth}x${canvasHeight}:stroke=${stroke.kind}`;
-		const drawStroke: TextureCanvasDrawFn = (ctx) => {
-			const { canvas: strokeCanvas, context: strokeCtx } = createCanvasSurface({
-				width: Math.round(transform.width),
-				height: Math.round(transform.height),
-			});
-
-			switch (stroke.kind) {
-				case "renderStroke":
-					stroke.renderStroke({
-						resolvedParams: mask.params,
-						ctx: strokeCtx,
-						width: transform.width,
-						height: transform.height,
-					});
-					break;
-				case "strokeFromPath": {
-					const strokePath = stroke.buildStrokePath({
-						resolvedParams: mask.params,
-						width: transform.width,
-						height: transform.height,
-					});
-					strokeCtx.strokeStyle = mask.params.strokeColor;
-					strokeCtx.lineWidth = mask.params.strokeWidth;
-					strokeCtx.stroke(strokePath);
-					break;
-				}
 			}
+			break;
+	}
+	return canvas;
+}
 
-			drawTransformedCanvas({ ctx, source: strokeCanvas, transform });
-		};
-		textures.set(strokeTextureId, {
-			kind: "rendered",
-			id: strokeTextureId,
-			contentHash: strokeContentHash,
-			width: canvasWidth,
-			height: canvasHeight,
-			draw: drawStroke,
-		});
-		strokeLayer = {
-			type: "layer",
-			textureId: strokeTextureId,
-			transform: fullCanvasTransform(renderer),
-			opacity: 1,
-			blendMode: "normal",
-			effectPassGroups: [],
-			mask: null,
-		};
+/** 마스크 하나를 화면 크기 텍스처로 올리고, 페더·반전은 GPU 컴포지터에 맡긴다 */
+function buildSingleMaskTexture({
+	mask,
+	textureId,
+	renderer,
+	transform,
+	textures,
+}: {
+	mask: Mask;
+	textureId: string;
+	renderer: CanvasRenderer;
+	transform: QuadTransformDescriptor;
+	textures: Map<string, TextureUploadDescriptor>;
+}): LayerMaskDescriptor {
+	const { body } = getMaskDefinition(mask.type).renderer;
+	const { width, height } = renderer;
+	textures.set(textureId, {
+		kind: "rendered",
+		id: textureId,
+		contentHash: `mask:${mask.type}:${JSON.stringify(mask.params)}:${transformHash(transform)}:${width}x${height}:body=${body.kind}`,
+		width,
+		height,
+		draw: (ctx) => {
+			drawTransformedCanvas({
+				ctx,
+				source: drawElementMaskShape({ mask, transform }),
+				transform,
+			});
+		},
+	});
+	return {
+		textureId,
+		feather: getGpuFeather(mask),
+		inverted: mask.params.inverted,
+	};
+}
+
+/** 합성용으로 페더와 반전까지 적용한 화면 크기 마스크 */
+function renderBakedMask({
+	mask,
+	transform,
+	width,
+	height,
+}: {
+	mask: Mask;
+	transform: QuadTransformDescriptor;
+	width: number;
+	height: number;
+}): OffscreenCanvas {
+	const surface = createCanvasSurface({ width, height });
+	drawTransformedCanvas({
+		ctx: surface.context,
+		source: drawElementMaskShape({ mask, transform }),
+		transform,
+	});
+	// GPU 페더(applyMaskFeather)는 WebGPU 캔버스를 돌려주는데, 2D 캔버스에 그리면 알파가 빠져 마스크가 통째로 불투명해진다.
+	// 그래서 합성 경로에서는 같은 전이 폭을 내는 가우시안 블러로 페더를 만든다
+	const feather = getGpuFeather(mask);
+	let feathered = surface.canvas;
+	if (feather > 0) {
+		const blurred = createCanvasSurface({ width, height });
+		blurred.context.filter = `blur(${feather * FEATHER_TO_BLUR_SIGMA}px)`;
+		blurred.context.drawImage(surface.canvas, 0, 0);
+		feathered = blurred.canvas;
+	}
+	if (!mask.params.inverted) return feathered;
+
+	const inverted = createCanvasSurface({ width, height });
+	inverted.context.fillStyle = "white";
+	inverted.context.fillRect(0, 0, width, height);
+	inverted.context.globalCompositeOperation = "destination-out";
+	inverted.context.drawImage(feathered, 0, 0);
+	return inverted.canvas;
+}
+
+function composeClipMasks({
+	masks,
+	transform,
+	width,
+	height,
+}: {
+	masks: Mask[];
+	transform: QuadTransformDescriptor;
+	width: number;
+	height: number;
+}): OffscreenCanvas {
+	const { canvas, context } = createCanvasSurface({ width, height });
+	masks.forEach((mask, index) => {
+		context.globalCompositeOperation =
+			index === 0 ? "source-over" : BLEND_COMPOSITE_OPS[getMaskBlend(mask)];
+		context.drawImage(
+			renderBakedMask({ mask, transform, width, height }),
+			0,
+			0,
+		);
+	});
+	return canvas;
+}
+
+function buildStrokeLayer({
+	mask,
+	renderer,
+	path,
+	transform,
+	textures,
+}: {
+	mask: Mask;
+	renderer: CanvasRenderer;
+	path: string;
+	transform: QuadTransformDescriptor;
+	textures: Map<string, TextureUploadDescriptor>;
+}): FrameItemDescriptor | null {
+	const stroke = getMaskDefinition(mask.type).renderer.stroke;
+	if (!stroke || mask.params.strokeWidth <= 0) {
+		return null;
 	}
 
+	const { width: canvasWidth, height: canvasHeight } = renderer;
+	const strokeTextureId = `${path}:mask-stroke:${mask.id}`;
+	const strokeContentHash = `stroke:${mask.type}:${JSON.stringify(mask.params)}:${transformHash(transform)}:${canvasWidth}x${canvasHeight}:stroke=${stroke.kind}`;
+	const drawStroke: TextureCanvasDrawFn = (ctx) => {
+		const { canvas: strokeCanvas, context: strokeCtx } = createCanvasSurface({
+			width: Math.round(transform.width),
+			height: Math.round(transform.height),
+		});
+
+		switch (stroke.kind) {
+			case "renderStroke":
+				stroke.renderStroke({
+					resolvedParams: mask.params,
+					ctx: strokeCtx,
+					width: transform.width,
+					height: transform.height,
+				});
+				break;
+			case "strokeFromPath": {
+				const strokePath = stroke.buildStrokePath({
+					resolvedParams: mask.params,
+					width: transform.width,
+					height: transform.height,
+				});
+				strokeCtx.strokeStyle = mask.params.strokeColor;
+				strokeCtx.lineWidth = mask.params.strokeWidth;
+				strokeCtx.stroke(strokePath);
+				break;
+			}
+		}
+
+		drawTransformedCanvas({ ctx, source: strokeCanvas, transform });
+	};
+	textures.set(strokeTextureId, {
+		kind: "rendered",
+		id: strokeTextureId,
+		contentHash: strokeContentHash,
+		width: canvasWidth,
+		height: canvasHeight,
+		draw: drawStroke,
+	});
 	return {
-		mask: {
-			textureId: maskTextureId,
-			feather,
-			inverted: mask.params.inverted,
-		},
-		strokeLayer,
+		type: "layer",
+		textureId: strokeTextureId,
+		transform: fullCanvasTransform(renderer),
+		opacity: 1,
+		blendMode: "normal",
+		effectPassGroups: [],
+		mask: null,
 	};
 }
 

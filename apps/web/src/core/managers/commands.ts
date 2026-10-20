@@ -90,6 +90,14 @@ export class CommandManager {
 		});
 	}
 
+	peekUndo(): Command | undefined {
+		return this.history.at(-1)?.command;
+	}
+
+	peekRedo(): Command | undefined {
+		return this.redoStack.at(-1)?.command;
+	}
+
 	canUndo(): boolean {
 		return this.history.length > 0;
 	}

@@ -23,6 +23,8 @@ export interface ResolvedVisualNodeState {
 	transform: Transform;
 	opacity: number;
 	effectPasses: EffectPass[][];
+	/** 키프레임을 반영한 이 시점의 마스크 */
+	masks: Mask[];
 }
 
 export interface ResolvedVisualSourceNodeState extends ResolvedVisualNodeState {

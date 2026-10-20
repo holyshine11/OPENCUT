@@ -10,6 +10,13 @@ import {
 	parseGraphicParamPath,
 } from "@/animation/graphic-param-channel";
 import { effectsRegistry, registerDefaultEffects } from "@/effects";
+import {
+	KEYFRAMABLE_MASK_PARAM_KEYS,
+	parseMaskParamPath,
+} from "@/animation/mask-param-channel";
+import { masksRegistry, registerDefaultMasks } from "@/masks";
+import { withMaskParams } from "@/masks/with-params";
+import { getMaskParamDefinition } from "@/masks/keyframes";
 import { getGraphicDefinition } from "@/graphics";
 import {
 	coerceParamValue,
@@ -25,7 +32,10 @@ import {
 	getElementParam,
 } from "@/params/registry";
 import type { TimelineElement } from "@/timeline";
-import { isVisualElement } from "@/timeline/element-utils";
+import {
+	isMaskableElement,
+	isVisualElement,
+} from "@/timeline/element-utils";
 
 export interface AnimationPathDescriptor {
 	channelLayout: ParamChannelLayout;
@@ -174,6 +184,57 @@ function buildEffectParamDescriptor({
 	});
 }
 
+function buildMaskParamDescriptor({
+	element,
+	maskId,
+	paramKey,
+}: {
+	element: TimelineElement;
+	maskId: string;
+	paramKey: string;
+}): AnimationPathDescriptor | null {
+	if (!isMaskableElement(element)) {
+		return null;
+	}
+	if (
+		!KEYFRAMABLE_MASK_PARAM_KEYS.some((key) => key === paramKey)
+	) {
+		return null;
+	}
+
+	const mask = element.masks?.find((candidate) => candidate.id === maskId);
+	if (!mask) {
+		return null;
+	}
+
+	if (!masksRegistry.has(mask.type)) registerDefaultMasks();
+	const param = getMaskParamDefinition({ maskType: mask.type, key: paramKey });
+	if (!param) {
+		return null;
+	}
+
+	return buildParamDescriptor({
+		param,
+		baseParams: Object.fromEntries(
+			Object.entries(mask.params).filter(
+				(entry): entry is [string, ParamValue] =>
+					typeof entry[1] === "number" ||
+					typeof entry[1] === "string" ||
+					typeof entry[1] === "boolean",
+			),
+		),
+		setParams: (params) => ({
+			...element,
+			masks:
+				element.masks?.map((candidate) =>
+					candidate.id !== maskId
+						? candidate
+						: withMaskParams({ mask: candidate, patch: params }),
+				) ?? element.masks,
+		}),
+	});
+}
+
 export function resolveAnimationTarget({
 	element,
 	path,
@@ -203,6 +264,15 @@ export function resolveAnimationTarget({
 			element,
 			effectId: effectParamTarget.effectId,
 			paramKey: effectParamTarget.paramKey,
+		});
+	}
+
+	const maskParamTarget = parseMaskParamPath({ propertyPath: path });
+	if (maskParamTarget) {
+		return buildMaskParamDescriptor({
+			element,
+			maskId: maskParamTarget.maskId,
+			paramKey: maskParamTarget.paramKey,
 		});
 	}
 
