@@ -65,6 +65,23 @@ export function StandaloneEffectTab({
 				renderParams={(renderElement as EffectElement).params}
 				previewParams={previewParams}
 				onCommit={commit}
+				onChangeEffect={({ effectType, params }) => {
+					const current = effectsRegistry.get(element.effectType);
+					const next = effectsRegistry.get(effectType);
+					// 사용자가 붙인 이름은 두고, 효과 이름 그대로였을 때만 새 효과 이름으로 바꾼다
+					const keepsDefaultName = [
+						current.name,
+						translateLabel({ messages: m, label: current.name }),
+					].includes(element.name);
+					previewUpdates({
+						effectType,
+						params,
+						...(keepsDefaultName && {
+							name: translateLabel({ messages: m, label: next.name }),
+						}),
+					});
+					commit();
+				}}
 			/>
 		</div>
 	);
@@ -178,6 +195,18 @@ export function ClipEffectsTab({
 									renderParams={getRenderParams({ effectId: effect.id })}
 									previewParams={buildPreviewParams(effect.id)}
 									onCommit={commit}
+									onChangeEffect={({ effectType, params }) => {
+										previewUpdates({
+											effects: (
+												(renderElement as VisualElement).effects ?? []
+											).map((existing) =>
+												existing.id === effect.id
+													? { ...existing, type: effectType, params }
+													: existing,
+											),
+										});
+										commit();
+									}}
 									onToggle={() =>
 										editor.timeline.toggleClipEffect({
 											trackId,
@@ -239,11 +268,13 @@ function EffectSection({
 	onCommit,
 	onToggle,
 	onRemove,
+	onChangeEffect,
 }: {
 	effect: Effect;
 	renderParams: ParamValues;
 	previewParams: (updates: ParamValues) => void;
 	onCommit: () => void;
+	onChangeEffect: (change: { effectType: string; params: ParamValues }) => void;
 	onToggle?: () => void;
 	onRemove?: () => void;
 }) {
@@ -308,6 +339,7 @@ function EffectSection({
 						onPreview={previewParams}
 						onCommit={onCommit}
 						onDiscard={() => editor.timeline.discardPreview()}
+						onChangeEffect={onChangeEffect}
 					/>
 				)}
 			</SectionContent>

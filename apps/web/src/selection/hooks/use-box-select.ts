@@ -65,6 +65,8 @@ export function useBoxSelect<TId>({
 	const [selectionBox, setSelectionBox] =
 		useState<SelectionBoxState<TId> | null>(null);
 	const justFinishedSelectingRef = useRef(false);
+	// cancel() 직후 같은 프레임의 mousemove가 상자를 되살리지 않게 한다
+	const isTrackingRef = useRef(false);
 
 	const handleMouseDown = useCallback(
 		(event: React.MouseEvent<Element>) => {
@@ -77,6 +79,7 @@ export function useBoxSelect<TId>({
 
 			const startPos = { x: event.clientX, y: event.clientY };
 			const container = containerRef.current;
+			isTrackingRef.current = true;
 			setSelectionBox({
 				startPos,
 				currentPos: startPos,
@@ -132,7 +135,14 @@ export function useBoxSelect<TId>({
 			return;
 		}
 
-		const handleMouseMove = ({ clientX, clientY }: MouseEvent) => {
+		const handleMouseMove = ({ clientX, clientY, buttons }: MouseEvent) => {
+			// 버튼을 뗐는데 mouseup을 못 받은 경우(포인터 가로채기 등) 상자가 따라다니지 않게 끝낸다
+			if (!isTrackingRef.current) return;
+			if ((buttons & 1) === 0) {
+				isTrackingRef.current = false;
+				setSelectionBox(null);
+				return;
+			}
 			const currentPos = { x: clientX, y: clientY };
 			const deltaX = Math.abs(clientX - selectionBox.startPos.x);
 			const deltaY = Math.abs(clientY - selectionBox.startPos.y);
@@ -160,6 +170,7 @@ export function useBoxSelect<TId>({
 		};
 
 		const handleMouseUp = () => {
+			isTrackingRef.current = false;
 			if (selectionBox.isActive) {
 				justFinishedSelectingRef.current = true;
 				requestAnimationFrame(() => {
@@ -201,6 +212,11 @@ export function useBoxSelect<TId>({
 		};
 	}, [containerRef, selectionBox]);
 
+	const cancel = useCallback(() => {
+		isTrackingRef.current = false;
+		setSelectionBox(null);
+	}, []);
+
 	const shouldIgnoreClick = useCallback(() => {
 		return justFinishedSelectingRef.current;
 	}, []);
@@ -213,5 +229,6 @@ export function useBoxSelect<TId>({
 		handleMouseDown,
 		isSelecting: selectionBox?.isActive ?? false,
 		shouldIgnoreClick,
+		cancel,
 	};
 }

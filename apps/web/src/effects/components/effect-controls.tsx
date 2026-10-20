@@ -7,12 +7,21 @@ import {
 	Cancel01Icon,
 	FloppyDiskIcon,
 	RefreshIcon,
+	UnavailableIcon,
 } from "@hugeicons/core-free-icons";
 import type { NumberParamDefinition, ParamValues } from "@/params";
 import { buildDefaultParamValues } from "@/params/registry";
 import type { EffectDefinition } from "@/effects/types";
 import type { AdjustSlider } from "@/effects/definitions/adjust";
-import { isSameParams, useEffectPresets } from "@/effects/effect-presets-store";
+import {
+	isSameParams,
+	useEffectPresets,
+	type UserEffectPreset,
+} from "@/effects/effect-presets-store";
+import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
+import { effectsRegistry } from "@/effects";
+import { ADJUST_EFFECT_TYPE } from "@/effects/definitions/adjust";
+import { AdjustFavoriteButton } from "./adjust-favorite-button";
 import { EffectPreviewCanvas } from "./effect-preview-canvas";
 import { CompareButton, SliderRow } from "./adjust-controls";
 import { Button } from "@/components/ui/button";
@@ -50,15 +59,20 @@ export function EffectControls({
 	onPreview,
 	onCommit,
 	onDiscard,
+	onChangeEffect,
 }: {
 	definition: EffectDefinition;
 	params: ParamValues;
 	onPreview: PreviewParams;
 	onCommit: () => void;
 	onDiscard: () => void;
+	onChangeEffect: (change: { effectType: string; params: ParamValues }) => void;
 }) {
 	const m = useMessages();
 	const neutral = findNeutralParam(definition);
+	const isOff =
+		neutral?.type === "number" &&
+		Number(params[neutral.key] ?? neutral.default) === (neutral.min ?? 0);
 	const applyAll = (updates: ParamValues) => {
 		onPreview(updates);
 		onCommit();
@@ -66,10 +80,33 @@ export function EffectControls({
 
 	return (
 		<div className="flex flex-col gap-3 px-4 pt-1 pb-4">
+			<EffectStrip
+				activeType={isOff ? null : definition.type}
+				onSelectNone={
+					neutral?.type === "number"
+						? () => applyAll({ [neutral.key]: neutral.min ?? 0 })
+						: undefined
+				}
+				onSelect={(next) => {
+					if (next.type === definition.type) {
+						// 없음에서 같은 효과를 다시 고르면 기본값으로 켠다
+						if (isOff) applyAll(buildDefaultParamValues(next.params));
+						return;
+					}
+					onChangeEffect({
+						effectType: next.type,
+						params: buildDefaultParamValues(next.params),
+					});
+				}}
+			/>
 			<UserPresetStrip
-				effectType={definition.type}
+				activeType={definition.type}
 				params={params}
-				onSelect={applyAll}
+				onSelect={(preset) =>
+					preset.effectType === definition.type
+						? applyAll(preset.params)
+						: onChangeEffect(preset)
+				}
 			/>
 			{definition.params.map((param) => {
 				if (param.type === "number") {
@@ -125,7 +162,15 @@ export function EffectControls({
 					variant="outline"
 					size="sm"
 					className="flex-1"
-					onClick={() => applyAll(buildDefaultParamValues(definition.params))}
+					onClick={() =>
+						// 초기화는 "없음"과 같다: 기본값으로 되돌리고 효과는 끈다
+						applyAll({
+							...buildDefaultParamValues(definition.params),
+							...(neutral?.type === "number" && {
+								[neutral.key]: neutral.min ?? 0,
+							}),
+						})
+					}
 				>
 					<HugeiconsIcon icon={RefreshIcon} />
 					{m.properties.adjust.resetAll}
@@ -140,19 +185,137 @@ export function EffectControls({
 	);
 }
 
+export const effectFavoriteId = (effectType: string) => `effect:${effectType}`;
+
+/** Every effect as a thumbnail row, favorites first, like the adjustment presets. */
+function EffectStrip({
+	activeType,
+	onSelect,
+	onSelectNone,
+}: {
+	/** null when the effect is switched off, which highlights "None" */
+	activeType: string | null;
+	onSelect: (definition: EffectDefinition) => void;
+	onSelectNone?: () => void;
+}) {
+	const m = useMessages();
+	const favorites = useAdjustFavorites((state) => state.favorites);
+	const effects = effectsRegistry
+		.getAll()
+		.filter((effect) => effect.type !== ADJUST_EFFECT_TYPE);
+	const isFavorite = (effect: EffectDefinition) =>
+		favorites.includes(effectFavoriteId(effect.type));
+	const ordered = [
+		...favorites.flatMap(
+			(id) => effects.find((effect) => effectFavoriteId(effect.type) === id) ?? [],
+		),
+		...effects.filter((effect) => !isFavorite(effect)),
+	];
+
+	return (
+		<div className="flex flex-col gap-1.5">
+			<span className="text-muted-foreground text-xs">
+				{m.properties.effectPresets.effects}
+			</span>
+			<div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+				{onSelectNone && (
+					<NoneTile isActive={activeType === null} onSelect={onSelectNone} />
+				)}
+				{ordered.map((effect) => {
+					const name = translateLabel({ messages: m, label: effect.name });
+					const isActive = effect.type === activeType;
+					return (
+						<div key={effect.type} className="group relative w-14 shrink-0">
+							<AdjustFavoriteButton presetId={effectFavoriteId(effect.type)} />
+							<button
+								type="button"
+								title={name}
+								aria-pressed={isActive}
+								onClick={() => onSelect(effect)}
+								className="flex w-14 cursor-pointer flex-col gap-1 text-left"
+							>
+								<span
+									className={cn(
+										"block size-14 overflow-hidden rounded-md border-2",
+										isActive ? "border-primary" : "border-transparent",
+									)}
+								>
+									<EffectPreviewCanvas effectType={effect.type} />
+								</span>
+								<span
+									className={cn(
+										"truncate text-[11px]",
+										isActive ? "text-foreground" : "text-muted-foreground",
+									)}
+								>
+									{name}
+								</span>
+							</button>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+/** First tile of a preset strip: the effect does nothing. */
+export function NoneTile({
+	isActive,
+	onSelect,
+}: {
+	isActive: boolean;
+	onSelect: () => void;
+}) {
+	const m = useMessages();
+	return (
+		<button
+			type="button"
+			title={m.properties.effectPresets.none}
+			aria-pressed={isActive}
+			onClick={onSelect}
+			className="flex w-14 shrink-0 cursor-pointer flex-col gap-1 text-left"
+		>
+			<span
+				className={cn(
+					"bg-accent text-muted-foreground flex size-14 items-center justify-center rounded-md border-2",
+					isActive ? "border-primary" : "border-transparent",
+				)}
+			>
+				<HugeiconsIcon icon={UnavailableIcon} className="size-6" />
+			</span>
+			<span
+				className={cn(
+					"truncate text-[11px]",
+					isActive ? "text-foreground" : "text-muted-foreground",
+				)}
+			>
+				{m.properties.effectPresets.none}
+			</span>
+		</button>
+	);
+}
+
+/** Without effectType it lists every effect preset (all but adjustment). */
 export function UserPresetStrip({
 	effectType,
+	activeType,
 	params,
 	onSelect,
 }: {
-	effectType: string;
+	effectType?: string;
+	activeType: string;
 	params: ParamValues;
-	onSelect: (params: ParamValues) => void;
+	onSelect: (preset: UserEffectPreset) => void;
 }) {
 	const m = useMessages();
 	const allPresets = useEffectPresets((state) => state.presets);
 	const remove = useEffectPresets((state) => state.remove);
-	const presets = allPresets.filter((preset) => preset.effectType === effectType);
+	const presets = allPresets.filter((preset) =>
+		effectType
+			? preset.effectType === effectType
+			: preset.effectType !== ADJUST_EFFECT_TYPE,
+	);
 	if (presets.length === 0) return null;
 
 	return (
@@ -162,7 +325,9 @@ export function UserPresetStrip({
 			</span>
 			<div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
 				{presets.map((preset) => {
-					const isActive = isSameParams({ params, preset: preset.params });
+					const isActive =
+						preset.effectType === activeType &&
+						isSameParams({ params, preset: preset.params });
 					return (
 						<div key={preset.id} className="group relative w-14 shrink-0">
 							<button
@@ -180,7 +345,7 @@ export function UserPresetStrip({
 								type="button"
 								title={preset.name}
 								aria-pressed={isActive}
-								onClick={() => onSelect(preset.params)}
+								onClick={() => onSelect(preset)}
 								className="flex w-14 cursor-pointer flex-col gap-1 text-left"
 							>
 								<span
@@ -190,7 +355,7 @@ export function UserPresetStrip({
 									)}
 								>
 									<EffectPreviewCanvas
-										effectType={effectType}
+										effectType={preset.effectType}
 										params={preset.params}
 									/>
 								</span>

@@ -15,6 +15,7 @@ import {
 } from "@/effects/definitions/adjust-presets";
 import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
 import { AdjustFavoriteButton } from "./adjust-favorite-button";
+import { effectFavoriteId } from "./effect-controls";
 import { useEditor } from "@/editor/use-editor";
 import { buildEffectElement } from "@/timeline/element-utils";
 import type { EffectCategory, EffectDefinition } from "@/effects/types";
@@ -37,7 +38,6 @@ const CATEGORY_ORDER: EffectCategory[] = [
 
 type EffectFilter = "all" | "favorites" | "mine" | EffectCategory;
 
-const favoriteId = (effectType: string) => `effect:${effectType}`;
 
 export function EffectsView() {
 	const m = useMessages();
@@ -50,7 +50,7 @@ export function EffectsView() {
 		.getAll()
 		.filter((effect) => effect.type !== ADJUST_EFFECT_TYPE);
 	const favorites = favoriteIds.flatMap(
-		(id) => effects.find((effect) => favoriteId(effect.type) === id) ?? [],
+		(id) => effects.find((effect) => effectFavoriteId(effect.type) === id) ?? [],
 	);
 	const filters: EffectFilter[] = [
 		"all",
@@ -63,7 +63,7 @@ export function EffectsView() {
 		<EffectItem
 			key={effect.type}
 			effect={effect}
-			overlay={<AdjustFavoriteButton presetId={favoriteId(effect.type)} />}
+			overlay={<AdjustFavoriteButton presetId={effectFavoriteId(effect.type)} />}
 		/>
 	);
 	const visible =

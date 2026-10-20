@@ -50,6 +50,7 @@ import type { MediaAsset } from "@/media/types";
 import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
+	Delete02Icon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
 	SortingOneNineIcon,
@@ -304,10 +305,12 @@ function MediaAssetDraggable({
 
 function MediaItemWithContextMenu({
 	item,
+	isGrid,
 	children,
 	onRemove,
 }: {
 	item: MediaAsset;
+	isGrid: boolean;
 	children: React.ReactNode;
 	onRemove: ({
 		event,
@@ -327,7 +330,27 @@ function MediaItemWithContextMenu({
 
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+			<ContextMenuTrigger asChild>
+				<div className={cn("group/media relative", !isGrid && "w-full")}>
+					{children}
+					<Button
+						size="icon"
+						variant="ghost"
+						aria-label={deleteLabel}
+						title={deleteLabel}
+						className={cn(
+							"text-muted-foreground hover:text-destructive absolute z-10 size-6 opacity-0 group-hover/media:opacity-100 focus-visible:opacity-100",
+							isGrid
+								? "bg-background/80 hover:bg-background top-1 right-1"
+								: "top-1/2 right-1 -translate-y-1/2",
+						)}
+						onPointerDown={(event) => event.stopPropagation()}
+						onClick={(event) => onRemove({ event, ids: idsToDelete })}
+					>
+						<HugeiconsIcon icon={Delete02Icon} className="size-3.5" />
+					</Button>
+				</div>
+			</ContextMenuTrigger>
 			<ContextMenuContent>
 				<ContextMenuItem>{m.media.exportClips}</ContextMenuItem>
 				<ContextMenuItem
@@ -368,7 +391,12 @@ function MediaItemList({
 			}
 		>
 			{items.map((item) => (
-				<MediaItemWithContextMenu item={item} onRemove={onRemove} key={item.id}>
+				<MediaItemWithContextMenu
+					item={item}
+					isGrid={isGrid}
+					onRemove={onRemove}
+					key={item.id}
+				>
 					<SelectableItem className={cn(!isGrid && "w-full")} id={item.id}>
 						<MediaAssetDraggable
 							item={item}

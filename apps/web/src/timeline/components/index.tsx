@@ -331,6 +331,9 @@ export function Timeline() {
 		};
 	}, [syncFollowers]);
 
+	// 영역 선택 중에 Space를 누르면 선택 상자를 접고 화면 이동으로 넘긴다
+	const boxSelectRef = useRef({ isSelecting: false, cancel: () => {} });
+
 	// Space+드래그 또는 휠 클릭 드래그로 화면만 옮긴다. 재생 헤드 시점은 그대로.
 	// 캡처 단계에서 가로채 클립 선택·이동·탐색이 같이 일어나지 않게 한다
 	useEffect(() => {
@@ -366,6 +369,24 @@ export function Timeline() {
 
 		const onPointerMove = (e: PointerEvent) => {
 			const tracks = tracksScrollRef.current;
+			if (
+				!drag &&
+				tracks &&
+				isSpaceHeld() &&
+				(e.buttons & 1) === 1 &&
+				boxSelectRef.current.isSelecting
+			) {
+				boxSelectRef.current.cancel();
+				drag = {
+					pointerId: e.pointerId,
+					x: e.clientX,
+					y: e.clientY,
+					left: tracks.scrollLeft,
+					top: tracks.scrollTop,
+				};
+				suppressClick = true;
+				setPanning(true);
+			}
 			if (!drag || e.pointerId !== drag.pointerId || !tracks) return;
 			e.stopPropagation();
 			tracks.scrollLeft = Math.max(0, drag.left - (e.clientX - drag.x));
@@ -461,8 +482,10 @@ export function Timeline() {
 		handleMouseDown: handleSelectionMouseDown,
 		isSelecting,
 		shouldIgnoreClick,
+		cancel: cancelBoxSelect,
 	} = useBoxSelect({
 		containerRef: tracksContainerRef,
+		shouldStartSelection: () => !isSpaceHeld(),
 		selectedIds: selectedElements,
 		anchorId: null,
 		getIsAdditiveSelection: (event) =>
@@ -490,6 +513,10 @@ export function Timeline() {
 			}
 		},
 	});
+
+	useEffect(() => {
+		boxSelectRef.current = { isSelecting, cancel: cancelBoxSelect };
+	}, [isSelecting, cancelBoxSelect]);
 
 	const contentWidth = timelineTimeToPixels({
 		time: timelineDuration,

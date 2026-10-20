@@ -12,6 +12,7 @@ import {
 	ADJUST_SLIDERS_BY_KEY,
 	type AdjustSlider,
 	type AdjustSectionId,
+	isNeutralAdjust,
 } from "@/effects/definitions/adjust";
 import {
 	ADJUST_PRESETS,
@@ -19,7 +20,11 @@ import {
 	findMatchingAdjustPreset,
 } from "@/effects/definitions/adjust-presets";
 import { EffectPreviewCanvas } from "./effect-preview-canvas";
-import { SavePresetButton, UserPresetStrip } from "./effect-controls";
+import {
+	NoneTile,
+	SavePresetButton,
+	UserPresetStrip,
+} from "./effect-controls";
 import { AdjustFavoriteButton } from "./adjust-favorite-button";
 import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
 import {
@@ -83,10 +88,13 @@ export function AdjustControls({
 			<div className="flex flex-col gap-3 px-4 pt-1 pb-3">
 				<UserPresetStrip
 					effectType={ADJUST_EFFECT_TYPE}
+					activeType={ADJUST_EFFECT_TYPE}
 					params={params}
-					onSelect={applyAll}
+					onSelect={(preset) => applyAll(preset.params)}
 				/>
 				<PresetStrip
+					isNone={isNeutralAdjust(params)}
+					onSelectNone={() => applyAll(buildAdjustPresetParams(null))}
 					activePresetId={activePreset?.id ?? null}
 					onSelect={(preset) =>
 						applyAll({
@@ -139,9 +147,13 @@ export function AdjustControls({
 }
 
 function PresetStrip({
+	isNone,
+	onSelectNone,
 	activePresetId,
 	onSelect,
 }: {
+	isNone: boolean;
+	onSelectNone: () => void;
 	activePresetId: string | null;
 	onSelect: (preset: (typeof ADJUST_PRESETS)[number]) => void;
 }) {
@@ -160,6 +172,7 @@ function PresetStrip({
 				{m.properties.adjust.presets}
 			</span>
 			<div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+				<NoneTile isActive={isNone} onSelect={onSelectNone} />
 				{presets.map((preset) => {
 					const name = translateLabel({ messages: m, label: preset.name });
 					const isActive = preset.id === activePresetId;
