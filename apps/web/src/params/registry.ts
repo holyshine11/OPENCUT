@@ -12,6 +12,7 @@ import type {
 import { DEFAULTS } from "@/timeline/defaults";
 import { VOLUME_DB_MAX, VOLUME_DB_MIN } from "@/timeline/audio-constants";
 import { DEFAULT_FADE_CURVE, type FadeCurveId } from "@/timeline/audio-fade";
+import { AUDIO_EFFECT_LIMITS } from "@/media/audio-effects";
 import {
 	CORNER_RADIUS_MAX,
 	CORNER_RADIUS_MIN,
@@ -233,6 +234,63 @@ const audioElementParams: ElementParamDefinition[] = [
 		keyframable: false,
 	},
 ];
+
+const L = AUDIO_EFFECT_LIMITS;
+const effectToggle = ({
+	key,
+	label,
+}: {
+	key: string;
+	label: string;
+}): ElementParamDefinition => ({
+	key,
+	label,
+	type: "boolean",
+	default: false,
+	keyframable: false,
+});
+const effectSlider = ({
+	key,
+	label,
+	toggle,
+	limit,
+	step,
+	suffix,
+}: {
+	key: string;
+	label: string;
+	toggle: string;
+	limit: { min: number; max: number; default: number };
+	step: number;
+	suffix: string;
+}): ElementParamDefinition => ({
+	key,
+	label,
+	type: "number",
+	default: limit.default,
+	min: limit.min,
+	max: limit.max,
+	step,
+	suffix,
+	slider: true,
+	keyframable: false,
+	dependencies: [{ param: toggle, equals: true }],
+});
+
+/** 클립 오디오 이펙트. 켜면 아래 슬라이더가 나타난다 */
+const audioEffectParams: ElementParamDefinition[] = [
+	effectToggle({ key: "reverb", label: "Reverb" }),
+	effectSlider({ key: "reverbMix", label: "Reverb Mix", toggle: "reverb", limit: L.mixPercent, step: 1, suffix: "%" }),
+	effectSlider({ key: "reverbDecay", label: "Reverb Decay", toggle: "reverb", limit: L.reverbDecay, step: 0.1, suffix: "s" }),
+	effectToggle({ key: "echo", label: "Echo" }),
+	effectSlider({ key: "echoMix", label: "Echo Mix", toggle: "echo", limit: L.mixPercent, step: 1, suffix: "%" }),
+	effectSlider({ key: "echoFeedback", label: "Echo Decay", toggle: "echo", limit: L.echoFeedbackPercent, step: 1, suffix: "%" }),
+	effectToggle({ key: "delay", label: "Delay" }),
+	effectSlider({ key: "delayMix", label: "Delay Mix", toggle: "delay", limit: L.mixPercent, step: 1, suffix: "%" }),
+	effectSlider({ key: "delayTime", label: "Delay Time", toggle: "delay", limit: L.delayTime, step: 0.01, suffix: "s" }),
+	effectSlider({ key: "delayFeedback", label: "Delay Feedback", toggle: "delay", limit: L.delayFeedbackPercent, step: 1, suffix: "%" }),
+];
+audioElementParams.push(...audioEffectParams);
 
 const textElementParams: ElementParamDefinition[] = [
 	{

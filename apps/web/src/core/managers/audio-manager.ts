@@ -8,6 +8,7 @@ import {
 	hasGainAutomation,
 } from "@/timeline/audio-state";
 import { createAudioMasteringChain } from "@/media/audio-mastering";
+import { connectAudioEffects, getAudioEffects } from "@/media/audio-effects";
 import {
 	faderDbToGain,
 	getTrackGain,
@@ -99,6 +100,8 @@ export class AudioManager {
 		AsyncGenerator<WrappedAudioBuffer, void, unknown>
 	>();
 	private queuedSources = new Set<AudioBufferSourceNode>();
+	/** 클립별 이펙트 체인 입력. 청크가 바뀌어도 꼬리가 이어지도록 재생 세션 동안 유지한다 */
+	private clipEffectChains = new Map<string, AudioNode[]>();
 	private preparedClipBuffers = new Map<string, Promise<AudioBuffer | null>>();
 	private decodedBuffers = new Map<string, Promise<AudioBuffer | null>>();
 	private playbackSessionId = 0;
@@ -316,7 +319,20 @@ export class AudioManager {
 	}): AudioNode {
 		const trackId = this.elementTrackIds.get(clip.id);
 		const bus = trackId ? this.trackBuses.get(trackId) : undefined;
-		return bus?.input ?? this.masterBus ?? audioContext.destination;
+		const destination = bus?.input ?? this.masterBus ?? audioContext.destination;
+		const existing = this.clipEffectChains.get(clip.id);
+		if (existing) return existing[0];
+		const settings = getAudioEffects({ element: clip.timelineElement });
+		if (!settings) return destination;
+		const input = audioContext.createGain();
+		const nodes = connectAudioEffects({
+			context: audioContext,
+			input,
+			output: destination,
+			settings,
+		});
+		this.clipEffectChains.set(clip.id, [input, ...nodes]);
+		return input;
 	}
 
 	private readPeak(analyser: AnalyserNode): number {
@@ -489,6 +505,11 @@ export class AudioManager {
 			source.disconnect();
 		}
 		this.queuedSources.clear();
+
+		for (const nodes of this.clipEffectChains.values()) {
+			for (const node of nodes) node.disconnect();
+		}
+		this.clipEffectChains.clear();
 	}
 
 	private async runClipIterator({

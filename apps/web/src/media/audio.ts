@@ -10,6 +10,11 @@ import type {
 import { shouldMaintainPitch } from "@/retime/rate";
 import type { MediaAsset } from "@/media/types";
 import { applyAudioMasteringToBuffer } from "@/media/audio-mastering";
+import {
+	getAudioEffects,
+	getAudioEffectTailSeconds,
+	renderAudioEffects,
+} from "@/media/audio-effects";
 import type { AudioCapableElement } from "@/timeline/audio-state";
 import {
 	applyCrossfades,
@@ -699,15 +704,41 @@ export async function createTimelineAudioBuffer({
 				})
 			: undefined;
 
-		mixAudioChannels({
+		const source = {
 			element,
 			buffer: renderedBuffer ?? element.buffer,
 			trimStart: renderedBuffer ? 0 : element.trimStart,
 			retime: renderedBuffer ? undefined : element.retime,
-			outputBuffer,
-			outputLength,
 			sampleRate,
+		};
+		const effects = getAudioEffects({ element: element.timelineElement });
+		if (!effects) {
+			mixAudioChannels({ ...source, outputBuffer, outputLength });
+			continue;
+		}
+
+		// 이펙트 꼬리까지 담을 버퍼에 따로 믹스해 체인을 통과시킨 뒤 더한다
+		const startSample = Math.floor(element.startTime * sampleRate);
+		const wetLength = Math.min(
+			outputLength - startSample,
+			Math.ceil(
+				(element.duration + getAudioEffectTailSeconds(effects)) * sampleRate,
+			),
+		);
+		if (wetLength <= 0) continue;
+		const scratch = context.createBuffer(outputChannels, wetLength, sampleRate);
+		mixAudioChannels({
+			...source,
+			outputBuffer: scratch,
+			outputLength: wetLength,
+			outputStartSample: 0,
 		});
+		const wet = await renderAudioEffects({ buffer: scratch, settings: effects });
+		for (let channel = 0; channel < outputChannels; channel++) {
+			const out = outputBuffer.getChannelData(channel);
+			const data = wet.getChannelData(channel);
+			for (let i = 0; i < wetLength; i++) out[startSample + i] += data[i];
+		}
 	}
 
 	if (master) applyMasterBus({ audioBuffer: outputBuffer, master });
@@ -848,6 +879,7 @@ function mixAudioChannels({
 	outputBuffer,
 	outputLength,
 	sampleRate,
+	outputStartSample = Math.floor(element.startTime * sampleRate),
 }: {
 	element: CollectedAudioElement;
 	buffer: AudioBuffer;
@@ -856,10 +888,10 @@ function mixAudioChannels({
 	outputBuffer: AudioBuffer;
 	outputLength: number;
 	sampleRate: number;
+	/** 출력 버퍼에서 클립이 시작하는 샘플. 기본은 타임라인 위치 */
+	outputStartSample?: number;
 }): void {
-	const { startTime, duration: elementDuration } = element;
-
-	const outputStartSample = Math.floor(startTime * sampleRate);
+	const elementDuration = element.duration;
 	const renderedLength = Math.ceil(elementDuration * sampleRate);
 
 	const outputL = outputBuffer.getChannelData(0);

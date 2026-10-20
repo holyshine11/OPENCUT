@@ -22,6 +22,7 @@ import {
 	MagicWand05Icon,
 	DashboardSpeed02Icon,
 	ChartIncreaseIcon,
+	AudioWave01Icon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
@@ -41,6 +42,18 @@ const TRANSFORM_PARAM_KEYS = [
 
 const BLENDING_PARAM_KEYS = ["opacity", "blendMode"] as const;
 const AUDIO_PARAM_KEYS = ["volume", "muted"] as const;
+const AUDIO_EFFECT_PARAM_KEYS = [
+	"reverb",
+	"reverbMix",
+	"reverbDecay",
+	"echo",
+	"echoMix",
+	"echoFeedback",
+	"delay",
+	"delayMix",
+	"delayTime",
+	"delayFeedback",
+] as const;
 const TEXT_PARAM_KEYS = [
 	"content",
 	"fontFamily",
@@ -78,6 +91,7 @@ export type PropertiesTabId =
 	| "transform"
 	| "blending"
 	| "audio"
+	| "audioEffects"
 	| "speed"
 	| "fade"
 	| "masks"
@@ -148,6 +162,25 @@ function buildAudioTab({
 				trackId={trackId}
 				paramKeys={AUDIO_PARAM_KEYS}
 				sectionKey="audio"
+			/>
+		),
+	};
+}
+
+function buildAudioEffectsTab({
+	element,
+}: {
+	element: AudioElement | VideoElement;
+}): PropertiesTabDef {
+	return {
+		id: "audioEffects",
+		icon: <HugeiconsIcon icon={AudioWave01Icon} size={16} />,
+		content: ({ trackId }) => (
+			<ElementParamsTab
+				element={element}
+				trackId={trackId}
+				paramKeys={AUDIO_EFFECT_PARAM_KEYS}
+				sectionKey="audioEffects"
 			/>
 		),
 	};
@@ -271,7 +304,9 @@ function getVideoConfig({
 		defaultTab: "transform",
 		tabs: [
 			buildTransformTab({ element }),
-			...(showAudioTab ? [buildAudioTab({ element })] : []),
+			...(showAudioTab
+				? [buildAudioTab({ element }), buildAudioEffectsTab({ element })]
+				: []),
 			buildSpeedTab({ element }),
 			...(showAudioTab ? [buildFadeTab({ element })] : []),
 			buildBlendingTab({ element }),
@@ -338,6 +373,7 @@ function getAudioConfig({
 		defaultTab: "audio",
 		tabs: [
 			buildAudioTab({ element }),
+			buildAudioEffectsTab({ element }),
 			buildSpeedTab({ element }),
 			buildFadeTab({ element }),
 		],
