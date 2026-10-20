@@ -22,7 +22,7 @@ import { computeDropTarget } from "@/timeline/components/drop-target";
 import { getMouseTimeFromClientX } from "@/timeline/drag-utils";
 import { isTrackLocked } from "@/timeline/track-capabilities";
 import { generateUUID } from "@/utils/id";
-import { findTrackInSceneTracks } from "@/timeline/track-element-update";
+import { redirectOverlappingCopies } from "@/timeline/group-move/copy-overlap";
 import type { SnapPoint } from "@/timeline/snapping";
 import type {
 	DropTarget,
@@ -467,19 +467,6 @@ export class ElementInteractionController {
 		this.notify();
 	}
 
-	private findElement({
-		sourceTrackId,
-		elementId,
-	}: {
-		sourceTrackId: string;
-		elementId: string;
-	}): TimelineElement | undefined {
-		return findTrackInSceneTracks({
-			tracks: this.deps.scene.getTracks(),
-			trackId: sourceTrackId,
-		})?.elements.find(({ id }) => id === elementId);
-	}
-
 	private snapResult({
 		frameSnappedTime,
 		group,
@@ -758,26 +745,19 @@ export class ElementInteractionController {
 			);
 		});
 
-		// 복사는 원본이 제자리에 남아서, 원본과 같은 트랙에 겹쳐 놓이면 하지 않는다
-		const copyOverlapsSource =
-			altKey &&
-			groupMoveResult.moves.some((move) => {
-				if (move.targetTrackId !== move.sourceTrackId) return false;
-				const element = this.findElement(move);
-				return (
-					!!element &&
-					move.newStartTime < element.startTime + element.duration &&
-					element.startTime < move.newStartTime + element.duration
-				);
-			});
+		// 복사본이 원본과 같은 트랙에서 겹치면 바로 위 새 트랙에 놓는다
+		const plan = altKey
+			? redirectOverlappingCopies({
+					tracks: this.deps.scene.getTracks(),
+					result: groupMoveResult,
+					createTrackId: generateUUID,
+				})
+			: groupMoveResult;
 
-		if (
-			(didMove || groupMoveResult.createTracks.length > 0) &&
-			!copyOverlapsSource
-		) {
+		if (plan && (didMove || plan.createTracks.length > 0)) {
 			this.deps.timeline.moveElements({
-				moves: groupMoveResult.moves,
-				createTracks: groupMoveResult.createTracks,
+				moves: plan.moves,
+				createTracks: plan.createTracks,
 				copy: altKey,
 			});
 		}
