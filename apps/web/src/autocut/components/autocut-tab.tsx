@@ -25,7 +25,7 @@ import {
 } from "@/wasm";
 import { getMotionAnalysis, getSpeechAnalysis } from "../analysis";
 import { collectSubtitleWords, sourcePointsToTimeline } from "../apply";
-import { type EditPoint, proposeEditPoints } from "../edit-points";
+import { type EditPoint, findFillers, proposeEditPoints } from "../edit-points";
 import { useAutocutReviewStore } from "../review-store";
 import settings from "../settings.json";
 import { collectSpeechRanges } from "../speech";
@@ -58,16 +58,15 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 		setRunning(m.autocut.analyzing({ percent: 0 }));
 		try {
 			const words = subtitleWords();
-			const speech =
+			const vad =
 				asset.hasAudio === false
-					? words
+					? []
 					: collectSpeechRanges({
 							...(await getSpeechAnalysis({
 								asset,
 								onProgress: (percent) =>
 									setRunning(m.autocut.analyzing({ percent })),
 							})),
-							words,
 							settings,
 						});
 			const { motion, motionSeconds } = await getMotionAnalysis({
@@ -78,7 +77,8 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 			const points = proposeEditPoints({
 				motion,
 				motionSeconds,
-				speech,
+				speech: [...vad, ...words],
+				fillers: findFillers({ vad, words, settings }),
 				frameSeconds: 1 / frameRateToFloat(fps),
 				settings,
 			});
@@ -132,6 +132,8 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 		motionStart: m.autocut.reasonMotionStart,
 		motionStop: m.autocut.reasonMotionStop,
 		event: m.autocut.reasonEvent,
+		fillerStart: m.autocut.reasonFillerStart,
+		fillerEnd: m.autocut.reasonFillerEnd,
 	};
 
 	return (

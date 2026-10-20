@@ -27,11 +27,13 @@ function caption({
 	start,
 	length,
 	offsets,
+	content = "",
 }: {
 	id: string;
 	start: number;
 	length: number;
 	offsets?: number[];
+	content?: string;
 }): TextElement {
 	return {
 		id,
@@ -41,7 +43,7 @@ function caption({
 		duration: t({ seconds: length }),
 		trimStart: ZERO_MEDIA_TIME,
 		trimEnd: ZERO_MEDIA_TIME,
-		params: {},
+		params: { content },
 		subtitleWordOffsets: offsets,
 	};
 }
@@ -69,15 +71,15 @@ describe("collectSubtitleWords", () => {
 					name: "subs",
 					hidden: false,
 					elements: [
-						caption({ id: "in", start: 11, length: 1, offsets: [0, 0.5] }),
+						caption({ id: "in", start: 11, length: 1, offsets: [0, 0.5], content: "음, 그래서" }),
 						caption({ id: "out", start: 25, length: 1, offsets: [0] }),
 					],
 				},
 			],
 		});
-		expect(words.map((word) => [word.start, word.end])).toEqual([
-			[6, 7],
-			[7, 8],
+		expect(words.map((word) => [word.start, word.end, word.text])).toEqual([
+			[6, 7, "음,"],
+			[7, 8, "그래서"],
 		]);
 	});
 });

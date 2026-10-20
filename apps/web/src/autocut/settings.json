@@ -18,5 +18,21 @@
 		"minRunSeconds": 1.5,
 		"smoothWindows": 3,
 		"eventAbove": 12
+	},
+	"fillers": {
+		"words": [
+			"어",
+			"음",
+			"아",
+			"에",
+			"으",
+			"흠",
+			"엄",
+			"어어",
+			"음음",
+			"아아"
+		],
+		"minSeconds": 0.2,
+		"maxSeconds": 1
 	}
 }

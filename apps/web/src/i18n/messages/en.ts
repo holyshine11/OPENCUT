@@ -245,6 +245,8 @@ export const en = {
 		reasonMotionStart: "Motion starts",
 		reasonMotionStop: "Still",
 		reasonEvent: "Action",
+		reasonFillerStart: "Filler starts",
+		reasonFillerEnd: "Filler ends",
 		playFrom: "Play from 1s before this point",
 		splitAt: ({ count }: { count: number }) => `Split at ${count} points`,
 		splitDone: ({ count }: { count: number }) => `Split at ${count} points. Undo with ⌘Z`,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { frameDifference, proposeEditPoints } from "../edit-points";
+import { findFillers, frameDifference, proposeEditPoints } from "../edit-points";
 import defaults from "../settings.json";
 import type { AutocutSettings } from "../speech";
 
@@ -146,6 +146,55 @@ describe("proposeEditPoints", () => {
 			[2, "speechStart"],
 			[4, "speechEnd"],
 		]);
+	});
+});
+
+describe("findFillers", () => {
+	const word = ([start, end, text]: [number, number, string]) => ({ start, end, text });
+
+	test("자막의 필러 단어는 문장부호를 떼고 찾는다", () => {
+		const words = [word([1, 2, "그래서"]), word([2, 2.4, "음,"]), word([2.4, 3, "이걸"])];
+		expect(findFillers({ vad: [], words, settings })).toEqual([{ start: 2, end: 2.4 }]);
+	});
+
+	test("받아쓰기가 뺀 짧은 말소리는 필러로 보고, 길거나 단어와 겹치면 아니다", () => {
+		const words = [word([1, 2, "그래서"]), word([5, 6, "이걸"])];
+		const vad = [
+			{ start: 1, end: 2 },
+			{ start: 3, end: 3.5 },
+			{ start: 3.8, end: 3.9 },
+			{ start: 6.5, end: 8 },
+		];
+		expect(findFillers({ vad, words, settings })).toEqual([{ start: 3, end: 3.5 }]);
+	});
+
+	test("자막이 없으면 짧은 말소리만으로는 찾지 않는다", () => {
+		expect(findFillers({ vad: [{ start: 3, end: 3.5 }], words: [], settings })).toEqual([]);
+	});
+});
+
+describe("필러 지점", () => {
+	test("필러 앞뒤를 1초보다 짧아도 따로 나누고, 필러 안과 바로 옆 지점은 뺀다", () => {
+		const points = proposeEditPoints({
+			...timeline("....SSSSSSSS...."),
+			fillers: [{ start: 4, end: 4.4 }],
+			settings,
+		}).map(({ time, reason }) => [time, reason]);
+		expect(points).toEqual([
+			[2, "speechStart"],
+			[4, "fillerStart"],
+			[4.4, "fillerEnd"],
+			[6, "speechEnd"],
+		]);
+	});
+
+	test("말 시작 바로 옆의 필러는 말 시작 지점을 대신한다", () => {
+		const points = proposeEditPoints({
+			...timeline("....SSSSSSSS...."),
+			fillers: [{ start: 2, end: 2.3 }],
+			settings,
+		}).map(({ reason }) => reason);
+		expect(points).toEqual(["fillerStart", "fillerEnd", "speechEnd"]);
 	});
 });
 

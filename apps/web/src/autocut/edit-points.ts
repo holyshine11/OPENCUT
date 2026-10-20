@@ -24,7 +24,7 @@ export function frameDifference({
 }
 
 /** 문자열 유니언으로 둔다(enum 금지 규칙). 지점 바로 뒤에 무엇이 시작되는지다 */
-export type EditPointReason = "speechStart" | "speechEnd" | "motionStart" | "motionStop" | "event";
+export type EditPointReason = "speechStart" | "speechEnd" | "motionStart" | "motionStop" | "event" | "fillerStart" | "fillerEnd";
 
 /** 클립을 나눌 지점 하나. 시간은 소스 기준(초) */
 export interface EditPoint {
@@ -35,7 +35,48 @@ export interface EditPoint {
 }
 
 // 같은 자리에 겹친 지점은 말 경계를 먼저 남긴다
-const PRIORITY: Record<EditPointReason, number> = { speechStart: 3, speechEnd: 3, event: 2, motionStart: 1, motionStop: 1 };
+const PRIORITY: Record<EditPointReason, number> = {
+	fillerStart: 4,
+	fillerEnd: 4,
+	speechStart: 3,
+	speechEnd: 3,
+	event: 2,
+	motionStart: 1,
+	motionStop: 1,
+};
+
+/**
+ * "어", "음" 같은 필러 구간을 찾는다. 지울지는 사람이 정하고, 여기서는 앞뒤로 쪼갤 자리만 준다.
+ * - 자막에 필러 단어(`fillers.words`, 문장부호는 무시)가 있으면 그 단어 구간
+ * - Whisper는 필러를 받아쓰지 않고 빼는 일이 많아서, 자막이 있는 클립에서는 어떤 단어와도 겹치지 않는
+ *   짧은 말소리(`minSeconds`~`maxSeconds`)도 필러로 본다. 자막이 없으면 짧은 말과 구분할 수 없어 찾지 않는다
+ */
+export function findFillers({
+	vad,
+	words,
+	settings,
+}: {
+	vad: readonly TimeRange[];
+	words: readonly (TimeRange & { text: string })[];
+	settings: AutocutSettings;
+}): TimeRange[] {
+	const { fillers } = settings;
+	const fromWords = words
+		.filter((word) => fillers.words.includes(word.text.replace(/[\p{P}\s]/gu, "")))
+		.map(({ start, end }) => ({ start, end }));
+	const fromVad =
+		words.length === 0
+			? []
+			: vad.filter((range) => {
+					const length = range.end - range.start;
+					return (
+						length >= fillers.minSeconds &&
+						length <= fillers.maxSeconds &&
+						!words.some((word) => word.start < range.end && range.start < word.end)
+					);
+				});
+	return mergeRanges({ ranges: [...fromWords, ...fromVad], joinWithin: 0 });
+}
 
 /**
  * 말과 화면 움직임으로 클립을 나눌 지점을 찾는다. 자르거나 빠르게 넘길지는 정하지 않고 쪼갤 자리만 준다.
@@ -51,12 +92,14 @@ export function proposeEditPoints({
 	motion,
 	motionSeconds,
 	speech,
+	fillers = [],
 	frameSeconds,
 	settings,
 }: {
 	motion: ArrayLike<number>;
 	motionSeconds: number;
 	speech: readonly TimeRange[];
+	fillers?: readonly TimeRange[];
 	frameSeconds?: number;
 	settings: AutocutSettings;
 }): EditPoint[] {
@@ -102,7 +145,31 @@ export function proposeEditPoints({
 		}
 		points.push(toPoint(candidate));
 	}
-	return points;
+	return withFillers({ points, fillers: fillers.map(({ start, end }) => ({ start: snap(start), end: snap(end) })), totalSeconds, near: rules.minPieceSeconds / 2 });
+}
+
+/** 필러 앞뒤에 지점을 넣는다. 필러는 1초보다 짧아도 따로 떼어야 하므로 위의 합치기 규칙을 거치지 않고, 필러 안이나 `near`초 안의 다른 지점은 뺀다 */
+function withFillers({
+	points,
+	fillers,
+	totalSeconds,
+	near,
+}: {
+	points: EditPoint[];
+	fillers: readonly TimeRange[];
+	totalSeconds: number;
+	near: number;
+}): EditPoint[] {
+	if (fillers.length === 0) return points;
+	const kept = points.filter((point) => !fillers.some((filler) => point.time > filler.start - near && point.time < filler.end + near));
+	const added = fillers.flatMap((filler) => [
+		toPoint({ time: filler.start, reason: "fillerStart" }),
+		toPoint({ time: filler.end, reason: "fillerEnd" }),
+	]);
+	return [...kept, ...added]
+		.filter((point) => point.time > 0 && point.time < totalSeconds)
+		.sort((a, b) => a.time - b.time)
+		.filter((point, index, all) => index === 0 || point.time !== all[index - 1].time);
 }
 
 const toPoint = ({ time, reason }: { time: number; reason: EditPointReason }): EditPoint => ({

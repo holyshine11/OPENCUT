@@ -58,6 +58,9 @@ export function timelineToSource({
 	);
 }
 
+/** 자막 단어 하나. 시간은 클립 소스 기준(초). 단어 수와 단어 시각 수가 안 맞는 자막이면 글자는 빈 문자열이다 */
+export type SubtitleWord = TimeRange & { text: string };
+
 /**
  * 클립 위에 놓인 자막의 단어 시각을 클립의 소스 시간(초)으로 모은다.
  * 단어 끝은 다음 단어 시작이나 자막 끝이다
@@ -68,24 +71,28 @@ export function collectSubtitleWords({
 }: {
 	tracks: SceneTracks;
 	element: TimelineElement;
-}): TimeRange[] {
+}): SubtitleWord[] {
 	const clipStart = seconds(element.startTime);
 	const clipEnd = clipStart + seconds(element.duration);
 	const toSource = (timelineSeconds: number) => timelineToSource({ element, timelineSeconds });
 
-	const words: TimeRange[] = [];
+	const words: SubtitleWord[] = [];
 	for (const track of tracks) {
 		for (const text of track.elements) {
 			if (text.type !== "text" || !text.subtitleWordOffsets?.length) continue;
 			const origin = seconds(text.startTime) - seconds(text.trimStart);
 			const textEnd = seconds(text.startTime) + seconds(text.duration);
 			const starts = text.subtitleWordOffsets.map((offset) => origin + offset);
+			// 단어 나누기는 자막 목록(subtitles/edit.ts)과 같이 공백 기준
+			const texts = String(text.params.content ?? "").split(/\s+/).filter(Boolean);
+			const textOf = (index: number) => (texts.length === starts.length ? texts[index] : "");
 			starts.forEach((start, index) => {
 				const end = Math.min(textEnd, starts[index + 1] ?? textEnd);
 				if (end <= start || end <= clipStart || start >= clipEnd) return;
 				words.push({
 					start: toSource(Math.max(start, clipStart)),
 					end: toSource(Math.min(end, clipEnd)),
+					text: textOf(index),
 				});
 			});
 		}
