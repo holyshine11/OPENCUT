@@ -216,13 +216,7 @@ export const ko: Messages = {
 	},
 	autocut: {
 		title: "자동 컷",
-		hint: "말이 없고 조용한 부분을 찾아 잘라 내고 뒤를 당겨요. 끓는 소리처럼 말 없이 소리가 나는 장면은 남기고, 배경음악 트랙은 건드리지 않아요.",
-		run: "무음 자동 컷",
 		analyzing: ({ percent }) => `분석 중... ${percent}%`,
-		noAudio: "이 클립에는 소리가 없어요",
-		nothingToCut: "잘라 낼 무음이 없어요",
-		done: ({ count, seconds }) =>
-			`${count}곳을 잘라 ${seconds}초 줄였어요. ⌘Z로 되돌릴 수 있어요`,
 		failed: "자동 컷에 실패했어요",
 		editPointsHint:
 			"말과 화면 움직임으로 편집점을 찾아 클립을 쪼개기만 해요. 말 한 마디마다, 말 없이 화면이 멈추거나 움직이기 시작하는 곳, 손이 들어오는 곳에서 나눠요. 자를지 빠르게 넘길지는 쪼갠 뒤 직접 정해요.",

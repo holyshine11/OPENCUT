@@ -249,7 +249,7 @@ export class AudioManager {
 
 	private applyMasterSettings = (): void => {
 		if (!this.masterBus || !this.monoNode) return;
-		const settings = this.editor.project.getActive()?.settings;
+		const settings = this.editor.project.getActiveOrNull()?.settings;
 		this.masterBus.gain.value = faderDbToGain(settings?.masterVolume ?? 0);
 		this.monoNode.channelCount = settings?.audioMono ? 1 : 2;
 	};

@@ -233,13 +233,7 @@ export const en = {
 	},
 	autocut: {
 		title: "Auto cut",
-		hint: "Finds quiet parts with no speech, cuts them and closes the gaps. Scenes with sound but no speech (like sizzling) are kept, and background music tracks are left alone.",
-		run: "Cut silences",
 		analyzing: ({ percent }: { percent: number }) => `Analyzing... ${percent}%`,
-		noAudio: "This clip has no audio",
-		nothingToCut: "No silences to cut",
-		done: ({ count, seconds }: { count: number; seconds: string }) =>
-			`Cut ${count} silences, ${seconds}s shorter. Undo with ⌘Z`,
 		failed: "Auto cut failed",
 		editPointsHint:
 			"Finds edit points from speech and on-screen motion and only splits the clip there: at each utterance, where the picture stops or starts moving with no speech, and where a hand comes in. You decide what to cut or speed up after splitting.",

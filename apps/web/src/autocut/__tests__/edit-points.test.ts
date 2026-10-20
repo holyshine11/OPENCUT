@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { frameDifference, proposeEditPoints } from "../edit-points";
 import defaults from "../settings.json";
-import type { AutocutSettings } from "../silence";
+import type { AutocutSettings } from "../speech";
 
 const W = 0.5;
 

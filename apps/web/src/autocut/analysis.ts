@@ -8,12 +8,10 @@ import { DEFAULT_TRANSCRIPTION_SAMPLE_RATE } from "@/transcription/audio";
 import transcriptionSettings from "@/transcription/settings.json";
 import settings from "./settings.json";
 import { frameDifference } from "./edit-points";
-import { computeWindowLevels } from "./silence";
 
-/** 소스 하나의 VAD 창별 말소리 확률과 음량. 두 배열은 같은 창을 쓴다 */
+/** 소스 하나의 VAD 창별 말소리 확률 */
 export interface SpeechAnalysis {
 	probabilities: Float32Array;
-	levels: Float32Array;
 	windowSeconds: number;
 }
 
@@ -61,16 +59,11 @@ async function analyze({
 	}
 
 	const windowSamples = transcriptionSettings.vad.windowSamples;
-	const levels = computeWindowLevels({
-		audio,
-		windowSamples,
-		silentDb: settings.level.silentDb,
-	});
 	const probabilities = await transcriptionService.analyzeSpeech({
 		audioData: audio,
 		onProgress,
 	});
-	return { probabilities, levels, windowSeconds: windowSamples / sampleRate };
+	return { probabilities, windowSeconds: windowSamples / sampleRate };
 }
 
 /** 소스 하나의 화면 움직임. `motion[i]`는 i번째와 i+1번째 샘플 프레임의 밝기 차이 */

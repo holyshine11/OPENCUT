@@ -10,7 +10,7 @@ import {
 	SectionHeader,
 	SectionTitle,
 } from "@/components/section";
-import { AutocutCommand, SplitAtTimesCommand } from "@/commands/timeline/element";
+import { SplitAtTimesCommand } from "@/commands/timeline/element";
 import { useEditor } from "@/editor/use-editor";
 import { frameRateToFloat } from "@/fps/utils";
 import { useMessages } from "@/i18n";
@@ -24,23 +24,20 @@ import {
 	ZERO_MEDIA_TIME,
 } from "@/wasm";
 import { getMotionAnalysis, getSpeechAnalysis } from "../analysis";
-import { collectSubtitleWords, sourceCutsToTimeline, sourcePointsToTimeline } from "../apply";
+import { collectSubtitleWords, sourcePointsToTimeline } from "../apply";
 import { type EditPoint, proposeEditPoints } from "../edit-points";
 import { useAutocutReviewStore } from "../review-store";
 import settings from "../settings.json";
-import { collectSpeechRanges, proposeSilenceCuts } from "../silence";
+import { collectSpeechRanges } from "../speech";
 
 const seconds = (time: MediaTime) => mediaTimeToSeconds({ time });
 
-/**
- * 클립 하나의 편집점을 찾아 목록으로 보여 주고, 고른 지점에서 클립을 쪼개기만 한다. 자르거나 빠르게 넘길지는 사람이 정한다.
- * 무음 자동 컷은 검토 없이 바로 잘라 낸다
- */
+/** 클립 하나의 편집점을 찾아 목록으로 보여 주고, 고른 지점에서 클립을 쪼개기만 한다. 자르거나 빠르게 넘길지는 사람이 정한다 */
 export function AutocutTab({ element, trackId }: { element: VideoElement; trackId: string }) {
 	const editor = useEditor();
 	const m = useMessages();
 	const fps = useEditor((e) => e.project.getActive().settings.fps);
-	const [running, setRunning] = useState<{ action: "silence" | "editPoints"; label: string } | null>(null);
+	const [running, setRunning] = useState<string | null>(null);
 	const reviewElementId = useAutocutReviewStore((state) => state.elementId);
 	const allItems = useAutocutReviewStore((state) => state.items);
 	const setItems = useAutocutReviewStore((state) => state.setItems);
@@ -52,56 +49,13 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 	const subtitleWords = () =>
 		collectSubtitleWords({ tracks: editor.scenes.getActiveScene().tracks, element });
 
-	const cutSilences = async () => {
-		const asset = findAsset();
-		if (!asset || asset.hasAudio === false) {
-			toast.error(m.autocut.noAudio);
-			return;
-		}
-		const showProgress = (percent: number) =>
-			setRunning({ action: "silence", label: m.autocut.analyzing({ percent }) });
-		showProgress(0);
-		try {
-			const analysis = await getSpeechAnalysis({ asset, onProgress: showProgress });
-			const ranges = sourceCutsToTimeline({
-				element,
-				cuts: proposeSilenceCuts({
-					...analysis,
-					words: subtitleWords(),
-					frameSeconds: 1 / frameRateToFloat(fps),
-					settings,
-				}),
-				fps,
-			});
-			if (ranges.length === 0) {
-				toast(m.autocut.nothingToCut);
-				return;
-			}
-			editor.command.execute({
-				command: new AutocutCommand({
-					mediaId: element.mediaId,
-					ranges,
-					select: [{ trackId, elementId: element.id }],
-				}),
-			});
-			clearItems();
-			const removed = ranges.reduce((sum, range) => sum + seconds(range.end) - seconds(range.start), 0);
-			toast.success(m.autocut.done({ count: ranges.length, seconds: removed.toFixed(1) }));
-		} catch (error) {
-			console.error("Auto cut failed:", error);
-			toast.error(m.autocut.failed);
-		} finally {
-			setRunning(null);
-		}
-	};
-
 	const findEditPoints = async () => {
 		const asset = findAsset();
 		if (!asset) {
 			toast.error(m.autocut.failed);
 			return;
 		}
-		setRunning({ action: "editPoints", label: m.autocut.analyzing({ percent: 0 }) });
+		setRunning(m.autocut.analyzing({ percent: 0 }));
 		try {
 			const words = subtitleWords();
 			const speech =
@@ -111,7 +65,7 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 							...(await getSpeechAnalysis({
 								asset,
 								onProgress: (percent) =>
-									setRunning({ action: "editPoints", label: m.autocut.analyzing({ percent }) }),
+									setRunning(m.autocut.analyzing({ percent })),
 							})),
 							words,
 							settings,
@@ -119,7 +73,7 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 			const { motion, motionSeconds } = await getMotionAnalysis({
 				asset,
 				onProgress: (percent) =>
-					setRunning({ action: "editPoints", label: m.autocut.analyzingVideo({ percent }) }),
+					setRunning(m.autocut.analyzingVideo({ percent })),
 			});
 			const points = proposeEditPoints({
 				motion,
@@ -188,7 +142,7 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 			<SectionContent>
 				<p className="text-muted-foreground mb-3 text-xs">{m.autocut.editPointsHint}</p>
 				<Button className="mb-3 w-full" disabled={running !== null} onClick={findEditPoints}>
-					{running?.action === "editPoints" ? running.label : m.autocut.findEditPoints}
+					{running ?? m.autocut.findEditPoints}
 				</Button>
 
 				{items.length > 0 && (
@@ -225,11 +179,6 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 						</Button>
 					</div>
 				)}
-
-				<p className="text-muted-foreground mb-3 text-xs">{m.autocut.hint}</p>
-				<Button className="w-full" variant="secondary" disabled={running !== null} onClick={cutSilences}>
-					{running?.action === "silence" ? running.label : m.autocut.run}
-				</Button>
 			</SectionContent>
 		</Section>
 	);

@@ -1,16 +1,15 @@
-// 무음 컷과 편집점 제안을 실제 영상으로 확인한다. 브라우저와 같은 VAD와 autocut/ 규칙을 bun(CPU)으로 돌린다.
+// 편집점 찾기를 실제 영상으로 확인한다. 브라우저와 같은 VAD와 autocut/ 규칙을 bun(CPU)으로 돌린다.
 //
 // 사용: bun scripts/autocut-bench.ts <영상>...
 //   모델은 앱과 같은 public/models 를 쓴다 (bun run models 로 받아 둔다)
-// 결과: 영상마다 컷 개수, 줄어든 길이, 처리 시간. <영상>.cuts.tsv에 무음 구간(시작, 끝),
-//   <영상>.points.tsv에 편집점(시각, 이유). 확장자를 .srt로 바꾼 자막 파일이 있으면
+// 결과: 영상마다 편집점 개수와 처리 시간. <영상>.points.tsv에 편집점(시각, 이유). 확장자를 .srt로 바꾼 자막 파일이 있으면
 //   앱에서 자막 단어를 합치듯 그 자막 구간도 말로 본다
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { env } from "@huggingface/transformers";
 import { frameDifference, proposeEditPoints } from "@/autocut/edit-points";
 import settings from "@/autocut/settings.json";
-import { collectSpeechRanges, computeWindowLevels, proposeSilenceCuts } from "@/autocut/silence";
+import { collectSpeechRanges } from "@/autocut/speech";
 import { computeSpeechProbabilities, loadVadModel } from "@/services/transcription/engine";
 import { parseSrt } from "@/subtitles/srt";
 import { DEFAULT_TRANSCRIPTION_SAMPLE_RATE } from "@/transcription/audio";
@@ -63,26 +62,8 @@ const windowSamples = transcriptionSettings.vad.windowSamples;
 
 for (const video of videos) {
 	const audio = await decodeAudio({ file: video });
-	const startedAt = performance.now();
 	const probabilities = await computeSpeechProbabilities({ vad, audio });
-	const levels = computeWindowLevels({ audio, windowSamples, silentDb: settings.level.silentDb });
-	const cuts = proposeSilenceCuts({
-		probabilities,
-		levels,
-		windowSeconds: windowSamples / DEFAULT_TRANSCRIPTION_SAMPLE_RATE,
-		frameSeconds: 1 / 30,
-		settings,
-	});
-	const seconds = (performance.now() - startedAt) / 1000;
-	const total = audio.length / DEFAULT_TRANSCRIPTION_SAMPLE_RATE;
-	const removed = cuts.reduce((sum, cut) => sum + cut.end - cut.start, 0);
-	await writeFile(
-		`${video}.cuts.tsv`,
-		cuts.map((cut) => `${cut.start.toFixed(3)}\t${cut.end.toFixed(3)}`).join("\n"),
-	);
-	console.log(
-		`${basename(video)}: ${total.toFixed(1)}초 → ${(total - removed).toFixed(1)}초, 컷 ${cuts.length}개, 분석 ${seconds.toFixed(1)}초`,
-	);
+	console.log(`${basename(video)}: ${(audio.length / DEFAULT_TRANSCRIPTION_SAMPLE_RATE).toFixed(1)}초`);
 
 	const motionStartedAt = performance.now();
 	const motion = await decodeMotion({ file: video });

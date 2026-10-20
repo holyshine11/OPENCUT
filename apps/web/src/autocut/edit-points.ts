@@ -1,5 +1,5 @@
 import type { TimeRange } from "@/transcription/speech-regions";
-import type { AutocutSettings } from "./silence";
+import type { AutocutSettings } from "./speech";
 
 /**
  * RGBA 두 프레임의 평균 밝기 차이(0~255). 가로 160px 기준으로 손이 들어오면 10~30,
