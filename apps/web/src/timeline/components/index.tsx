@@ -9,13 +9,10 @@ import {
 	FolderAddIcon,
 	FolderRemoveIcon,
 	LockIcon,
-	MagicWand05Icon,
 	PaintBoardIcon,
-	MusicNote03Icon,
 	PencilEdit01Icon,
 	SquareUnlock02Icon,
 	TaskAdd02Icon,
-	TextIcon,
 	ViewIcon,
 	ViewOffSlashIcon,
 	VolumeHighIcon,
@@ -23,6 +20,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { OcShapesIcon, OcVideoIcon } from "@/components/icons";
+import { AddTrackMenuAtPoint, TRACK_ICONS } from "./add-track-menu";
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -128,31 +126,13 @@ import { useTrackReorderDrag } from "@/timeline/hooks/use-track-reorder-drag";
 const TRACKS_CONTAINER_MAX_HEIGHT = 800;
 const FALLBACK_CONTAINER_WIDTH = 1000;
 const TRACKS_CONTAINER_HEIGHT = { min: 0, max: TRACKS_CONTAINER_MAX_HEIGHT };
-const TRACK_ICONS: Record<TimelineTrack["type"], ReactNode> = {
-	video: <OcVideoIcon className="text-muted-foreground size-4 shrink-0" />,
-	text: (
-		<HugeiconsIcon
-			icon={TextIcon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
-	audio: (
-		<HugeiconsIcon
-			icon={MusicNote03Icon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
-	graphic: <OcShapesIcon className="text-muted-foreground size-4 shrink-0" />,
-	effect: (
-		<HugeiconsIcon
-			icon={MagicWand05Icon}
-			className="text-muted-foreground size-4 shrink-0"
-		/>
-	),
-};
 
 export function Timeline() {
 	const m = useMessages();
+	const [addTrackMenuPoint, setAddTrackMenuPoint] = useState<{
+		x: number;
+		y: number;
+	} | null>(null);
 	const snappingEnabled = useTimelineStore((s) => s.snappingEnabled);
 	const {
 		selectedElements,
@@ -697,6 +677,10 @@ export function Timeline() {
 									handleTracksClick(event);
 									editor.selection.setSelectedTrackIds({ trackIds: [] });
 								}}
+								onDoubleClick={(event) => {
+									if (event.target !== event.currentTarget) return;
+									setAddTrackMenuPoint({ x: event.clientX, y: event.clientY });
+								}}
 							>
 								{tracks.length > 0 && (
 									<TimelineTrackRows
@@ -726,6 +710,13 @@ export function Timeline() {
 									handleTracksClick(event);
 									editor.selection.setSelectedTrackIds({ trackIds: [] });
 								}}
+								onDoubleClick={(event) =>
+									setAddTrackMenuPoint({ x: event.clientX, y: event.clientY })
+								}
+							/>
+							<AddTrackMenuAtPoint
+								point={addTrackMenuPoint}
+								onClose={() => setAddTrackMenuPoint(null)}
 							/>
 						</div>
 					</ScrollArea>
@@ -1461,13 +1452,20 @@ function TimelineTrackRows({
 function TimelineGutter({
 	onMouseDown,
 	onClick,
+	onDoubleClick,
 }: {
 	onMouseDown: (event: React.MouseEvent) => void;
 	onClick: (event: React.MouseEvent) => void;
+	onDoubleClick: (event: React.MouseEvent) => void;
 }) {
 	return (
-		// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- spatial gesture surface (empty space below tracks); clicks here clear selection. Keyboard control is global timeline shortcuts.
-		<div className="flex-1" onMouseDown={onMouseDown} onClick={onClick} />
+		// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- spatial gesture surface (empty space below tracks); clicks here clear selection, double-click opens the add-track menu. Keyboard control is global timeline shortcuts.
+		<div
+			className="flex-1"
+			onMouseDown={onMouseDown}
+			onClick={onClick}
+			onDoubleClick={onDoubleClick}
+		/>
 	);
 }
 

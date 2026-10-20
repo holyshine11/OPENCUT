@@ -49,6 +49,8 @@ interface BaseTrack {
 	folderId?: string;
 	/** 사용자가 바꾼 트랙 높이(px). 없으면 트랙 종류의 기본 높이 */
 	height?: number;
+	/** 사용자가 직접 만든 트랙. 비어 있어도 자동 정리하지 않는다 */
+	keepWhenEmpty?: boolean;
 }
 
 export interface VideoTrack extends BaseTrack {

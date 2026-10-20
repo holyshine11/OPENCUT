@@ -53,7 +53,9 @@ export class EditorCore {
 			}
 
 			const tracks = activeScene.tracks;
-			const prunedTracks = tracks.filter((track) => track.elements.length > 0);
+			const prunedTracks = tracks.filter(
+				(track) => track.elements.length > 0 || track.keepWhenEmpty,
+			);
 			if (prunedTracks.length !== tracks.length) {
 				this.timeline.updateTracks(prunedTracks);
 			}

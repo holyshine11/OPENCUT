@@ -42,6 +42,7 @@ import {
 	Unlink02Icon,
 	Undo02Icon,
 	Redo02Icon,
+	Add01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { OcRippleIcon } from "@/components/icons";
@@ -50,6 +51,8 @@ import { AudioMixerButton } from "./audio-mixer";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { useGraphEditorController } from "./graph-editor/use-controller";
 import { translateLabel, useMessages } from "@/i18n";
+import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AddTrackMenuContent } from "./add-track-menu";
 
 export function TimelineToolbar({
 	zoomLevel,
@@ -266,6 +269,19 @@ function ToolbarLeftSection() {
 						}
 					/>
 				</GraphEditorPopover>
+
+				<div className="bg-border mx-1 h-6 w-px" />
+
+				<DropdownMenu>
+					<ToolbarButton
+						icon={<HugeiconsIcon icon={Add01Icon} />}
+						tooltip={m.timeline.addTrack}
+						buttonWrapper={(button) => (
+							<DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+						)}
+					/>
+					<AddTrackMenuContent />
+				</DropdownMenu>
 			</TooltipProvider>
 		</div>
 	);

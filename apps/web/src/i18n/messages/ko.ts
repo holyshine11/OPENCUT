@@ -663,6 +663,7 @@ export const ko: Messages = {
 		extractAudio: "오디오 분리",
 		recoverAudio: "오디오 되돌리기",
 		duplicateElement: "복제",
+		addTrack: "트랙 추가",
 		freezeFrame: "정지 화면 (준비 중)",
 		deleteElement: "삭제",
 		addBookmark: "북마크 추가",

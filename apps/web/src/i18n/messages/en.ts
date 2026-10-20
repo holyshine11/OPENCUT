@@ -697,6 +697,7 @@ export const en = {
 		extractAudio: "Extract audio",
 		recoverAudio: "Recover audio",
 		duplicateElement: "Duplicate element",
+		addTrack: "Add track",
 		freezeFrame: "Freeze frame (coming soon)",
 		deleteElement: "Delete element",
 		addBookmark: "Add bookmark",

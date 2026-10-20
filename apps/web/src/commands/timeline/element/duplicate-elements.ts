@@ -6,9 +6,9 @@ import {
 import type { SceneTracks, TimelineElement } from "@/timeline";
 import { generateUUID } from "@/utils/id";
 import { EditorCore } from "@/core";
-import { applyPlacement, resolveTrackPlacement } from "@/timeline/placement";
+import { findDuplicateOffset } from "@/timeline/placement/overlap";
 import { cloneAnimations } from "@/animation";
-import type { MediaTime } from "@/wasm";
+import { mediaTime, type MediaTime } from "@/wasm";
 
 interface DuplicateElementsParams {
 	elements: { trackId: string; elementId: string }[];
@@ -40,50 +40,40 @@ export class DuplicateElementsCommand extends Command {
 				continue;
 			}
 
+			if (track.locked) {
+				continue;
+			}
+
 			const elementIdsToDuplicate = new Set(
 				elementsToDuplicate.map((element) => element.elementId),
 			);
-			const newTrackElements: TimelineElement[] = [];
-
-			for (const element of track.elements) {
-				if (!elementIdsToDuplicate.has(element.id)) {
-					continue;
-				}
-
-				const newId = generateUUID();
-				newTrackElements.push(
-					buildDuplicateElement({
-						element,
-						id: newId,
-						startTime: element.startTime,
-					}),
-				);
-			}
-
-			const placementResult = resolveTrackPlacement({
-				tracks: updatedTracks,
-				trackType: track.type,
-				timeSpans: [],
-				strategy: { type: "alwaysNew", position: "highest" },
+			const originals = track.elements.filter((element) =>
+				elementIdsToDuplicate.has(element.id),
+			);
+			const offset = findDuplicateOffset({
+				trackElements: track.elements,
+				originals,
 			});
-			if (!placementResult || placementResult.kind !== "newTrack") {
-				continue;
-			}
+			const newTrackElements = originals.map((element) =>
+				buildDuplicateElement({
+					element,
+					id: generateUUID(),
+					startTime: mediaTime({ ticks: element.startTime + offset }),
+				}),
+			);
 
-			const applied = applyPlacement({
-				tracks: updatedTracks,
-				placementResult,
-				elements: newTrackElements,
-			});
-			if (!applied) {
-				continue;
-			}
-
-			updatedTracks = applied.updatedTracks;
+			updatedTracks = updatedTracks.map((candidate) =>
+				candidate.id === track.id
+					? ({
+							...candidate,
+							elements: [...candidate.elements, ...newTrackElements],
+						} as typeof candidate)
+					: candidate,
+			);
 
 			for (const element of newTrackElements) {
 				this.duplicatedElements.push({
-					trackId: applied.targetTrackId,
+					trackId: track.id,
 					elementId: element.id,
 				});
 			}

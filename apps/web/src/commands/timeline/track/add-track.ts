@@ -14,18 +14,23 @@ export class AddTrackCommand extends Command {
 	constructor({
 		type,
 		index,
+		keepWhenEmpty = false,
 	}: {
 		type: TrackType;
 		index?: number;
+		/** 사용자가 직접 만든 빈 트랙이면 true. 자동 정리에서 빠진다 */
+		keepWhenEmpty?: boolean;
 	}) {
 		super();
 		this.type = type;
 		this.index = index;
+		this.keepWhenEmpty = keepWhenEmpty;
 		this.trackId = generateUUID();
 	}
 
 	private type: TrackType;
 	private index?: number;
+	private keepWhenEmpty: boolean;
 
 	execute(): CommandResult | undefined {
 		const editor = EditorCore.getInstance();
@@ -40,7 +45,10 @@ export class AddTrackCommand extends Command {
 
 		const updatedTracks = [
 			...this.savedState.slice(0, insertIndex),
-			buildEmptyTrack({ id: this.trackId, type: this.type }),
+			{
+				...buildEmptyTrack({ id: this.trackId, type: this.type }),
+				...(this.keepWhenEmpty ? { keepWhenEmpty: true } : {}),
+			},
 			...this.savedState.slice(insertIndex),
 		];
 
