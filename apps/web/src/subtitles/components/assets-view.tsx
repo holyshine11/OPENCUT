@@ -25,6 +25,9 @@ import {
 } from "@/services/transcription/service";
 import { DEFAULT_TRANSCRIPTION_LANGUAGE } from "@/transcription/languages";
 import { parseTerms, useTranscriptionTerms } from "@/transcription/terms-store";
+import { correctSegments } from "@/transcription/correction";
+import { useTranscriptionCorrections } from "@/transcription/corrections-store";
+import transcriptionSettings from "@/transcription/settings.json";
 import { decodeAudioToFloat32 } from "@/media/audio";
 import { buildCaptionChunks } from "@/transcription/caption";
 import {
@@ -158,6 +161,7 @@ export function Captions() {
 				sampleRate: DEFAULT_TRANSCRIPTION_SAMPLE_RATE,
 			});
 
+			const { corrections } = useTranscriptionCorrections.getState();
 			const result = await transcriptionService.transcribe({
 				audioData: samples,
 				language: selectedLanguage,
@@ -170,7 +174,11 @@ export function Captions() {
 				step: m.captions.steps.generatingCaptions,
 			});
 			const captionChunks = buildCaptionChunks({
-				segments: result.segments,
+				segments: correctSegments({
+					segments: result.segments,
+					corrections,
+					settings: transcriptionSettings.correction,
+				}),
 				layout: useCaptionLayouts.getState().layouts[captionForm],
 			});
 
@@ -353,6 +361,7 @@ export function Captions() {
 								}
 							/>
 						</SectionField>
+						<LearnedCorrectionsField />
 						<CaptionLayoutFields form={captionForm} disabled={isProcessing} />
 					</SectionFields>
 
@@ -392,5 +401,48 @@ export function Captions() {
 				</SectionContent>
 			</Section>
 		</PanelView>
+	);
+}
+
+/** 자막을 고쳐서 배운 오인식 목록. 잘못 배운 것은 지울 수 있다 */
+function LearnedCorrectionsField() {
+	const m = useMessages();
+	const corrections = useTranscriptionCorrections((state) => state.corrections);
+	const remove = useTranscriptionCorrections((state) => state.remove);
+	return (
+		<SectionField label={m.captions.corrections}>
+			{corrections.length === 0 ? (
+				<p className="text-muted-foreground text-xs">{m.captions.correctionsEmpty}</p>
+			) : (
+				<ul className="flex flex-wrap gap-1">
+					{[...corrections]
+						.sort((a, b) => b.count - a.count)
+						.map((correction) => (
+							<li
+								key={correction.from}
+								className="bg-accent flex items-center gap-1 rounded-sm py-0.5 pr-0.5 pl-1.5 text-xs"
+							>
+								<span>
+									{correction.from} → {correction.to}
+									{correction.count > 1 && (
+										<span className="text-muted-foreground"> ×{correction.count}</span>
+									)}
+								</span>
+								<button
+									type="button"
+									className="text-muted-foreground hover:text-foreground px-1"
+									aria-label={m.captions.removeCorrection({
+										from: correction.from,
+										to: correction.to,
+									})}
+									onClick={() => remove({ from: correction.from })}
+								>
+									×
+								</button>
+							</li>
+						))}
+				</ul>
+			)}
+		</SectionField>
 	);
 }

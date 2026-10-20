@@ -95,6 +95,7 @@ import { getClipFrameThumbnail } from "@/media/clip-frames";
 import { formatCueTime } from "@/subtitles/edit";
 import type { SelectedKeyframeRef, ElementKeyframe } from "@/animation/types";
 import { cn } from "@/utils/ui";
+import { AutocutReviewOverlay } from "@/autocut/components/review-overlay";
 import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
 import { useTimelineStore } from "@/timeline/timeline-store";
 import { KEYFRAME_LANE_HEIGHT_PX } from "./layout";
@@ -661,6 +662,9 @@ function ElementInner({
 						)}
 						{expandedContent}
 					</button>
+					{pixelsPerSecond !== null && (
+						<AutocutReviewOverlay element={visibleElement} pixelsPerSecond={pixelsPerSecond} />
+					)}
 					{element.groupId && (
 						<HugeiconsIcon
 							icon={Link01Icon}

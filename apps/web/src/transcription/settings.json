@@ -8,6 +8,7 @@
 	},
 	"vad": {
 		"huggingFaceId": "onnx-community/silero-vad",
+		"dtype": "fp32",
 		"windowSamples": 512,
 		"contextSamples": 64,
 		"threshold": 0.5,
@@ -17,8 +18,40 @@
 		"maxGroupSeconds": 28,
 		"stateSize": 128
 	},
+	"local": {
+		"modelPath": "/models/",
+		"ortPath": "/ort/",
+		"modelFiles": [
+			"config.json",
+			"generation_config.json",
+			"preprocessor_config.json",
+			"tokenizer.json",
+			"tokenizer_config.json"
+		],
+		"ortFiles": [
+			"ort-wasm-simd-threaded.jsep.mjs",
+			"ort-wasm-simd-threaded.jsep.wasm"
+		]
+	},
 	"prompt": {
 		"maxTokens": 200
+	},
+	"correction": {
+		"contextWords": [
+			"큰술",
+			"작은술",
+			"숟가락",
+			"스푼",
+			"티스푼",
+			"컵",
+			"꼬집",
+			"그램",
+			"리터",
+			"넣"
+		],
+		"contextSeconds": 3,
+		"trustCount": 2,
+		"maxPhraseWords": 3
 	},
 	"filter": {
 		"maxRepeats": 2,

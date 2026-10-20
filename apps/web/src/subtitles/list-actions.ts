@@ -12,6 +12,9 @@ import {
 	type MediaTime,
 } from "@/wasm";
 import { isTrackLocked } from "@/timeline/track-capabilities";
+import { extractCorrections } from "@/transcription/correction";
+import { useTranscriptionCorrections } from "@/transcription/corrections-store";
+import transcriptionSettings from "@/transcription/settings.json";
 import type { SubtitleEntry } from "./groups";
 import {
 	clampCueTiming,
@@ -209,6 +212,17 @@ export function replaceAllInSubtitles({
 		replacement,
 	});
 	const textById = new Map(plan.map(({ id, text }) => [id, text]));
+	// 자동 자막 여러 줄을 한꺼번에 고친 건 확실한 교정이라 바로 믿는다
+	if (plan.length > 0 && entries.some((entry) => entry.element.subtitleWordOffsets)) {
+		useTranscriptionCorrections.getState().learn({
+			pairs: extractCorrections({
+				before: query,
+				after: replacement,
+				maxPhraseWords: transcriptionSettings.correction.maxPhraseWords,
+			}),
+			count: transcriptionSettings.correction.trustCount,
+		});
+	}
 	editor.timeline.updateElements({
 		updates: entries.flatMap((entry) => {
 			const text = textById.get(entry.element.id);

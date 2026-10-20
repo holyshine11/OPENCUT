@@ -12,3 +12,6 @@
 next-env.d.ts
 
 *.tsbuildinfo
+# 오프라인 모델 번들 (bun run models 로 받는다)
+public/models/
+public/ort/

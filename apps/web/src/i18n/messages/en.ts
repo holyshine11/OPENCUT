@@ -231,6 +231,33 @@ export const en = {
 		addFailed: "Couldn't add sound effects",
 		dropFailed: "Couldn't add the sound effect to the timeline",
 	},
+	autocut: {
+		title: "Auto cut",
+		hint: "Finds quiet parts with no speech, cuts them and closes the gaps. Scenes with sound but no speech (like sizzling) are kept, and background music tracks are left alone.",
+		run: "Cut silences",
+		analyzing: ({ percent }: { percent: number }) => `Analyzing... ${percent}%`,
+		noAudio: "This clip has no audio",
+		nothingToCut: "No silences to cut",
+		done: ({ count, seconds }: { count: number; seconds: string }) =>
+			`Cut ${count} silences, ${seconds}s shorter. Undo with ⌘Z`,
+		failed: "Auto cut failed",
+		editPointsHint:
+			"Finds edit points from speech and on-screen motion. Still shots with no speech are suggested as cuts, stirring or simmering as speed-ups. Pick an action per item and apply them all at once.",
+		findEditPoints: "Find edit points",
+		analyzingVideo: ({ percent }: { percent: number }) => `Analyzing video... ${percent}%`,
+		noEditPoints: "Nothing worth shortening",
+		reasonStatic: "Still shot",
+		reasonProcess: "Motion, no speech",
+		reasonRetake: "NG",
+		keep: "Keep",
+		cut: "Cut",
+		rate: ({ rate }: { rate: number }) => `${rate}x`,
+		playFrom: "Play from 1s before this range",
+		applyEdits: ({ count, from, to }: { count: number; from: string; to: string }) =>
+			`Apply ${count} · ${from}s → ${to}s`,
+		editsApplied: ({ count }: { count: number }) => `Applied ${count} edits. Undo with ⌘Z`,
+		clearEdits: "Clear list",
+	},
 	properties: {
 		tabs: {
 			transform: "Transform",
@@ -244,6 +271,7 @@ export const en = {
 			none: "None",
 			text: "Text",
 			graphic: "Graphic",
+			autocut: "Auto cut",
 		},
 		emptyTitle: "It's empty here",
 		emptyHint: "Click an element on the timeline to edit its properties",
@@ -340,6 +368,7 @@ export const en = {
 	},
 	/** Labels from the param/mask/effect/shape registries, keyed by their English text. Read with translateLabel(). */
 	labels: {
+		"Auto cut": "Auto cut",
 		"Add mask": "Add mask",
 		"Delete mask": "Delete mask",
 		"Invert mask": "Invert mask",
@@ -637,6 +666,10 @@ export const en = {
 		},
 		terms: "Names and terms",
 		termsPlaceholder: "People, places, product names. Separate with commas.",
+		corrections: "Learned fixes",
+		correctionsEmpty:
+			"Fix auto captions in the subtitle list and the changed words are learned. From the next transcript, words fixed twice or more are always replaced; words fixed once only when they appear next to amounts or actions.",
+		removeCorrection: ({ from, to }: { from: string; to: string }) => `Remove ${from} → ${to}`,
 		generate: "Generate transcript",
 		cancel: "Cancel",
 		steps: {
@@ -1076,7 +1109,7 @@ export const en = {
 		transcription: {
 			noAudio:
 				"No audio detected. Add a clip with audio to the timeline first.",
-			modelLoadFailed: "Failed to load the speech recognition model",
+			modelLoadFailed: "Failed to load the speech recognition model. Check the bundled model folder (bun run models)",
 			failed: "Transcription failed",
 		},
 		subtitles: {

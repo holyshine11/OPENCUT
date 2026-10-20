@@ -23,6 +23,7 @@ import {
 	DashboardSpeed02Icon,
 	ChartIncreaseIcon,
 	AudioWave01Icon,
+	ScissorIcon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
@@ -31,6 +32,7 @@ import { SpeedTab } from "@/speed/components/speed-tab";
 import { FadeTab } from "./components/fade-tab";
 import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
+import { AutocutTab } from "@/autocut/components/autocut-tab";
 
 const TRANSFORM_PARAM_KEYS = [
 	"transform.positionX",
@@ -97,7 +99,8 @@ export type PropertiesTabId =
 	| "masks"
 	| "effects"
 	| "text"
-	| "graphic";
+	| "graphic"
+	| "autocut";
 
 export type PropertiesTabDef = {
 	id: PropertiesTabId;
@@ -210,6 +213,18 @@ function buildFadeTab({
 	};
 }
 
+function buildAutocutTab({
+	element,
+}: {
+	element: VideoElement;
+}): PropertiesTabDef {
+	return {
+		id: "autocut",
+		icon: <HugeiconsIcon icon={ScissorIcon} size={16} />,
+		content: ({ trackId }) => <AutocutTab element={element} trackId={trackId} />,
+	};
+}
+
 function buildMasksTab({
 	element,
 }: {
@@ -308,7 +323,9 @@ function getVideoConfig({
 				? [buildAudioTab({ element }), buildAudioEffectsTab({ element })]
 				: []),
 			buildSpeedTab({ element }),
-			...(showAudioTab ? [buildFadeTab({ element })] : []),
+			...(showAudioTab
+				? [buildFadeTab({ element }), buildAutocutTab({ element })]
+				: []),
 			buildBlendingTab({ element }),
 			buildMasksTab({ element }),
 			buildClipEffectsTab({ element }),

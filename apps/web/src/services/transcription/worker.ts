@@ -1,5 +1,14 @@
 import type { TranscriptionSegment } from "@/transcription/types";
-import { loadTranscriptionEngine, type TranscriptionEngine } from "./engine";
+import type { PreTrainedModel } from "@huggingface/transformers";
+import { readTranscriptionModelsFromAppFolder } from "../model-env";
+import {
+	computeSpeechProbabilities,
+	loadTranscriptionEngine,
+	loadVadModel,
+	type TranscriptionEngine,
+} from "./engine";
+
+readTranscriptionModelsFromAppFolder();
 
 // 취소는 service가 worker를 종료하는 방식이라 여기서는 처리하지 않는다
 export type WorkerMessage =
@@ -9,7 +18,8 @@ export type WorkerMessage =
 			audio: Float32Array;
 			language: string;
 			terms: string[];
-	  };
+	  }
+	| { type: "analyze-speech"; audio: Float32Array };
 
 export type WorkerResponse =
 	| { type: "init-progress"; progress: number }
@@ -21,9 +31,14 @@ export type WorkerResponse =
 			text: string;
 			segments: TranscriptionSegment[];
 	  }
-	| { type: "transcribe-error"; error: string };
+	| { type: "transcribe-error"; error: string }
+	| { type: "analyze-speech-progress"; progress: number }
+	| { type: "analyze-speech-complete"; probabilities: Float32Array }
+	| { type: "analyze-speech-error"; error: string };
 
 let engine: TranscriptionEngine | null = null;
+// 자동 컷은 Whisper 없이 VAD만 쓰므로 따로 올린다
+let vadPromise: Promise<PreTrainedModel> | null = null;
 let lastReportedProgress = -1;
 const fileBytes = new Map<string, { loaded: number; total: number }>();
 
@@ -37,6 +52,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 		case "transcribe":
 			await handleTranscribe(message);
 			break;
+		case "analyze-speech":
+			await handleAnalyzeSpeech(message);
+			break;
 	}
 };
 
@@ -44,7 +62,7 @@ function reportProgress({
 	type,
 	fraction,
 }: {
-	type: "init-progress" | "transcribe-progress";
+	type: "init-progress" | "transcribe-progress" | "analyze-speech-progress";
 	fraction: number;
 }) {
 	const roundedProgress = Math.floor(fraction * 100);
@@ -136,6 +154,29 @@ async function handleTranscribe({
 		self.postMessage({
 			type: "transcribe-error",
 			error: error instanceof Error ? error.message : "Transcription failed",
+		} satisfies WorkerResponse);
+	}
+}
+
+async function handleAnalyzeSpeech({ audio }: { audio: Float32Array }) {
+	lastReportedProgress = -1;
+	try {
+		vadPromise ??= loadVadModel();
+		const probabilities = await computeSpeechProbabilities({
+			vad: await vadPromise,
+			audio,
+			onProgress: (fraction) =>
+				reportProgress({ type: "analyze-speech-progress", fraction }),
+		});
+		self.postMessage(
+			{ type: "analyze-speech-complete", probabilities } satisfies WorkerResponse,
+			{ transfer: [probabilities.buffer] },
+		);
+	} catch (error) {
+		vadPromise = null;
+		self.postMessage({
+			type: "analyze-speech-error",
+			error: error instanceof Error ? error.message : "Speech analysis failed",
 		} satisfies WorkerResponse);
 	}
 }

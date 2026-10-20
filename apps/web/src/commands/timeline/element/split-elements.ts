@@ -4,39 +4,9 @@ import {
 	type CommandResult,
 } from "@/commands/base-command";
 import type { SceneTracks, TimelineElement } from "@/timeline";
-import { generateUUID } from "@/utils/id";
 import { EditorCore } from "@/core";
-import { isRetimableElement } from "@/timeline";
-import { splitAnimationsAtTime } from "@/animation";
-import { getSourceSpanAtClipTime } from "@/retime";
-import {
-	addMediaTime,
-	type MediaTime,
-	roundMediaTime,
-	subMediaTime,
-} from "@/wasm";
-
-// 자른 자리에는 페이드가 없다. 왼쪽은 페이드 아웃과 크로스페이드(바로 뒤가 오른쪽 조각이 된다), 오른쪽은 페이드 인을 뗀다
-function clearFade({
-	element,
-	keys,
-}: {
-	element: TimelineElement;
-	keys: readonly ("fadeIn" | "fadeOut" | "crossfade")[];
-}): Pick<TimelineElement, "params"> {
-	const params = { ...element.params };
-	for (const key of keys) {
-		if (key in params) params[key] = 0;
-	}
-	return { params };
-}
-
-// 경계에 걸린 전환은 경계 왼쪽 클립에 있다. 자르면 원래 끝 경계를 가진 오른쪽 조각이 이어받는다
-function withoutTransition(element: TimelineElement): TimelineElement {
-	if (!("transition" in element)) return element;
-	const { transition: _transition, ...rest } = element;
-	return rest;
-}
+import { splitElementAtTime } from "@/timeline/split-element";
+import type { MediaTime } from "@/wasm";
 
 export class SplitElementsCommand extends Command {
 	private savedState: SceneTracks | null = null;
@@ -91,127 +61,19 @@ export class SplitElementsCommand extends Command {
 					return [element];
 				}
 
-				const effectiveStart = element.startTime;
-				const effectiveEnd = element.startTime + element.duration;
-
-				if (
-					this.splitTime <= effectiveStart ||
-					this.splitTime >= effectiveEnd
-				) {
+				const halves = splitElementAtTime({ element, splitTime: this.splitTime });
+				if (!halves) {
 					return [element];
 				}
-
-				const relativeTime = subMediaTime({
-					a: this.splitTime,
-					b: element.startTime,
-				});
-				const leftVisibleDuration = relativeTime;
-				const rightVisibleDuration = subMediaTime({
-					a: element.duration,
-					b: relativeTime,
-				});
-				const retimeRef = isRetimableElement(element)
-					? element.retime
-					: undefined;
-				// Snap the source-side split point exactly once and derive the right
-				// half from it. Independently rounding both spans (left and total)
-				// would let a 1-tick rounding error desynchronise them, breaking the
-				// invariant `leftSourceSpan + rightSourceSpan == totalSourceSpan`.
-				// See the same discipline in `compute-resize.ts` (snap-once comment).
-				const leftSourceSpan = roundMediaTime({
-					time: getSourceSpanAtClipTime({
-						clipTime: leftVisibleDuration,
-						retime: retimeRef,
-					}),
-				});
-				const totalSourceSpan = roundMediaTime({
-					time: getSourceSpanAtClipTime({
-						clipTime: element.duration,
-						retime: retimeRef,
-					}),
-				});
-				const rightSourceSpan = subMediaTime({
-					a: totalSourceSpan,
-					b: leftSourceSpan,
-				});
-				const { leftAnimations, rightAnimations } = splitAnimationsAtTime({
-					animations: element.animations,
-					splitTime: relativeTime,
-					shouldIncludeSplitBoundary: true,
-				});
-				let splitResult: TimelineElement[];
-
-				const leftTrimEnd = addMediaTime({
-					a: element.trimEnd,
-					b: rightSourceSpan,
-				});
-				const rightTrimStart = addMediaTime({
-					a: element.trimStart,
-					b: leftSourceSpan,
-				});
-
-				if (this.retainSide === "left") {
-					splitResult = [
-						{
-							...withoutTransition(element),
-							duration: leftVisibleDuration,
-							trimEnd: leftTrimEnd,
-							name: `${element.name} (left)`,
-							animations: leftAnimations,
-							...clearFade({ element, keys: ["fadeOut", "crossfade"] }),
-							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-						},
-					];
-				} else if (this.retainSide === "right") {
-					const newId = generateUUID();
+				if (this.retainSide !== "left") {
 					this.rightSideElements.push({
 						trackId: track.id,
-						elementId: newId,
+						elementId: halves.right.id,
 					});
-					splitResult = [
-						{
-							...element,
-							id: newId,
-							startTime: this.splitTime,
-							duration: rightVisibleDuration,
-							trimStart: rightTrimStart,
-							name: `${element.name} (right)`,
-							animations: rightAnimations,
-							...clearFade({ element, keys: ["fadeIn"] }),
-							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-						},
-					];
-				} else {
-					const secondElementId = generateUUID();
-					this.rightSideElements.push({
-						trackId: track.id,
-						elementId: secondElementId,
-					});
-					splitResult = [
-						{
-							...withoutTransition(element),
-							duration: leftVisibleDuration,
-							trimEnd: leftTrimEnd,
-							name: `${element.name} (left)`,
-							animations: leftAnimations,
-							...clearFade({ element, keys: ["fadeOut", "crossfade"] }),
-							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-						},
-						{
-							...element,
-							id: secondElementId,
-							startTime: this.splitTime,
-							duration: rightVisibleDuration,
-							trimStart: rightTrimStart,
-							name: `${element.name} (right)`,
-							animations: rightAnimations,
-							...clearFade({ element, keys: ["fadeIn"] }),
-							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-						},
-					];
 				}
-
-				return splitResult;
+				if (this.retainSide === "left") return [halves.left];
+				if (this.retainSide === "right") return [halves.right];
+				return [halves.left, halves.right];
 			});
 
 			return { ...track, elements } as TTrack;

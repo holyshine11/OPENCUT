@@ -2,6 +2,7 @@ import {
 	AutoModel,
 	AutoProcessor,
 	AutoTokenizer,
+	env,
 	Tensor,
 	WhisperForConditionalGeneration,
 	type PreTrainedModel,
@@ -23,6 +24,13 @@ import type {
 
 // 브라우저 worker와 측정 스크립트(bun)가 함께 쓰는 음성 인식 본체.
 // VAD로 말하는 구간만 골라 30초 이내로 묶고, 묶음마다 Whisper를 돌려 단어 시간 정보를 받는다.
+
+// 모델은 앱 폴더(public/)에서만 읽는다. 인터넷 없이 돌아가야 하므로 Hugging Face는 쓰지 않고,
+// 파일은 `bun run models`(scripts/fetch-models.ts)로 미리 받아 둔다.
+// 브라우저 worker는 worker.ts에서 origin을 붙인 절대 경로로, bun 스크립트는 import 뒤에 파일 경로로 바꿔 쓴다
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = settings.local.modelPath;
 
 type Device = "webgpu" | "wasm" | "cpu";
 type ProgressInfo = { status?: string; file?: string; loaded?: number; total?: number };
@@ -71,11 +79,7 @@ export async function loadTranscriptionEngine({
 			device,
 			progress_callback: onProgress,
 		}),
-		AutoModel.from_pretrained(settings.vad.huggingFaceId, {
-			config: { model_type: "custom" } as never,
-			dtype: "fp32",
-			progress_callback: onProgress,
-		}),
+		loadVadModel({ onProgress }),
 	]);
 
 	return {
@@ -93,7 +97,21 @@ export async function loadTranscriptionEngine({
 	};
 }
 
-async function detectSpeech({
+/** Silero VAD만 올린다. 자동 컷은 Whisper 없이 이것만 쓴다 */
+export function loadVadModel({
+	onProgress,
+}: {
+	onProgress?: (info: ProgressInfo) => void;
+} = {}): Promise<PreTrainedModel> {
+	return AutoModel.from_pretrained(settings.vad.huggingFaceId, {
+		config: { model_type: "custom" } as never,
+		dtype: settings.vad.dtype as never,
+		progress_callback: onProgress,
+	});
+}
+
+/** VAD 창(`settings.vad.windowSamples`)마다 말소리 확률을 구한다 */
+export async function computeSpeechProbabilities({
 	vad,
 	audio,
 	onProgress,
@@ -101,7 +119,7 @@ async function detectSpeech({
 	vad: PreTrainedModel;
 	audio: Float32Array;
 	onProgress?: (fraction: number) => void;
-}): Promise<TimeRange[]> {
+}): Promise<Float32Array> {
 	const { windowSamples, contextSamples, stateSize } = settings.vad;
 	const sampleRate = DEFAULT_TRANSCRIPTION_SAMPLE_RATE;
 	const windowCount = Math.ceil(audio.length / windowSamples);
@@ -127,7 +145,21 @@ async function detectSpeech({
 		probabilities[i] = (output as Tensor).data[0] as number;
 		if (i % reportEvery === 0) onProgress?.(i / windowCount);
 	}
+	return probabilities;
+}
 
+async function detectSpeech({
+	vad,
+	audio,
+	onProgress,
+}: {
+	vad: PreTrainedModel;
+	audio: Float32Array;
+	onProgress?: (fraction: number) => void;
+}): Promise<TimeRange[]> {
+	const { windowSamples } = settings.vad;
+	const sampleRate = DEFAULT_TRANSCRIPTION_SAMPLE_RATE;
+	const probabilities = await computeSpeechProbabilities({ vad, audio, onProgress });
 	return detectSpeechRegions({
 		probabilities,
 		windowSeconds: windowSamples / sampleRate,

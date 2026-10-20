@@ -214,6 +214,32 @@ export const ko: Messages = {
 		addFailed: "효과음을 추가하지 못했어요",
 		dropFailed: "효과음을 타임라인에 넣지 못했어요",
 	},
+	autocut: {
+		title: "자동 컷",
+		hint: "말이 없고 조용한 부분을 찾아 잘라 내고 뒤를 당겨요. 끓는 소리처럼 말 없이 소리가 나는 장면은 남기고, 배경음악 트랙은 건드리지 않아요.",
+		run: "무음 자동 컷",
+		analyzing: ({ percent }) => `분석 중... ${percent}%`,
+		noAudio: "이 클립에는 소리가 없어요",
+		nothingToCut: "잘라 낼 무음이 없어요",
+		done: ({ count, seconds }) =>
+			`${count}곳을 잘라 ${seconds}초 줄였어요. ⌘Z로 되돌릴 수 있어요`,
+		failed: "자동 컷에 실패했어요",
+		editPointsHint:
+			"말과 화면 움직임으로 편집점을 찾아요. 말 없이 화면이 멈춘 곳은 컷, 젓거나 끓이는 곳은 배속으로 제안하고, 항목마다 고른 대로 한 번에 적용해요.",
+		findEditPoints: "편집점 찾기",
+		analyzingVideo: ({ percent }) => `화면 분석 중... ${percent}%`,
+		noEditPoints: "줄일 만한 구간을 찾지 못했어요",
+		reasonStatic: "멈춘 화면",
+		reasonProcess: "말 없이 움직임",
+		reasonRetake: "NG",
+		keep: "유지",
+		cut: "컷",
+		rate: ({ rate }) => `${rate}배`,
+		playFrom: "이 구간 1초 앞부터 재생",
+		applyEdits: ({ count, from, to }) => `${count}곳 적용 · ${from}초 → ${to}초`,
+		editsApplied: ({ count }) => `${count}곳을 적용했어요. ⌘Z로 되돌릴 수 있어요`,
+		clearEdits: "목록 지우기",
+	},
 	properties: {
 		tabs: {
 			transform: "변형",
@@ -227,6 +253,7 @@ export const ko: Messages = {
 			none: "없음",
 			text: "텍스트",
 			graphic: "도형",
+			autocut: "자동 컷",
 		},
 		emptyTitle: "선택한 항목이 없어요",
 		emptyHint: "타임라인에서 요소를 클릭하면 속성을 편집할 수 있어요",
@@ -319,6 +346,7 @@ export const ko: Messages = {
 			"마스크로 레이어 일부를 가리거나 드러내고, 얼굴이나 번호판을 모자이크할 수 있어요.",
 	},
 	labels: {
+		"Auto cut": "자동 컷",
 		"Add mask": "마스크 추가",
 		"Delete mask": "마스크 삭제",
 		"Invert mask": "마스크 반전",
@@ -614,6 +642,10 @@ export const ko: Messages = {
 		},
 		terms: "이름과 용어",
 		termsPlaceholder: "인명, 지명, 제품명 등을 쉼표로 구분해 입력하세요.",
+		corrections: "고친 단어",
+		correctionsEmpty:
+			"자막 목록에서 자동 자막을 고치면 바뀐 단어를 배워요. 다음 받아쓰기부터 두 번 이상 고친 단어는 늘, 한 번 고친 단어는 분량·동작 말(큰술, 넣어 등) 옆에 나올 때만 자동으로 바꿔요.",
+		removeCorrection: ({ from, to }) => `${from} → ${to} 지우기`,
 		generate: "자막 생성",
 		cancel: "취소",
 		steps: {
@@ -1006,7 +1038,7 @@ export const ko: Messages = {
 		transcription: {
 			noAudio:
 				"오디오가 없습니다. 먼저 소리가 있는 클립을 타임라인에 추가하세요.",
-			modelLoadFailed: "음성 인식 모델을 불러오지 못했습니다",
+			modelLoadFailed: "음성 인식 모델을 불러오지 못했습니다. 앱 폴더에 모델이 있는지 확인하세요 (bun run models)",
 			failed: "음성을 인식하지 못했습니다",
 		},
 		subtitles: {

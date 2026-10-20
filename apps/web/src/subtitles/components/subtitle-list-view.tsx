@@ -34,6 +34,7 @@ import {
 	splitSubtitle,
 } from "@/subtitles/list-actions";
 import { useMessages } from "@/i18n";
+import { learnFromSubtitleEdit } from "@/transcription/corrections-store";
 import { ActionTooltip } from "@/actions/components/action-tooltip";
 import type { ElementRef } from "@/timeline/types";
 
@@ -306,6 +307,8 @@ function SubtitleRow({
 	const commit = () => {
 		if (draft === null) return;
 		if (draft !== cue.text) {
+			// 받아쓴 자막(단어 시각이 있는 것)을 고칠 때만 오인식으로 배운다. 불러온 SRT는 빼고
+			if (element.subtitleWordOffsets) learnFromSubtitleEdit({ before: cue.text, after: draft });
 			editor.timeline.updateElements({
 				updates: [
 					{

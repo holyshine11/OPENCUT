@@ -9,3 +9,4 @@ export { MoveElementCommand } from "./move-elements";
 export * from "./keyframes";
 export * from "./effects";
 export * from "./masks";
+export { AutocutCommand } from "./autocut";

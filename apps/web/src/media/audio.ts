@@ -276,7 +276,7 @@ async function resolveAudioBufferForElement({
 	}
 }
 
-async function resolveAudioBufferForAsset({
+export async function resolveAudioBufferForAsset({
 	asset,
 	audioContext,
 }: {

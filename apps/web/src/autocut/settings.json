@@ -1,0 +1,41 @@
+{
+	"speech": {
+		"threshold": 0.4,
+		"mergeSeconds": 0.1,
+		"minSpeechSeconds": 0.05
+	},
+	"level": {
+		"noiseFloorPercentile": 10,
+		"minNoiseFloorDb": -70,
+		"quietMarginDb": 12,
+		"maxQuietDb": -30,
+		"silentDb": -120
+	},
+	"silence": {
+		"minSilenceSeconds": 0.4,
+		"keepAfterSpeechSeconds": 0.1,
+		"keepBeforeSpeechSeconds": 0.05,
+		"snapRadiusSeconds": 0.1,
+		"minCutSeconds": 0.2,
+		"cutAmbient": false
+	},
+	"motion": {
+		"sampleFps": 2,
+		"width": 160,
+		"staticBelow": 3
+	},
+	"editPoints": {
+		"speechBeforeSeconds": 0.5,
+		"speechAfterSeconds": 1,
+		"minGapSeconds": 3,
+		"smoothWindows": 3,
+		"targetSeconds": 3,
+		"minRate": 2,
+		"maxRate": 5,
+		"rateStep": 1
+	},
+	"apply": {
+		"crossfadeSeconds": 0.02,
+		"maintainPitch": true
+	}
+}
