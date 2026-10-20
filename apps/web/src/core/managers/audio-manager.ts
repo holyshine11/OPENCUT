@@ -483,7 +483,9 @@ export class AudioManager {
 		for (const source of this.queuedSources) {
 			try {
 				source.stop();
-			} catch {}
+			} catch {
+				// 아직 start하지 않았거나 이미 멈춘 소스는 stop()이 던진다. 정리 중이라 무시한다
+			}
 			source.disconnect();
 		}
 		this.queuedSources.clear();
@@ -728,8 +730,11 @@ export class AudioManager {
 	}
 
 	private hasCurveRetime({ clip }: { clip: AudioClipSource }): boolean {
-		const mode = (clip.retime as { mode?: unknown } | undefined)?.mode;
-		return mode === "curve";
+		// 예전 프로젝트에 남은 곡선 리타임(mode: "curve")을 알아본다. 지금 타입에는 mode가 없다
+		const retime = clip.retime;
+		return (
+			retime !== undefined && "mode" in retime && retime.mode === "curve"
+		);
 	}
 
 	private scheduleClipGainAutomation({

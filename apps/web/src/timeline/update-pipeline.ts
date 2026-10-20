@@ -111,6 +111,30 @@ const enforceRules: ElementUpdateRule[] = [
 	},
 ];
 
+/** 패치가 요소 종류(type)를 바꾸지 않았으면 같은 종류의 요소로 본다 */
+function keepsElementType(
+	merged: object,
+	element: TimelineElement,
+): merged is TimelineElement {
+	return "type" in merged && merged.type === element.type;
+}
+
+/** 패치를 요소에 얹는다. params는 덮어쓰지 않고 합친다. 글자만 고쳐도 스타일이 사라지지 않게 하려는 것이다 */
+export function mergeElementPatch({
+	element,
+	patch,
+}: {
+	element: TimelineElement;
+	patch: Partial<TimelineElement>;
+}): TimelineElement {
+	const merged = {
+		...element,
+		...patch,
+		params: { ...element.params, ...(patch.params ?? {}) },
+	};
+	return keepsElementType(merged, element) ? merged : element;
+}
+
 export function applyElementUpdate({
 	element,
 	patch,
@@ -120,14 +144,7 @@ export function applyElementUpdate({
 	patch: Partial<TimelineElement>;
 	context: ElementUpdateContext;
 }): TimelineElement {
-	let nextElement = {
-		...element,
-		...patch,
-		params: {
-			...element.params,
-			...(patch.params ?? {}),
-		},
-	} as TimelineElement;
+	let nextElement = mergeElementPatch({ element, patch });
 	const changedFields = new Set(
 		Object.keys(patch) as ElementUpdateField[],
 	);

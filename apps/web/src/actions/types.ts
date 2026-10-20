@@ -28,9 +28,11 @@ export type TArgOfAction<A extends TAction> = A extends TActionWithArgs
 	? TActionArgsMap[A]
 	: undefined;
 
-export type TActionFunc<A extends TAction> = A extends TActionWithArgs
-	? (arg: TArgOfAction<A>, trigger?: TInvocationTrigger) => void
-	: (_?: undefined, trigger?: TInvocationTrigger) => void;
+// 조건부 함수 타입이면 제네릭 A에서 호출할 수 없어 레지스트리가 타입 단언에 기대야 했다
+export type TActionFunc<A extends TAction> = (
+	arg: TArgOfAction<A>,
+	trigger?: TInvocationTrigger,
+) => void;
 
 export type TInvocationTrigger = "keypress" | "mouseclick";
 

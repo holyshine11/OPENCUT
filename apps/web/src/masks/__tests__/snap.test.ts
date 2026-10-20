@@ -24,7 +24,9 @@ import type {
 
 // bun에는 canvas가 없다. 텍스트 마스크 측정에 필요한 만큼만 흉내 낸다.
 if (typeof OffscreenCanvas === "undefined") {
-	globalThis.OffscreenCanvas = class {
+	Object.defineProperty(globalThis, "OffscreenCanvas", {
+		configurable: true,
+		value: class {
 		getContext() {
 			return {
 				font: "",
@@ -37,7 +39,8 @@ if (typeof OffscreenCanvas === "undefined") {
 				}),
 			};
 		}
-	} as unknown as typeof OffscreenCanvas;
+	},
+	});
 }
 
 const bounds: ElementBounds = {

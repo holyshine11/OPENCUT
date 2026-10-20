@@ -43,45 +43,47 @@ export const usePanelStore = create<PanelState>()(
 			name: "panel-sizes",
 			version: 2,
 			migrate: (persistedState) => {
-				const state = persistedState as
-					| {
-							panels?: Partial<PanelSizes> | null;
-							toolsPanel?: number;
-							previewPanel?: number;
-							propertiesPanel?: number;
-							mainContent?: number;
-							timeline?: number;
-							tools?: number;
-							preview?: number;
-							properties?: number;
-					  }
-					| undefined
-					| null;
-
+				const state = isRecord(persistedState) ? persistedState : null;
 				if (!state) return { panels: { ...PANEL_CONFIG.panels } };
+				const readNumber = (key: string): number | undefined => {
+					const value = state[key];
+					return typeof value === "number" ? value : undefined;
+				};
 
-				if (state.panels && typeof state.panels === "object") {
+				if (isRecord(state.panels)) {
+					const saved = state.panels;
+					const savedNumber = (key: PanelId): number =>
+						typeof saved[key] === "number"
+							? saved[key]
+							: PANEL_CONFIG.panels[key];
 					return {
 						panels: {
-							...PANEL_CONFIG.panels,
-							...state.panels,
+							tools: savedNumber("tools"),
+							preview: savedNumber("preview"),
+							properties: savedNumber("properties"),
+							mainContent: savedNumber("mainContent"),
+							timeline: savedNumber("timeline"),
 						},
 					};
 				}
 
 				return {
 					panels: {
-						tools: state.tools ?? state.toolsPanel ?? PANEL_CONFIG.panels.tools,
+						tools:
+							readNumber("tools") ??
+							readNumber("toolsPanel") ??
+							PANEL_CONFIG.panels.tools,
 						preview:
-							state.preview ??
-							state.previewPanel ??
+							readNumber("preview") ??
+							readNumber("previewPanel") ??
 							PANEL_CONFIG.panels.preview,
 						properties:
-							state.properties ??
-							state.propertiesPanel ??
+							readNumber("properties") ??
+							readNumber("propertiesPanel") ??
 							PANEL_CONFIG.panels.properties,
-						mainContent: state.mainContent ?? PANEL_CONFIG.panels.mainContent,
-						timeline: state.timeline ?? PANEL_CONFIG.panels.timeline,
+						mainContent:
+							readNumber("mainContent") ?? PANEL_CONFIG.panels.mainContent,
+						timeline: readNumber("timeline") ?? PANEL_CONFIG.panels.timeline,
 					},
 				};
 			},
@@ -91,3 +93,7 @@ export const usePanelStore = create<PanelState>()(
 		},
 	),
 );
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}

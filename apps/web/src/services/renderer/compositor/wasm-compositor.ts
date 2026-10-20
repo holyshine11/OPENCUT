@@ -90,9 +90,8 @@ class WasmCompositor {
 	render(frame: FrameDescriptor) {
 		renderFrame(frame);
 		if (isRenderPerfEnabled()) {
-			recordWasmFrameProfile(
-				getLastFrameProfile() as Array<{ name: string; durationMs: number }>,
-			);
+			const profile: unknown[] = getLastFrameProfile();
+			recordWasmFrameProfile(profile.filter(isFrameProfileEntry));
 		}
 	}
 
@@ -183,6 +182,20 @@ class WasmCompositor {
 }
 
 export const wasmCompositor = new WasmCompositor();
+
+/** wasm 쪽 프로파일은 any[]로 넘어와서 모양을 확인하고 쓴다 */
+function isFrameProfileEntry(
+	entry: unknown,
+): entry is { name: string; durationMs: number } {
+	return (
+		typeof entry === "object" &&
+		entry !== null &&
+		"name" in entry &&
+		typeof entry.name === "string" &&
+		"durationMs" in entry &&
+		typeof entry.durationMs === "number"
+	);
+}
 
 function createBackingCanvas({
 	width,

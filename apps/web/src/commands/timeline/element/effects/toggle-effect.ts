@@ -48,8 +48,9 @@ export class ToggleClipEffectCommand extends Command {
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
 		update: (element) => {
+			if (!isVisualElement(element)) return element;
 			return toggleEffectOnElement({
-				element: element as VisualElement,
+				element,
 				effectId: this.effectId,
 			});
 			},

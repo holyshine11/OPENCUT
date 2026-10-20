@@ -53,8 +53,9 @@ export class ReorderClipEffectsCommand extends Command {
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
 		update: (element) => {
+			if (!isVisualElement(element)) return element;
 			return reorderEffectsOnElement({
-				element: element as VisualElement,
+				element,
 				fromIndex: this.fromIndex,
 				toIndex: this.toIndex,
 			});

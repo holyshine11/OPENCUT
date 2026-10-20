@@ -7,6 +7,7 @@ import type {
 	TProjectSettings,
 	TTimelineViewState,
 } from "@/project/types";
+import { PROJECT_SORT_KEYS } from "@/project/types";
 import type { ExportOptions, ExportResult, ExportState } from "@/export";
 import { storageService } from "@/services/storage/service";
 import { toast } from "sonner";
@@ -594,10 +595,11 @@ export class ProjectManager {
 			project.name.toLowerCase().includes(searchQuery.toLowerCase()),
 		);
 
-		const [key, order] = sortOption.split("-") as [
-			TProjectSortKey,
-			"asc" | "desc",
-		];
+		const [rawKey, rawOrder] = sortOption.split("-");
+		const key: TProjectSortKey =
+			PROJECT_SORT_KEYS.find((candidate) => candidate === rawKey) ??
+			"updatedAt";
+		const order = rawOrder === "asc" ? "asc" : "desc";
 
 		const sortedProjects = [...filteredProjects].sort((a, b) => {
 			const aValue = a[key];

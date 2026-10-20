@@ -33,7 +33,7 @@ export function SelectableSurface({
 	const [selectionState, setSelectionState] = useState<SelectionState>(() =>
 		clearSelection(),
 	);
-	const [highlightedId, setHighlightedId] = useState<string | null>(null);
+	const [highlightedId, setHighlightedId] = useState<string | null>(revealId);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const itemElementsRef = useRef<Map<string, HTMLElement>>(new Map());
 
@@ -208,25 +208,29 @@ export function SelectableSurface({
 		[clearSelectionState],
 	);
 
-	useEffect(() => {
-		setSelectionState((state) =>
-			pruneSelection({
-				state,
-				orderedIds,
-			}),
-		);
-	}, [orderedIds]);
+	// 목록이 바뀌면 사라진 항목을 선택에서 뺀다. effect 대신 렌더 중에 맞춰 한 번 더 그리는 일을 막는다
+	const [prunedForIds, setPrunedForIds] = useState(orderedIds);
+	if (prunedForIds !== orderedIds) {
+		setPrunedForIds(orderedIds);
+		setSelectionState((state) => pruneSelection({ state, orderedIds }));
+	}
 
 	useEffect(() => {
 		onSelectionChange?.(selectionState);
 	}, [onSelectionChange, selectionState]);
+
+	const [highlightedForRevealId, setHighlightedForRevealId] =
+		useState(revealId);
+	if (highlightedForRevealId !== revealId) {
+		setHighlightedForRevealId(revealId);
+		if (revealId) setHighlightedId(revealId);
+	}
 
 	useEffect(() => {
 		if (!revealId) {
 			return;
 		}
 
-		setHighlightedId(revealId);
 		getItemElement(revealId)?.scrollIntoView({ block: "center" });
 
 		const timer = setTimeout(() => {

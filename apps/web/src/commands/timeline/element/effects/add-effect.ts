@@ -48,8 +48,9 @@ export class AddClipEffectCommand extends Command {
 			elementId: this.elementId,
 			elementPredicate: isVisualElement,
 		update: (element) => {
+			if (!isVisualElement(element)) return element;
 			const updated = addEffectToElement({
-				element: element as VisualElement,
+				element,
 				effectType: this.effectType,
 			});
 				const effects = updated.effects ?? [];

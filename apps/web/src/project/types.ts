@@ -54,6 +54,12 @@ export interface TProject {
 	timelineViewState?: TTimelineViewState;
 }
 
-export type TProjectSortKey = "createdAt" | "updatedAt" | "name" | "duration";
+export const PROJECT_SORT_KEYS = [
+	"createdAt",
+	"updatedAt",
+	"name",
+	"duration",
+] as const;
+export type TProjectSortKey = (typeof PROJECT_SORT_KEYS)[number];
 export type TSortOrder = "asc" | "desc";
 export type TProjectSortOption = `${TProjectSortKey}-${TSortOrder}`;

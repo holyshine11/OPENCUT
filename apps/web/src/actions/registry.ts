@@ -6,23 +6,18 @@ import type {
 	TActionArgsMap,
 	TArgOfAction,
 	TInvocationTrigger,
+	TBoundActionList,
 } from "./types";
 
-type ActionHandler = (arg: unknown, trigger?: TInvocationTrigger) => void;
-const boundActions: Partial<Record<TAction, ActionHandler[]>> = {};
+const boundActions: TBoundActionList = {};
 
 // eslint-disable-next-line opencut/prefer-object-params -- action registries read best as (action, handler).
 export function bindAction<A extends TAction>(
 	action: A,
 	handler: TActionFunc<A>,
 ) {
-	const handlers = boundActions[action];
-	const typedHandler = handler as ActionHandler;
-	if (handlers) {
-		handlers.push(typedHandler);
-	} else {
-		boundActions[action] = [typedHandler];
-	}
+	const handlers: TBoundActionList[A] = (boundActions[action] ??= []);
+	handlers?.push(handler);
 }
 
 // eslint-disable-next-line opencut/prefer-object-params -- action registries read best as (action, handler).
@@ -30,11 +25,11 @@ export function unbindAction<A extends TAction>(
 	action: A,
 	handler: TActionFunc<A>,
 ) {
-	const handlers = boundActions[action];
+	const handlers: TBoundActionList[A] = boundActions[action];
 	if (!handlers) return;
 
-	const typedHandler = handler as ActionHandler;
-	boundActions[action] = handlers.filter((h) => h !== typedHandler);
+	const index = handlers.indexOf(handler);
+	if (index >= 0) handlers.splice(index, 1);
 
 	if (boundActions[action]?.length === 0) {
 		delete boundActions[action];
@@ -57,10 +52,12 @@ type InvokeActionFunc = {
 // eslint-disable-next-line opencut/prefer-object-params -- dispatchers conventionally separate action, payload, and trigger.
 export const invokeAction: InvokeActionFunc = <A extends TAction>(
 	action: A,
-	args?: TArgOfAction<A>,
+	args: TArgOfAction<A>,
 	trigger?: TInvocationTrigger,
 ) => {
-	boundActions[action]?.forEach((handler) => {
+	const handlers: TBoundActionList[A] = boundActions[action];
+	// 핸들러가 실행 중에 자기 바인딩을 풀 수 있어 복사본을 돈다
+	handlers?.slice().forEach((handler) => {
 		handler(args, trigger);
 	});
 };

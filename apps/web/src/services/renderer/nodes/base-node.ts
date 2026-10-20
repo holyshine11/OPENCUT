@@ -8,8 +8,8 @@ export class BaseNode<
 	params: Params;
 	resolved: Resolved | null = null;
 
-	constructor(params?: Params) {
-		this.params = params ?? ({} as Params);
+	constructor(params: Params) {
+		this.params = params;
 	}
 
 	children: AnyBaseNode[] = [];
