@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Slider as SliderPrimitive } from "radix-ui";
+import { withResetClick } from "@/components/ui/slider";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ImageCompositionIcon, RefreshIcon } from "@hugeicons/core-free-icons";
 import type { ParamValues } from "@/params";
@@ -447,6 +448,7 @@ export function SliderRow({
 					setSlidingValue(null);
 					onCommit();
 				}}
+				onPointerDown={withResetClick({ onReset: reset })}
 				onDoubleClick={reset}
 			>
 				<SliderPrimitive.Track

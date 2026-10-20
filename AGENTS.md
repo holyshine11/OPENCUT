@@ -21,6 +21,16 @@ Each app is a frontend that calls into Rust. Logic is never duplicated between a
 
 - Read components before using them. They may already apply classes, which affects what you need to pass and how to override them.
 
+### Sliders
+
+Every value slider resets to its default on ⌘-click (Ctrl-click off Apple). When you add a slider:
+
+- Use `Slider` from `@/components/ui/slider` and pass `onReset`. It must set **and commit** the default (one undo step), reusing the field's existing reset (the number field's ⏎ `onReset`) when there is one.
+- A hand-built Radix root (e.g. `SliderRow` in `effects/components/adjust-controls.tsx`) gets `onPointerDown={withResetClick({ onReset })}`.
+- A custom drag control (e.g. the clip volume line) checks `isResetClick(event)` at pointer-down.
+- Take the default from a named constant or the param definition (`param.default`, `slider.default`, `DEFAULT_RETIME_RATE`, `VOLUME_DB_DEFAULT`), never a literal.
+- Sliders without a meaningful default (timeline zoom) are the only exception.
+
 
 ## Agent skills
 

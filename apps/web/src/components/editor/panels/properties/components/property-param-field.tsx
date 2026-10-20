@@ -297,6 +297,7 @@ function NumberParamField({
 					setSlidingValue(null);
 					onCommit();
 				}}
+				onReset={handleReset}
 			/>
 		</>
 	);

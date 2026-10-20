@@ -958,6 +958,10 @@ function MaskFillFields({
 							step={1}
 							onValueChange={([value]) => previewParam("fillStrength")(value)}
 							onValueCommit={onCommit}
+							onReset={() => {
+								previewParam("fillStrength")(DEFAULT_FILL_STRENGTH);
+								onCommit();
+							}}
 						/>
 						<span className="text-muted-foreground w-8 shrink-0 text-right text-xs tabular-nums">
 							{Math.round(strength)}

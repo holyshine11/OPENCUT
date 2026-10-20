@@ -7,7 +7,12 @@ import {
 	getDbFromLinePos,
 	getLinePosFromDb,
 } from "@/timeline/audio-display";
-import { VOLUME_DB_MAX, VOLUME_DB_MIN } from "@/timeline/audio-constants";
+import {
+	VOLUME_DB_DEFAULT,
+	VOLUME_DB_MAX,
+	VOLUME_DB_MIN,
+} from "@/timeline/audio-constants";
+import { isResetClick } from "@/components/ui/slider";
 import { getElementVolume, hasAnimatedVolume } from "@/timeline/audio-state";
 import type { AudioElement } from "@/timeline/types";
 import {
@@ -162,6 +167,13 @@ export function AudioVolumeLine({
 			editor.selection.setSelectedElements({
 				elements: [{ trackId, elementId: element.id }],
 			});
+			if (isResetClick(event)) {
+				startVolumeRef.current = currentVolume;
+				lastPreviewVolumeRef.current = currentVolume;
+				previewVolume(VOLUME_DB_DEFAULT);
+				finishDrag({ shouldCommit: true });
+				return;
+			}
 			activePointerIdRef.current = event.pointerId;
 			startVolumeRef.current = currentVolume;
 			lastPreviewVolumeRef.current = currentVolume;
@@ -173,7 +185,15 @@ export function AudioVolumeLine({
 				clientY: event.clientY,
 			});
 		},
-		[currentVolume, editor.selection, element.id, trackId, updateFromPointer],
+		[
+			currentVolume,
+			editor.selection,
+			element.id,
+			trackId,
+			updateFromPointer,
+			previewVolume,
+			finishDrag,
+		],
 	);
 
 	const handlePointerMove = useCallback(

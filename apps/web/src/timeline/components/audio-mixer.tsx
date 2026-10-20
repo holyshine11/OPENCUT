@@ -22,7 +22,7 @@ import { translateLabel, useMessages } from "@/i18n";
 import { canTrackHaveAudio, type TimelineTrack } from "@/timeline";
 import { isTrackSilencedBySolo, linearToDb } from "@/timeline/audio-mix";
 import type { AudioLoudness } from "@/core/managers/audio-manager";
-import { VOLUME_DB_MIN } from "@/timeline/audio-constants";
+import { VOLUME_DB_DEFAULT, VOLUME_DB_MIN } from "@/timeline/audio-constants";
 import { cn } from "@/utils/ui";
 
 const METER_FLOOR_DB = -60;
@@ -261,6 +261,7 @@ function Fader({
 					setDraft(null);
 					onCommit(db);
 				}}
+				onReset={() => onCommit(VOLUME_DB_DEFAULT)}
 				onDoubleClick={() => onCommit(0)}
 				className="min-h-0 flex-1"
 			/>
@@ -355,6 +356,9 @@ function TrackChannelStrip({
 								editor.timeline.setTrackMix({ trackId: track.id, pan: value });
 							}}
 							onDoubleClick={() =>
+								editor.timeline.setTrackMix({ trackId: track.id, pan: 0 })
+							}
+							onReset={() =>
 								editor.timeline.setTrackMix({ trackId: track.id, pan: 0 })
 							}
 						/>

@@ -189,6 +189,7 @@ export function SpeedTab({ targets }: { targets: SpeedTarget[] }) {
 								setSlidingRate(nextRate);
 								previewRate(nextRate);
 							}}
+							onReset={() => commitRetime({ rate: DEFAULT_RETIME_RATE })}
 							onValueCommit={([value]) => {
 								setSlidingRate(null);
 								commitRetime({ rate: clampSpeed({ rate: value }) });
