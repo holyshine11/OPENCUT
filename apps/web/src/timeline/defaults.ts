@@ -15,6 +15,8 @@ const defaultTransform: Transform = {
 const defaultOpacity = 1;
 const defaultBlendMode: BlendMode = "normal";
 const defaultVolume = 0;
+// 단축키로 크로스페이드를 걸 때의 길이(초)
+const defaultCrossfadeSeconds = 1;
 
 const defaultTextLetterSpacing = 0;
 const defaultTextLineHeight = 1.2;
@@ -92,6 +94,7 @@ export const DEFAULTS = {
 		opacity: defaultOpacity,
 		blendMode: defaultBlendMode,
 		volume: defaultVolume,
+		crossfade: defaultCrossfadeSeconds,
 	},
 	text: {
 		letterSpacing: defaultTextLetterSpacing,

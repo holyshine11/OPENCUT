@@ -33,11 +33,7 @@ export class ToggleSourceAudioSeparationCommand extends Command {
 		const editor = EditorCore.getInstance();
 		this.savedState = editor.scenes.getActiveScene().tracks;
 
-		const sourceTrack = [
-			...this.savedState.overlay,
-			this.savedState.main,
-			...this.savedState.audio,
-		].find((track) => track.id === this.params.trackId);
+		const sourceTrack = this.savedState.find((track) => track.id === this.params.trackId);
 		if (!sourceTrack) {
 			return;
 		}

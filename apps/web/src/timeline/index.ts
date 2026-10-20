@@ -16,7 +16,7 @@ export function calculateTotalDuration({
 }: {
 	tracks: SceneTracks;
 }): MediaTime {
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 	if (orderedTracks.length === 0) return ZERO_MEDIA_TIME;
 
 	let maxEnd: MediaTime = ZERO_MEDIA_TIME;

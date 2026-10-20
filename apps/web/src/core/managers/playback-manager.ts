@@ -4,9 +4,17 @@ import {
 	clampMediaTime,
 	type MediaTime,
 	mediaTimeFromSeconds,
+	minMediaTime,
 	roundFrameTime,
 	ZERO_MEDIA_TIME,
 } from "@/wasm";
+
+/** 큐베이스 사이클처럼 재생이 end에 닿으면 start로 돌아가는 구간 */
+export interface PlaybackLoop {
+	start: MediaTime;
+	end: MediaTime;
+	enabled: boolean;
+}
 
 export class PlaybackManager {
 	private isPlaying = false;
@@ -22,6 +30,7 @@ export class PlaybackManager {
 	private playbackStartWallTime = 0;
 	private playbackStartTime: MediaTime = ZERO_MEDIA_TIME;
 	private timelineScopeBound = false;
+	private loop: PlaybackLoop | null = null;
 
 	constructor(private editor: EditorCore) {}
 
@@ -109,6 +118,28 @@ export class PlaybackManager {
 		} else {
 			this.mute();
 		}
+	}
+
+	getLoop(): PlaybackLoop | null {
+		return this.loop;
+	}
+
+	/** 루프 구간을 정하고 켠다. null이면 구간을 지운다 */
+	setLoop({
+		range,
+	}: {
+		range: { start: MediaTime; end: MediaTime } | null;
+	}): void {
+		this.loop =
+			range && range.end > range.start ? { ...range, enabled: true } : null;
+		this.notify();
+	}
+
+	/** 구간은 남기고 루프만 켜고 끈다 */
+	toggleLoop(): void {
+		if (!this.loop) return;
+		this.loop = { ...this.loop, enabled: !this.loop.enabled };
+		this.notify();
 	}
 
 	getIsPlaying(): boolean {
@@ -222,6 +253,20 @@ export class PlaybackManager {
 		});
 		const newTime = fps ? roundFrameTime({ time: rawTime, fps }) : rawTime;
 		const maxTime = this.editor.timeline.getTotalDuration();
+		const loop = this.loop;
+		const loopEnd = loop ? minMediaTime({ a: loop.end, b: maxTime }) : null;
+
+		// 구간 끝보다 앞에서 재생을 시작했을 때만 되돌린다. 뒤에서 시작하면 그대로 흘러간다
+		if (
+			loop?.enabled &&
+			loopEnd !== null &&
+			this.playbackStartTime < loopEnd &&
+			newTime >= loopEnd
+		) {
+			this.seek({ time: loop.start });
+			this.playbackTimer = requestAnimationFrame(this.updateTime);
+			return;
+		}
 
 		if (newTime >= maxTime) {
 			this.pause();

@@ -5,6 +5,7 @@ import type { MediaAsset } from "@/media/types";
 import { storageService } from "@/services/storage/service";
 import { generateUUID } from "@/utils/id";
 import { videoCache } from "@/services/video-cache/service";
+import { clearAllClipFrames } from "@/media/clip-frames";
 import { waveformCache } from "@/services/waveform-cache/service";
 import { BatchCommand, RemoveMediaAssetCommand } from "@/commands";
 
@@ -132,6 +133,7 @@ export class MediaManager {
 
 	clearAllAssets(): void {
 		videoCache.clearAll();
+		clearAllClipFrames();
 		waveformCache.clearAll();
 
 		this.assets.forEach((asset) => {

@@ -38,19 +38,11 @@ export class AddTrackCommand extends Command {
 				trackType: this.type,
 			});
 
-		const updatedTracks =
-			this.type === "audio"
-				? buildAudioTrackState({
-						tracks: this.savedState,
-						insertIndex,
-						trackId: this.trackId,
-					})
-				: buildOverlayTrackState({
-						tracks: this.savedState,
-						insertIndex,
-						trackId: this.trackId,
-						trackType: this.type,
-					});
+		const updatedTracks = [
+			...this.savedState.slice(0, insertIndex),
+			buildEmptyTrack({ id: this.trackId, type: this.type }),
+			...this.savedState.slice(insertIndex),
+		];
 
 		editor.timeline.updateTracks(updatedTracks);
 		return undefined;
@@ -66,58 +58,4 @@ export class AddTrackCommand extends Command {
 	getTrackId(): string {
 		return this.trackId;
 	}
-}
-
-function buildAudioTrackState({
-	tracks,
-	insertIndex,
-	trackId,
-}: {
-	tracks: SceneTracks;
-	insertIndex: number;
-	trackId: string;
-}): SceneTracks {
-	const audioInsertIndex = Math.max(0, insertIndex - tracks.overlay.length - 1);
-	const newTrack = buildEmptyTrack({
-		id: trackId,
-		type: "audio",
-	});
-	return {
-		...tracks,
-		audio: [
-			...tracks.audio.slice(0, audioInsertIndex),
-			newTrack,
-			...tracks.audio.slice(audioInsertIndex),
-		],
-	};
-}
-
-function buildOverlayTrackState({
-	tracks,
-	insertIndex,
-	trackId,
-	trackType,
-}: {
-	tracks: SceneTracks;
-	insertIndex: number;
-	trackId: string;
-	trackType: Exclude<TrackType, "audio">;
-}): SceneTracks {
-	const overlayInsertIndex = Math.min(insertIndex, tracks.overlay.length);
-	const newTrack =
-		trackType === "video"
-			? buildEmptyTrack({ id: trackId, type: "video" })
-			: trackType === "text"
-				? buildEmptyTrack({ id: trackId, type: "text" })
-				: trackType === "graphic"
-					? buildEmptyTrack({ id: trackId, type: "graphic" })
-					: buildEmptyTrack({ id: trackId, type: "effect" });
-	return {
-		...tracks,
-		overlay: [
-			...tracks.overlay.slice(0, overlayInsertIndex),
-			newTrack,
-			...tracks.overlay.slice(overlayInsertIndex),
-		],
-	};
 }

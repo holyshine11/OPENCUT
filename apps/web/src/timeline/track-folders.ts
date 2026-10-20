@@ -8,10 +8,6 @@ export interface TrackFolderRow {
 	hidden: boolean;
 }
 
-function orderedTracks(tracks: SceneTracks): TimelineTrack[] {
-	return [...tracks.overlay, tracks.main, ...tracks.audio];
-}
-
 function findFolder({
 	folders,
 	folderId,
@@ -73,12 +69,7 @@ function mapTracks({
 	tracks: SceneTracks;
 	update: <TTrack extends TimelineTrack>(track: TTrack) => TTrack;
 }): SceneTracks {
-	return {
-		...tracks,
-		overlay: tracks.overlay.map(update),
-		main: update(tracks.main),
-		audio: tracks.audio.map(update),
-	};
+	return tracks.map(update);
 }
 
 export function groupTracksIntoFolder({
@@ -93,7 +84,7 @@ export function groupTracksIntoFolder({
 	folder: TrackFolder;
 }): { tracks: SceneTracks; trackFolders: TrackFolder[] } | null {
 	const memberIds = getGroupableTrackIds({
-		tracks: orderedTracks(tracks),
+		tracks: tracks,
 		folders,
 		trackIds,
 	});
@@ -136,7 +127,7 @@ export function getFolderMembers({
 	tracks: SceneTracks;
 	folderId: string;
 }): TimelineTrack[] {
-	return orderedTracks(tracks).filter((track) => track.folderId === folderId);
+	return tracks.filter((track) => track.folderId === folderId);
 }
 
 /** 해당 트랙이 모두 음소거·숨김·잠금이면 true. 해당 트랙이 없으면 null */
@@ -153,5 +144,50 @@ export function getFolderToggleState({
 		locked: members.length
 			? members.every((track) => track.locked === true)
 			: null,
+	};
+}
+
+/**
+ * 트랙을 다른 자리로 옮긴다. toIndex는 옮기기 전 목록에서 끼워 넣을 자리다. 폴더 구성원은 늘 붙어 있어야 해서,
+ * 같은 폴더 트랙 옆에 남으면 그 폴더에 두고, 한 폴더의 두 트랙 사이에 들어가면 그 폴더에 넣고,
+ * 아니면 폴더에서 뺀다. 구성원이 없어진 폴더는 지운다
+ */
+export function moveTrack({
+	tracks,
+	folders,
+	trackId,
+	toIndex,
+}: {
+	tracks: SceneTracks;
+	folders: readonly TrackFolder[] | undefined;
+	trackId: string;
+	toIndex: number;
+}): { tracks: SceneTracks; trackFolders: TrackFolder[] } | null {
+	const from = tracks.findIndex(({ id }) => id === trackId);
+	const to = toIndex > from ? toIndex - 1 : toIndex;
+	if (from < 0 || to === from || to < 0 || to >= tracks.length) return null;
+
+	const rest = tracks.filter((_, index) => index !== from);
+	const moved = [...rest.slice(0, to), tracks[from], ...rest.slice(to)];
+	const folderOf = (track: TimelineTrack | undefined) =>
+		findFolder({ folders, folderId: track?.folderId })?.id;
+	const above = folderOf(moved[to - 1]);
+	const below = folderOf(moved[to + 1]);
+	const own = folderOf(moved[to]);
+	const folderId =
+		own && (own === above || own === below)
+			? own
+			: above && above === below
+				? above
+				: undefined;
+
+	const next = mapTracks({
+		tracks: moved,
+		update: (track) => (track.id === trackId ? { ...track, folderId } : track),
+	});
+	const usedFolderIds = new Set(next.map((track) => track.folderId));
+	return {
+		tracks: next,
+		trackFolders: (folders ?? []).filter(({ id }) => usedFolderIds.has(id)),
 	};
 }

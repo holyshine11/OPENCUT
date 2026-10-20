@@ -14,6 +14,8 @@ export class SelectionManager {
 	private selectedKeyframes: SelectedKeyframeRef[] = [];
 	private keyframeSelectionAnchor: SelectedKeyframeRef | null = null;
 	private selectedMaskPoints: SelectedMaskPointSelection | null = null;
+	// 트랙 선택은 클립 선택과 따로 간다. 클립을 골라도 트랙 선택은 그대로 둔다
+	private selectedTrackIds: string[] = [];
 	private listeners = new Set<() => void>();
 
 	constructor(private editor: EditorCore) {}
@@ -32,6 +34,37 @@ export class SelectionManager {
 
 	getSelectedMaskPointSelection(): SelectedMaskPointSelection | null {
 		return this.selectedMaskPoints;
+	}
+
+	getSelectedTrackIds(): string[] {
+		return this.selectedTrackIds;
+	}
+
+	/** 그냥 누르면 그 트랙 하나만, 보조 키를 누르면 선택에 넣거나 뺀다 */
+	selectTrack({
+		trackId,
+		isMultiKey,
+	}: {
+		trackId: string;
+		isMultiKey: boolean;
+	}): void {
+		const isSelected = this.selectedTrackIds.includes(trackId);
+		if (!isMultiKey) {
+			this.setSelectedTrackIds({ trackIds: [trackId] });
+		} else if (isSelected) {
+			this.setSelectedTrackIds({
+				trackIds: this.selectedTrackIds.filter((id) => id !== trackId),
+			});
+		} else {
+			this.setSelectedTrackIds({
+				trackIds: [...this.selectedTrackIds, trackId],
+			});
+		}
+	}
+
+	setSelectedTrackIds({ trackIds }: { trackIds: string[] }): void {
+		this.selectedTrackIds = trackIds;
+		this.notify();
 	}
 
 	getActiveSelectionKind(): EditorSelectionKind | null {

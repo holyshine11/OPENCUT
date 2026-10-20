@@ -30,14 +30,11 @@ const main: VideoTrack = {
 	hidden: false,
 };
 
-const tracks: SceneTracks = {
-	overlay: [
-		textTrack({ id: "open" }),
-		textTrack({ id: "locked", locked: true }),
-	],
+const tracks: SceneTracks = [
+	textTrack({ id: "open" }),
+	textTrack({ id: "locked", locked: true }),
 	main,
-	audio: [],
-};
+];
 
 describe("track lock", () => {
 	test("locked가 true일 때만 잠긴 트랙", () => {

@@ -36,9 +36,8 @@ function buildVideoElement(overrides: Partial<VideoElement> = {}): VideoElement 
 }
 
 function buildTracks(element: VideoElement): SceneTracks {
-	return {
-		overlay: [],
-		main: {
+	return [
+		{
 			id: "main-track",
 			type: "video",
 			name: "Main",
@@ -46,8 +45,7 @@ function buildTracks(element: VideoElement): SceneTracks {
 			hidden: false,
 			elements: [element],
 		},
-		audio: [],
-	};
+	];
 }
 
 describe("applyElementUpdate", () => {
@@ -62,7 +60,7 @@ describe("applyElementUpdate", () => {
 			},
 			context: {
 				tracks,
-				trackId: tracks.main.id,
+				trackId: tracks[0].id,
 			},
 		});
 

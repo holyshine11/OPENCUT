@@ -1,6 +1,7 @@
 "use client";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isSpaceHeld, setPanning } from "@/timeline/space-pan";
 import {
 	ArrowDown01Icon,
 	ArrowRight01Icon,
@@ -78,6 +79,7 @@ import {
 import {
 	getTrackColor,
 	LOCKED_TRACK_OVERLAY_CLASS,
+	PICKED_TRACK_ROW_CLASS,
 	SELECTED_TRACK_ROW_CLASS,
 } from "./theme";
 import { TIMELINE_LAYERS } from "./layers";
@@ -89,6 +91,7 @@ import {
 } from "./expanded-layout";
 import { TIMELINE_HORIZONTAL_WHEEL_STEP_PX } from "./interaction";
 import { TimelineToolbar } from "./timeline-toolbar";
+import { MasterMeterColumn } from "./audio-mixer";
 import {
 	AnchoredColorPopover,
 	ColorStrip,
@@ -116,6 +119,8 @@ import { cn } from "@/utils/ui";
 import { translateLabel, useMessages } from "@/i18n";
 import { ActionTooltip } from "@/actions/components/action-tooltip";
 import { DEFAULT_TRACK_NAMES } from "@/timeline/tracks";
+import { insertCaptionAt } from "@/subtitles/insert";
+import { useTrackReorderDrag } from "@/timeline/hooks/use-track-reorder-drag";
 
 const TRACKS_CONTAINER_MAX_HEIGHT = 800;
 const FALLBACK_CONTAINER_WIDTH = 1000;
@@ -158,13 +163,9 @@ export function Timeline() {
 		currentEditor.scenes.getActiveSceneOrNull(),
 	);
 	const tracks = useMemo<TimelineTrack[]>(
-		() =>
-			scene
-				? [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio]
-				: [],
+		() => (scene ? scene.tracks : []),
 		[scene],
 	);
-	const mainTrackId = scene?.tracks.main.id ?? null;
 	const folderRows = useMemo(
 		() => getTrackFolderRows({ tracks, folders: scene?.trackFolders }),
 		[tracks, scene],
@@ -327,6 +328,88 @@ export function Timeline() {
 		};
 	}, [syncFollowers]);
 
+	// Space+드래그 또는 휠 클릭 드래그로 화면만 옮긴다. 재생 헤드 시점은 그대로.
+	// 캡처 단계에서 가로채 클립 선택·이동·탐색이 같이 일어나지 않게 한다
+	useEffect(() => {
+		const container = timelineRef.current;
+		if (!container) return;
+
+		let drag: {
+			pointerId: number;
+			x: number;
+			y: number;
+			left: number;
+			top: number;
+		} | null = null;
+		let suppressClick = false;
+
+		const onPointerDown = (e: PointerEvent) => {
+			const isPan = e.button === 1 || (e.button === 0 && isSpaceHeld());
+			const tracks = tracksScrollRef.current;
+			if (!isPan || !tracks) return;
+			e.preventDefault();
+			e.stopPropagation();
+			container.setPointerCapture(e.pointerId);
+			drag = {
+				pointerId: e.pointerId,
+				x: e.clientX,
+				y: e.clientY,
+				left: tracks.scrollLeft,
+				top: tracks.scrollTop,
+			};
+			suppressClick = true;
+			setPanning(true);
+		};
+
+		const onPointerMove = (e: PointerEvent) => {
+			const tracks = tracksScrollRef.current;
+			if (!drag || e.pointerId !== drag.pointerId || !tracks) return;
+			e.stopPropagation();
+			tracks.scrollLeft = Math.max(0, drag.left - (e.clientX - drag.x));
+			tracks.scrollTop = Math.max(0, drag.top - (e.clientY - drag.y));
+			syncFollowers();
+		};
+
+		const onPointerUp = (e: PointerEvent) => {
+			if (!drag || e.pointerId !== drag.pointerId) return;
+			e.stopPropagation();
+			drag = null;
+			setPanning(false);
+			saveScrollPositionRef.current();
+			// 끌기 직후 click이 안 오는 경우(다른 요소에서 뗌)에 다음 진짜 클릭까지 삼키지 않게
+			setTimeout(() => {
+				suppressClick = false;
+			});
+		};
+
+		// 드래그 뒤 따라오는 click이 재생 헤드 이동이나 선택 해제로 이어지지 않게 한 번 삼킨다
+		const onClick = (e: MouseEvent) => {
+			if (!suppressClick) return;
+			suppressClick = false;
+			e.stopPropagation();
+			e.preventDefault();
+		};
+		const onAuxClick = (e: MouseEvent) => {
+			if (e.button === 1) onClick(e);
+		};
+
+		const options = { capture: true };
+		container.addEventListener("pointerdown", onPointerDown, options);
+		container.addEventListener("pointermove", onPointerMove, options);
+		container.addEventListener("pointerup", onPointerUp, options);
+		container.addEventListener("pointercancel", onPointerUp, options);
+		container.addEventListener("click", onClick, options);
+		container.addEventListener("auxclick", onAuxClick, options);
+		return () => {
+			container.removeEventListener("pointerdown", onPointerDown, options);
+			container.removeEventListener("pointermove", onPointerMove, options);
+			container.removeEventListener("pointerup", onPointerUp, options);
+			container.removeEventListener("pointercancel", onPointerUp, options);
+			container.removeEventListener("click", onClick, options);
+			container.removeEventListener("auxclick", onAuxClick, options);
+		};
+	}, [syncFollowers]);
+
 	useInitialScrollBottom({
 		tracksScrollRef,
 		trackLabelsScrollRef,
@@ -477,7 +560,11 @@ export function Timeline() {
 				setZoomLevel={({ zoom }) => setZoomLevel(zoom)}
 			/>
 
-			<div className="relative flex flex-1 overflow-hidden" ref={timelineRef}>
+			<div
+				className="relative flex flex-1 overflow-hidden"
+				ref={timelineRef}
+				data-timeline-pan-surface
+			>
 				<TrackLabelsPanel
 					trackLabelsRef={trackLabelsRef}
 					trackLabelsScrollRef={trackLabelsScrollRef}
@@ -578,11 +665,11 @@ export function Timeline() {
 									if (!isDirectTarget) return;
 									event.stopPropagation();
 									handleTracksClick(event);
+									editor.selection.setSelectedTrackIds({ trackIds: [] });
 								}}
 							>
 								{tracks.length > 0 && (
 									<TimelineTrackRows
-										mainTrackId={mainTrackId}
 										zoomLevel={zoomLevel}
 										dragView={dragView}
 										onResizeStart={handleResizeStart}
@@ -605,7 +692,10 @@ export function Timeline() {
 									handleTracksMouseDown(event);
 									handleSelectionMouseDown(event);
 								}}
-								onClick={handleTracksClick}
+								onClick={(event) => {
+									handleTracksClick(event);
+									editor.selection.setSelectedTrackIds({ trackIds: [] });
+								}}
 							/>
 						</div>
 					</ScrollArea>
@@ -630,6 +720,7 @@ export function Timeline() {
 					tracksScrollRef={tracksScrollRef}
 					isVisible={showSnapIndicator}
 				/>
+				<MasterMeterColumn />
 			</div>
 		</section>
 	);
@@ -654,10 +745,7 @@ function TrackLabelsPanel({
 	const m = useMessages();
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const tracks = useMemo<TimelineTrack[]>(
-		() =>
-			scene
-				? [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio]
-				: [],
+		() => (scene ? scene.tracks : []),
 		[scene],
 	);
 	const { selectedElements } = useElementSelection();
@@ -665,6 +753,19 @@ function TrackLabelsPanel({
 		() => new Set(selectedElements.map((el) => el.trackId)),
 		[selectedElements],
 	);
+	const pickedTrackIds = useEditor((e) => e.selection.getSelectedTrackIds());
+	const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
+	const trackListRef = useRef<HTMLDivElement>(null);
+	const trackZones = useMemo(
+		() => (scene ? [scene.tracks.map(({ id }) => id)] : []),
+		[scene],
+	);
+	const reorder = useTrackReorderDrag({
+		listRef: trackListRef,
+		zones: trackZones,
+		onMove: ({ trackId, toIndex }) =>
+			editor.timeline.moveTrack({ trackId, toIndex }),
+	});
 
 	const expandedElementIds = useTimelineStore((s) => s.expandedElementIds);
 	const trackExpandedRowsMap = useMemo(
@@ -688,11 +789,26 @@ function TrackLabelsPanel({
 				<div ref={trackLabelsScrollRef} className="size-full overflow-hidden">
 					{tracks.length > 0 && (
 						<div
-							className="flex flex-col"
+							ref={trackListRef}
+							className="relative flex flex-col select-none"
 							style={{ gap: `${TIMELINE_TRACK_GAP_PX}px` }}
 						>
+							{reorder.drag && (
+								<div
+									className="bg-primary pointer-events-none absolute inset-x-0 z-10 h-0.5"
+									style={{
+										// 맨 위 자리는 목록 밖으로 잘리지 않게 0에 붙인다
+										top: `${Math.max(0, reorder.drag.indicatorTop - TIMELINE_TRACK_GAP_PX / 2 - 1)}px`,
+									}}
+								/>
+							)}
 							{tracks.map((track, index) => {
 								const expandedRows = trackExpandedRowsMap[index];
+								const displayName = translateLabel({
+									messages: m,
+									label: track.name,
+								});
+								const isRenaming = renamingTrackId === track.id;
 								const baseHeight = getTrackHeight({ type: track.type });
 								const folderHeader = folderRows[index]?.header;
 
@@ -708,20 +824,92 @@ function TrackLabelsPanel({
 										)}
 										{!folderRows[index]?.hidden && (
 											<div
+												data-track-row-id={track.id}
 												className={cn(
 													"group relative flex flex-col",
 													tracksWithSelection.has(track.id) &&
 														SELECTED_TRACK_ROW_CLASS,
+													pickedTrackIds.includes(track.id) &&
+														PICKED_TRACK_ROW_CLASS,
+													reorder.drag?.trackId === track.id && "opacity-50",
 												)}
 												style={{
 													height: `${baseHeight + getTrackExpansionHeight(index)}px`,
 												}}
 											>
+												<button
+													type="button"
+													className="absolute inset-x-0 top-0 appearance-none border-0 bg-transparent p-0"
+													style={{ height: `${baseHeight}px` }}
+													aria-label={m.timeline.selectTrack({
+														name: displayName,
+													})}
+													title={m.timeline.renameTrackHint}
+													aria-pressed={pickedTrackIds.includes(track.id)}
+													onPointerDown={(event) =>
+														reorder.onPointerDown({ event, trackId: track.id })
+													}
+													onClick={(event) => {
+														if (reorder.shouldSuppressClick()) return;
+														// 헤더 클릭은 트랙을 고르는 동작이라 클립 선택을 풀어 Delete가 트랙에 가게 한다
+														editor.selection.setSelectedElements({ elements: [] });
+														editor.selection.selectTrack({
+															trackId: track.id,
+															isMultiKey:
+																event.metaKey ||
+																event.ctrlKey ||
+																event.shiftKey,
+														});
+													}}
+													onDoubleClick={() => setRenamingTrackId(track.id)}
+													onKeyDown={(event) => {
+														if (event.key === "F2")
+															setRenamingTrackId(track.id);
+													}}
+												/>
 												<TrackColorStrip track={track} />
 												<div
-													className="flex shrink-0 items-center justify-end gap-2 px-3"
+													className="pointer-events-none relative flex shrink-0 items-center justify-end gap-2 pr-3 pl-2.5 [&>*]:pointer-events-auto"
 													style={{ height: `${baseHeight}px` }}
 												>
+													{isRenaming ? (
+														<input
+															// eslint-disable-next-line jsx-a11y/no-autofocus -- 이름 바꾸기를 고르면 바로 입력한다
+															autoFocus
+															aria-label={m.timeline.trackName}
+															defaultValue={displayName}
+															className="bg-background min-w-0 flex-1 rounded-sm px-1 text-xs"
+															onFocus={(event) => event.currentTarget.select()}
+															onBlur={(event) => {
+																setRenamingTrackId(null);
+																const name = event.currentTarget.value.trim();
+																if (name && name !== displayName) {
+																	editor.timeline.renameTrack({
+																		trackId: track.id,
+																		name,
+																	});
+																}
+															}}
+															onKeyDown={(event) => {
+																event.stopPropagation();
+																if (event.nativeEvent.isComposing) return;
+																if (event.key === "Escape") {
+																	event.currentTarget.value = displayName;
+																}
+																if (
+																	event.key === "Enter" ||
+																	event.key === "Escape"
+																) {
+																	event.currentTarget.blur();
+																}
+															}}
+														/>
+													) : (
+														// 고르기·이름 바꾸기는 밑에 깔린 버튼이 받는다
+														<span className="pointer-events-none! min-w-0 flex-1 truncate text-xs">
+															{displayName}
+														</span>
+													)}
 													{canTrackHaveAudio(track) && (
 														<TrackToggleIcon
 															isOff={track.muted}
@@ -802,7 +990,6 @@ function TrackLabelsPanel({
 }
 
 function TimelineTrackRows({
-	mainTrackId,
 	zoomLevel,
 	dragView,
 	onResizeStart,
@@ -815,7 +1002,6 @@ function TimelineTrackRows({
 	dropTarget,
 	folderRows,
 }: {
-	mainTrackId: string | null;
 	zoomLevel: number;
 	dragView: ElementDragView;
 	onResizeStart: React.ComponentProps<
@@ -835,14 +1021,17 @@ function TimelineTrackRows({
 	folderRows: readonly TrackFolderRow[];
 }) {
 	const m = useMessages();
+	const editor = useEditor();
 	const timeline = useEditor((e) => e.timeline);
 	const [colorTrackId, setColorTrackId] = useState<string | null>(null);
+	const [captionDraft, setCaptionDraft] = useState<{
+		trackId: string;
+		x: number;
+		time: number;
+	} | null>(null);
 	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
 	const tracks = useMemo<TimelineTrack[]>(
-		() =>
-			scene
-				? [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio]
-				: [],
+		() => (scene ? scene.tracks : []),
 		[scene],
 	);
 	const { selectedElements } = useElementSelection();
@@ -850,6 +1039,7 @@ function TimelineTrackRows({
 		() => new Set(selectedElements.map((el) => el.trackId)),
 		[selectedElements],
 	);
+	const pickedTrackIds = useEditor((e) => e.selection.getSelectedTrackIds());
 
 	const expandedElementIds = useTimelineStore((s) => s.expandedElementIds);
 
@@ -932,6 +1122,7 @@ function TimelineTrackRows({
 								className={cn(
 									"absolute right-0 left-0 transition-colors",
 									tracksWithSelection.has(track.id) && SELECTED_TRACK_ROW_CLASS,
+									pickedTrackIds.includes(track.id) && PICKED_TRACK_ROW_CLASS,
 								)}
 								style={{
 									top: `${TIMELINE_CONTENT_TOP_PADDING_PX + rows[index].top}px`,
@@ -946,14 +1137,62 @@ function TimelineTrackRows({
 									onElementMouseDown={onElementMouseDown}
 									onElementClick={onElementClick}
 									onTrackMouseDown={onTrackMouseDown}
-									onTrackMouseUp={onTrackMouseUp}
+									onTrackMouseUp={(event) => {
+										onTrackMouseUp(event);
+										editor.selection.selectTrack({
+											trackId: track.id,
+											isMultiKey:
+												event.metaKey || event.ctrlKey || event.shiftKey,
+										});
+									}}
 									shouldIgnoreClick={shouldIgnoreClick}
 									targetElementId={
 										isDragOver
 											? (dropTarget?.targetElement?.elementId ?? null)
 											: null
 									}
+									onEmptyDoubleClick={({ x, time }) => {
+										// 고른 자막 트랙의 빈 곳을 두 번 누르면 그 자리에 자막을 쓴다
+										if (
+											track.type !== "text" ||
+											track.locked ||
+											!pickedTrackIds.includes(track.id)
+										)
+											return;
+										setCaptionDraft({ trackId: track.id, x, time });
+									}}
 								/>
+								{captionDraft?.trackId === track.id && (
+									<input
+										// eslint-disable-next-line jsx-a11y/no-autofocus -- 두 번 누른 자리에서 바로 입력한다
+										autoFocus
+										aria-label={m.timeline.newCaption}
+										placeholder={m.timeline.newCaption}
+										className="bg-background border-primary absolute top-1/2 h-7 w-48 -translate-y-1/2 rounded-sm border-2 px-2 text-xs"
+										style={{
+											left: `${captionDraft.x}px`,
+											zIndex: TIMELINE_LAYERS.trackLockOverlay + 1,
+										}}
+										onMouseDown={(event) => event.stopPropagation()}
+										onKeyDown={(event) => {
+											if (event.nativeEvent.isComposing) return;
+											// Esc는 비우고 나가서 아무것도 넣지 않는다
+											if (event.key === "Escape")
+												event.currentTarget.value = "";
+											if (event.key === "Escape" || event.key === "Enter")
+												event.currentTarget.blur();
+										}}
+										onBlur={(event) => {
+											insertCaptionAt({
+												editor,
+												trackId: captionDraft.trackId,
+												startTime: captionDraft.time,
+												text: event.currentTarget.value,
+											});
+											setCaptionDraft(null);
+										}}
+									/>
+								)}
 								{track.locked && (
 									<div
 										className={cn(
@@ -1041,18 +1280,16 @@ function TimelineTrackRows({
 								groupTargetIds={getGroupTargetIds(track.id)}
 								tracks={tracks}
 							/>
-							{track.id !== mainTrackId && (
-								<ContextMenuItem
-									icon={<HugeiconsIcon icon={Delete02Icon} />}
-									onClick={(event: React.MouseEvent) => {
-										event.stopPropagation();
-										timeline.removeTrack({ trackId: track.id });
-									}}
-									variant="destructive"
-								>
-									{m.timeline.deleteTrack}
-								</ContextMenuItem>
-							)}
+							<ContextMenuItem
+								icon={<HugeiconsIcon icon={Delete02Icon} />}
+								onClick={(event: React.MouseEvent) => {
+									event.stopPropagation();
+									timeline.removeTrack({ trackId: track.id });
+								}}
+								variant="destructive"
+							>
+								{m.timeline.deleteTrack}
+							</ContextMenuItem>
 						</ContextMenuContent>
 					</ContextMenu>
 				),

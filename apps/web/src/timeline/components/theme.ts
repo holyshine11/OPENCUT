@@ -42,6 +42,9 @@ export const TIMELINE_COLOR_PALETTE = [
 ] as const;
 
 export const SELECTED_TRACK_ROW_CLASS = "bg-accent/50";
+/** 직접 고른 트랙. 클립만 고른 트랙(SELECTED_TRACK_ROW_CLASS)보다 눈에 띄게 테두리를 두른다 */
+export const PICKED_TRACK_ROW_CLASS =
+	"bg-primary/15 ring-2 ring-inset ring-primary";
 /** 잠긴 트랙 위에 덮는 빗금 */
 export const LOCKED_TRACK_OVERLAY_CLASS =
 	"bg-[repeating-linear-gradient(-45deg,transparent_0_6px,rgb(0_0_0/0.3)_6px_12px)]";

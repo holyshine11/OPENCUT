@@ -40,18 +40,7 @@ function textTrack({
 }
 
 function sceneTracks({ overlay }: { overlay: TextTrack[] }): SceneTracks {
-	return {
-		overlay,
-		main: {
-			id: "main",
-			type: "video",
-			name: "Main",
-			muted: false,
-			hidden: false,
-			elements: [],
-		},
-		audio: [],
-	};
+	return overlay;
 }
 
 describe("listSubtitleGroups", () => {

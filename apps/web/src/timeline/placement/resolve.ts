@@ -5,7 +5,6 @@ import {
 	resolvePreferredNewTrackPlacement,
 } from "./insert-index";
 import { getTrackTypeForElementType } from "./compatibility";
-import { enforceMainTrackStart } from "./main-track";
 import { canPlaceTimeSpansOnTrack } from "./overlap";
 import type {
 	PlacementResult,
@@ -13,7 +12,6 @@ import type {
 	PlacementSubject,
 	PlacementTimeSpan,
 } from "./types";
-import { ZERO_MEDIA_TIME } from "@/wasm";
 
 type ResolveTrackPlacementParams = PlacementSubject & {
 	tracks: SceneTracks;
@@ -24,28 +22,15 @@ type ResolveTrackPlacementParams = PlacementSubject & {
 function buildExistingTrackResult({
 	track,
 	trackIndex,
-	tracks,
-	timeSpans,
 }: {
 	track: TimelineTrack;
 	trackIndex: number;
-	tracks: SceneTracks;
-	timeSpans: PlacementTimeSpan[];
 }): PlacementResult {
-	const firstSpan = timeSpans[0];
-	const requestedStartTime = firstSpan?.startTime ?? ZERO_MEDIA_TIME;
-	const adjustedStartTime = enforceMainTrackStart({
-		tracks,
-		targetTrackId: track.id,
-		requestedStartTime,
-		excludeElementId: firstSpan?.excludeElementId,
-	});
 	return {
 		kind: "existingTrack",
 		trackId: track.id,
 		trackIndex,
 		trackType: track.type,
-		...(adjustedStartTime !== requestedStartTime ? { adjustedStartTime } : {}),
 	};
 }
 
@@ -135,7 +120,7 @@ export function resolveTrackPlacement({
 	tracks,
 	...placement
 }: ResolveTrackPlacementParams): PlacementResult | null {
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 	const trackType =
 		"trackType" in placement
 			? placement.trackType
@@ -160,8 +145,6 @@ export function resolveTrackPlacement({
 		return buildExistingTrackResult({
 			track,
 			trackIndex,
-			tracks,
-			timeSpans,
 		});
 	}
 
@@ -175,8 +158,6 @@ export function resolveTrackPlacement({
 			return buildExistingTrackResult({
 				track: orderedTracks[existingTrackIndex],
 				trackIndex: existingTrackIndex,
-				tracks,
-				timeSpans,
 			});
 		}
 
@@ -202,8 +183,6 @@ export function resolveTrackPlacement({
 			return buildExistingTrackResult({
 				track: preferredTrack,
 				trackIndex: strategy.trackIndex,
-				tracks,
-				timeSpans,
 			});
 		}
 
@@ -239,8 +218,6 @@ export function resolveTrackPlacement({
 			return buildExistingTrackResult({
 				track: aboveTrack,
 				trackIndex: aboveTrackIndex,
-				tracks,
-				timeSpans,
 			});
 		}
 
@@ -253,8 +230,6 @@ export function resolveTrackPlacement({
 			return buildExistingTrackResult({
 				track: orderedTracks[firstAvailableTrackIndex],
 				trackIndex: firstAvailableTrackIndex,
-				tracks,
-				timeSpans,
 			});
 		}
 

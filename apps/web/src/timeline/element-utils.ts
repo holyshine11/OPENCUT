@@ -371,7 +371,7 @@ export function getElementsAtTime({
 	time: number;
 }): { trackId: string; elementId: string }[] {
 	const result: { trackId: string; elementId: string }[] = [];
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 
 	for (const track of orderedTracks) {
 		for (const element of track.elements) {
@@ -393,7 +393,7 @@ export function getElementFontFamilies({
 	tracks: SceneTracks;
 }): string[] {
 	const families = new Set<string>();
-	for (const track of [...tracks.overlay, tracks.main, ...tracks.audio]) {
+	for (const track of tracks) {
 		for (const element of track.elements) {
 			if (element.type === "text" && typeof element.params.fontFamily === "string") {
 				families.add(element.params.fontFamily);

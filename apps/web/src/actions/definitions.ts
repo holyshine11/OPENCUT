@@ -146,6 +146,14 @@ export const ACTIONS = {
 		description: "Mute/unmute selected elements",
 		category: "selection",
 	},
+	"toggle-loop": {
+		description: "Toggle loop range",
+		category: "playback",
+	},
+	"toggle-crossfade-selected": {
+		description: "Toggle crossfade between adjacent clips",
+		category: "editing",
+	},
 	"toggle-elements-visibility-selected": {
 		description: "Show/hide selected elements",
 		category: "selection",
@@ -210,6 +218,8 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["duplicate-selected", ["ctrl+d"]],
 	["group-selected", ["ctrl+g"]],
 	["ungroup-selected", ["ctrl+shift+g"]],
+	["toggle-crossfade-selected", ["x"]],
+	["toggle-loop", ["/"]],
 	["timeline-zoom-in", ["h"]],
 	["timeline-zoom-out", ["g"]],
 	["undo", ["ctrl+z"]],

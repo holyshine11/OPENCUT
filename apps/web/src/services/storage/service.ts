@@ -22,6 +22,10 @@ import {
 } from "@/services/storage/migrations";
 import type { Bookmark, SceneTracks, TScene } from "@/timeline";
 import { roundMediaTime } from "@/wasm";
+import {
+	fromLegacySceneTracks,
+	toLegacySceneTracks,
+} from "@/timeline/legacy-tracks";
 import type { ProjectBackup } from "@/project/backup-format";
 
 function normalizeBookmarks({ raw }: { raw: unknown }): Bookmark[] {
@@ -116,32 +120,38 @@ class StorageService {
 	}
 
 	private stripAudioBuffers({ tracks }: { tracks: SceneTracks }): SceneTracks {
-		return {
-			...tracks,
-			audio: tracks.audio.map((track) => ({
-				...track,
-				elements: track.elements.map((element) => {
-					const { buffer: _buffer, ...rest } = element;
-					return rest;
-				}),
-			})),
-		};
+		return tracks.map((track) =>
+			track.type === "audio"
+				? {
+						...track,
+						elements: track.elements.map((element) => {
+							const { buffer: _buffer, ...rest } = element;
+							return rest;
+						}),
+					}
+				: track,
+		);
 	}
 
 	async saveProject({ project }: { project: TProject }): Promise<void> {
 		const duration =
 			project.metadata.duration ??
 			getProjectDurationFromScenes({ scenes: project.scenes });
-		const serializedScenes: SerializedScene[] = project.scenes.map((scene) => ({
-			id: scene.id,
-			name: scene.name,
-			isMain: scene.isMain,
-			tracks: this.stripAudioBuffers({ tracks: scene.tracks }),
-			bookmarks: scene.bookmarks,
-			trackFolders: scene.trackFolders,
-			createdAt: scene.createdAt.toISOString(),
-			updatedAt: scene.updatedAt.toISOString(),
-		}));
+		const serializedScenes: SerializedScene[] = project.scenes.map((scene) => {
+			const trackList = this.stripAudioBuffers({ tracks: scene.tracks });
+			return {
+				id: scene.id,
+				name: scene.name,
+				isMain: scene.isMain,
+				trackList,
+				// 옛 버전도 열 수 있게 메인 트랙이 있던 형식을 함께 남긴다
+				tracks: toLegacySceneTracks({ tracks: trackList, sceneId: scene.id }),
+				bookmarks: scene.bookmarks,
+				trackFolders: scene.trackFolders,
+				createdAt: scene.createdAt.toISOString(),
+				updatedAt: scene.updatedAt.toISOString(),
+			};
+		});
 
 		const serializedProject: SerializedProject = {
 			metadata: {
@@ -193,7 +203,9 @@ class StorageService {
 				id: scene.id,
 				name: scene.name,
 				isMain: scene.isMain,
-				tracks: scene.tracks,
+				tracks: Array.isArray(scene.trackList)
+					? scene.trackList
+					: fromLegacySceneTracks({ tracks: scene.tracks }),
 				bookmarks: normalizeBookmarks({ raw: scene.bookmarks }),
 				trackFolders: scene.trackFolders,
 				createdAt: new Date(scene.createdAt),

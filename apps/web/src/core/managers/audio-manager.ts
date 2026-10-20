@@ -5,9 +5,26 @@ import type { AudioClipSource } from "@/media/audio";
 import { createAudioContext, collectAudioClips } from "@/media/audio";
 import {
 	buildAudioGainAutomation,
-	hasAnimatedVolume,
+	hasGainAutomation,
 } from "@/timeline/audio-state";
 import { createAudioMasteringChain } from "@/media/audio-mastering";
+import {
+	faderDbToGain,
+	getTrackGain,
+	getTrackPan,
+	isTrackSilencedBySolo,
+} from "@/timeline/audio-mix";
+import {
+	averageLufs,
+	integratedLufs,
+	K_WEIGHTING,
+	LOUDNESS_BLOCK_SECONDS,
+	LOUDNESS_HOP_SECONDS,
+	meanSquareTail,
+	powerToLufs,
+	SHORT_TERM_SECONDS,
+} from "@/media/loudness";
+import { canTrackHaveAudio } from "@/timeline";
 import {
 	getClipTimeAtSourceTime,
 	getSourceTimeAtClipTime,
@@ -18,12 +35,56 @@ import {
 	AudioBufferSink,
 	BlobSource,
 	Input,
+	InputDisposedError,
 	type WrappedAudioBuffer,
 } from "mediabunny";
+
+// disposeSinks() disposes inputs mid-read when the timeline changes; that rejection is expected
+function ignoreInputDisposed(error: unknown): void {
+	if (error instanceof InputDisposedError) return;
+	console.warn("Audio clip iterator failed:", error);
+}
+
+const METER_FFT_SIZE = 2048;
+// 분석기 최대 창. 400ms 블록을 담기에 충분하다(96kHz면 약 341ms로 잘린다)
+const LOUDNESS_FFT_SIZE = 32768;
+const SHORT_TERM_BLOCKS = Math.round(SHORT_TERM_SECONDS / LOUDNESS_HOP_SECONDS);
+
+interface TrackBus {
+	input: GainNode;
+	panner: StereoPannerNode;
+	analyser: AnalyserNode;
+}
+
+/** 미터 한 칸의 피크 진폭(선형, 0~). 1을 넘으면 리미터 앞에서 0 dBFS를 넘은 것 */
+export interface AudioLevels {
+	left: number;
+	right: number;
+}
+
+/** LUFS. 측정값이 없으면 -Infinity */
+export interface AudioLoudness {
+	momentary: number;
+	shortTerm: number;
+	integrated: number;
+}
 
 export class AudioManager {
 	private audioContext: AudioContext | null = null;
 	private masterGain: GainNode | null = null;
+	/** 트랙 버스가 모이는 곳. 마스터 페이더 → 모노 합산 → 미터 → 모니터 볼륨·리미터 */
+	private masterBus: GainNode | null = null;
+	private monoNode: GainNode | null = null;
+	private meterAnalysers: [AnalyserNode, AnalyserNode] | null = null;
+	private trackBuses = new Map<string, TrackBus>();
+	private elementTrackIds = new Map<string, string>();
+	private meterScratch = new Float32Array(METER_FFT_SIZE);
+	private soloSilencedTrackIds = new Set<string>();
+	private loudnessAnalysers: [AnalyserNode, AnalyserNode] | null = null;
+	private loudnessScratch = new Float32Array(LOUDNESS_FFT_SIZE);
+	private loudnessTimer: number | null = null;
+	/** 100ms마다 잰 400ms 블록 파워. 통합 라우드니스는 초기화 전까지 누적한다 */
+	private loudnessBlocks: number[] = [];
 	private playbackStartTime = 0;
 	private playbackStartContextTime = 0;
 	private scheduleTimer: number | null = null;
@@ -53,6 +114,7 @@ export class AudioManager {
 			this.editor.playback.subscribe(this.handlePlaybackChange),
 			this.editor.timeline.subscribe(this.handleTimelineChange),
 			this.editor.media.subscribe(this.handleTimelineChange),
+			this.editor.project.subscribe(this.applyMasterSettings),
 			this.editor.playback.onSeek(this.handleSeek),
 		);
 	}
@@ -70,6 +132,11 @@ export class AudioManager {
 			void this.audioContext.close();
 			this.audioContext = null;
 			this.masterGain = null;
+			this.masterBus = null;
+			this.monoNode = null;
+			this.meterAnalysers = null;
+			this.loudnessAnalysers = null;
+			this.trackBuses.clear();
 		}
 	}
 
@@ -109,6 +176,7 @@ export class AudioManager {
 	};
 
 	private handleTimelineChange = (): void => {
+		this.applyTrackMix();
 		this.disposeSinks();
 		this.preparedClipBuffers.clear();
 		this.decodedBuffers.clear();
@@ -131,7 +199,188 @@ export class AudioManager {
 		});
 		this.masterGain = input;
 		this.masterGain.gain.value = this.lastVolume;
+
+		this.masterBus = this.audioContext.createGain();
+		// channelCount 1 + explicit 이면 스테레오가 (L+R)/2 로 합쳐지고, 뒤 노드에서 양쪽으로 다시 퍼진다
+		this.monoNode = this.audioContext.createGain();
+		this.monoNode.channelCountMode = "explicit";
+		this.monoNode.channelInterpretation = "speakers";
+		const splitter = this.audioContext.createChannelSplitter(2);
+		const left = this.audioContext.createAnalyser();
+		const right = this.audioContext.createAnalyser();
+		left.fftSize = METER_FFT_SIZE;
+		right.fftSize = METER_FFT_SIZE;
+		this.meterAnalysers = [left, right];
+
+		this.masterBus.connect(this.monoNode);
+		this.monoNode.connect(this.masterGain);
+		this.monoNode.connect(splitter);
+		splitter.connect(left, 0);
+		splitter.connect(right, 1);
+
+		// 라우드니스는 K-가중을 거친 좌우 채널로 잰다
+		const shelf = this.audioContext.createBiquadFilter();
+		shelf.type = "highshelf";
+		shelf.frequency.value = K_WEIGHTING.shelf.frequency;
+		shelf.gain.value = K_WEIGHTING.shelf.gainDb;
+		const highpass = this.audioContext.createBiquadFilter();
+		highpass.type = "highpass";
+		highpass.frequency.value = K_WEIGHTING.highpass.frequency;
+		highpass.Q.value = K_WEIGHTING.highpass.qDb;
+		const loudnessSplitter = this.audioContext.createChannelSplitter(2);
+		const loudnessLeft = this.audioContext.createAnalyser();
+		const loudnessRight = this.audioContext.createAnalyser();
+		loudnessLeft.fftSize = LOUDNESS_FFT_SIZE;
+		loudnessRight.fftSize = LOUDNESS_FFT_SIZE;
+		this.loudnessAnalysers = [loudnessLeft, loudnessRight];
+		this.monoNode.connect(shelf);
+		shelf.connect(highpass);
+		highpass.connect(loudnessSplitter);
+		loudnessSplitter.connect(loudnessLeft, 0);
+		loudnessSplitter.connect(loudnessRight, 1);
+
+		this.applyMasterSettings();
+		this.applyTrackMix();
 		return this.audioContext;
+	}
+
+	private applyMasterSettings = (): void => {
+		if (!this.masterBus || !this.monoNode) return;
+		const settings = this.editor.project.getActive()?.settings;
+		this.masterBus.gain.value = faderDbToGain(settings?.masterVolume ?? 0);
+		this.monoNode.channelCount = settings?.audioMono ? 1 : 2;
+	};
+
+	/** 페이더를 끄는 동안 저장 없이 바로 들리게 한다. 놓을 때 명령으로 저장한다 */
+	previewMasterVolume({ volumeDb }: { volumeDb: number }): void {
+		if (this.masterBus) this.masterBus.gain.value = faderDbToGain(volumeDb);
+	}
+
+	previewTrackMix({
+		trackId,
+		volumeDb,
+		pan,
+	}: {
+		trackId: string;
+		volumeDb?: number;
+		pan?: number;
+	}): void {
+		const bus = this.trackBuses.get(trackId);
+		if (!bus) return;
+		if (volumeDb !== undefined && !this.soloSilencedTrackIds.has(trackId))
+			bus.input.gain.value = faderDbToGain(volumeDb);
+		if (pan !== undefined) bus.panner.pan.value = pan;
+	}
+
+	private applyTrackMix(): void {
+		if (!this.audioContext) return;
+		const tracks = this.editor.scenes.getActiveSceneOrNull()?.tracks ?? [];
+		this.elementTrackIds.clear();
+		this.soloSilencedTrackIds.clear();
+		for (const track of tracks) {
+			if (!canTrackHaveAudio(track)) continue;
+			const bus = this.ensureTrackBus(track.id);
+			const isSilenced = isTrackSilencedBySolo({ track, tracks });
+			if (isSilenced) this.soloSilencedTrackIds.add(track.id);
+			bus.input.gain.value = isSilenced ? 0 : getTrackGain(track);
+			bus.panner.pan.value = getTrackPan(track);
+			for (const element of track.elements) {
+				this.elementTrackIds.set(element.id, track.id);
+			}
+		}
+	}
+
+	private ensureTrackBus(trackId: string): TrackBus {
+		const existing = this.trackBuses.get(trackId);
+		if (existing) return existing;
+		const context = this.audioContext;
+		if (!context) throw new Error("Audio context is not ready.");
+		const input = context.createGain();
+		const panner = context.createStereoPanner();
+		const analyser = context.createAnalyser();
+		analyser.fftSize = METER_FFT_SIZE;
+		input.connect(panner);
+		panner.connect(analyser);
+		panner.connect(this.masterBus ?? context.destination);
+		const bus = { input, panner, analyser };
+		this.trackBuses.set(trackId, bus);
+		return bus;
+	}
+
+	private getClipDestination({
+		clip,
+		audioContext,
+	}: {
+		clip: AudioClipSource;
+		audioContext: AudioContext;
+	}): AudioNode {
+		const trackId = this.elementTrackIds.get(clip.id);
+		const bus = trackId ? this.trackBuses.get(trackId) : undefined;
+		return bus?.input ?? this.masterBus ?? audioContext.destination;
+	}
+
+	private readPeak(analyser: AnalyserNode): number {
+		analyser.getFloatTimeDomainData(this.meterScratch);
+		let peak = 0;
+		for (const sample of this.meterScratch) {
+			const magnitude = Math.abs(sample);
+			if (magnitude > peak) peak = magnitude;
+		}
+		return peak;
+	}
+
+	/** 마스터 출력(리미터 앞) 좌우 피크. 재생 중이 아니면 0 */
+	getMasterLevels(): AudioLevels {
+		if (!this.meterAnalysers || !this.editor.playback.getIsPlaying()) {
+			return { left: 0, right: 0 };
+		}
+		return {
+			left: this.readPeak(this.meterAnalysers[0]),
+			right: this.readPeak(this.meterAnalysers[1]),
+		};
+	}
+
+	/** 트랙 페이더·팬을 지난 피크(모노 합산) */
+	getTrackLevel({ trackId }: { trackId: string }): number {
+		const bus = this.trackBuses.get(trackId);
+		if (!bus || !this.editor.playback.getIsPlaying()) return 0;
+		return this.readPeak(bus.analyser);
+	}
+
+	private measureLoudnessBlock = (): void => {
+		if (!this.loudnessAnalysers || !this.audioContext) return;
+		const blockSamples = Math.round(
+			LOUDNESS_BLOCK_SECONDS * this.audioContext.sampleRate,
+		);
+		let power = 0;
+		for (const analyser of this.loudnessAnalysers) {
+			analyser.getFloatTimeDomainData(this.loudnessScratch);
+			power += meanSquareTail({
+				samples: this.loudnessScratch,
+				count: blockSamples,
+			});
+		}
+		this.loudnessBlocks.push(power);
+	};
+
+	/** 모멘터리(400ms)·숏텀(3s)·통합 LUFS. 마스터 버스(리미터 앞)에서 잰다 */
+	getLoudness(): AudioLoudness {
+		const blocks = this.loudnessBlocks;
+		const isPlaying = this.editor.playback.getIsPlaying();
+		return {
+			momentary:
+				isPlaying && blocks.length > 0
+					? powerToLufs(blocks[blocks.length - 1])
+					: Number.NEGATIVE_INFINITY,
+			shortTerm: isPlaying
+				? averageLufs(blocks.slice(-SHORT_TERM_BLOCKS))
+				: Number.NEGATIVE_INFINITY,
+			integrated: integratedLufs(blocks),
+		};
+	}
+
+	resetLoudness(): void {
+		this.loudnessBlocks = [];
 	}
 
 	private updateGain(): void {
@@ -176,6 +425,11 @@ export class AudioManager {
 			this.scheduleTimer = window.setInterval(() => {
 				this.scheduleUpcomingClips();
 			}, this.scheduleIntervalMs);
+			// ponytail: 메인 스레드 타이머라 블록 간격이 조금 흔들린다. 정밀 측정이 필요하면 AudioWorklet으로
+			this.loudnessTimer = window.setInterval(
+				this.measureLoudnessBlock,
+				LOUDNESS_HOP_SECONDS * 1000,
+			);
 		}
 	}
 
@@ -201,11 +455,11 @@ export class AudioManager {
 					sessionId: this.playbackSessionId,
 				});
 			} else {
-				void this.runClipIterator({
+				this.runClipIterator({
 					clip,
 					startTime: currentTime,
 					sessionId: this.playbackSessionId,
-				});
+				}).catch(ignoreInputDisposed);
 			}
 		}
 	}
@@ -215,6 +469,10 @@ export class AudioManager {
 			window.clearInterval(this.scheduleTimer);
 		}
 		this.scheduleTimer = null;
+		if (this.loudnessTimer !== null && typeof window !== "undefined") {
+			window.clearInterval(this.loudnessTimer);
+		}
+		this.loudnessTimer = null;
 
 		for (const iterator of this.clipIterators.values()) {
 			void iterator.return();
@@ -289,7 +547,7 @@ export class AudioManager {
 			const clipGain = audioContext.createGain();
 			clipGain.gain.value = clip.volume;
 			node.connect(clipGain);
-			clipGain.connect(this.masterGain ?? audioContext.destination);
+			clipGain.connect(this.getClipDestination({ clip, audioContext }));
 
 			const startTimestamp =
 				this.playbackStartContextTime +
@@ -319,11 +577,11 @@ export class AudioManager {
 						}
 						const resyncStartTime = this.getPlaybackTime();
 						this.clipIterators.delete(clip.id);
-						void this.runClipIterator({
+						this.runClipIterator({
 							clip,
 							startTime: resyncStartTime,
 							sessionId,
-						});
+						}).catch(ignoreInputDisposed);
 						return;
 					}
 					continue;
@@ -381,7 +639,7 @@ export class AudioManager {
 		node.buffer = buffer;
 		const clipGain = audioContext.createGain();
 		node.connect(clipGain);
-		clipGain.connect(this.masterGain ?? audioContext.destination);
+		clipGain.connect(this.getClipDestination({ clip, audioContext }));
 
 		const startTimestamp =
 			this.playbackStartContextTime +
@@ -461,7 +719,7 @@ export class AudioManager {
 	}): boolean {
 		return (
 			this.hasCurveRetime({ clip }) ||
-			hasAnimatedVolume({ element: clip.timelineElement }) ||
+			hasGainAutomation({ element: clip.timelineElement }) ||
 			shouldMaintainPitch({
 				rate: clip.retime?.rate ?? 1,
 				maintainPitch: clip.retime?.maintainPitch,
@@ -490,7 +748,7 @@ export class AudioManager {
 		clipGain.gain.cancelScheduledValues(startTimestamp);
 		clipGain.gain.setValueAtTime(clip.volume, startTimestamp);
 
-		if (!hasAnimatedVolume({ element: clip.timelineElement })) {
+		if (!hasGainAutomation({ element: clip.timelineElement })) {
 			return;
 		}
 

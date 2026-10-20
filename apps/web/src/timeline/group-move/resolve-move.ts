@@ -90,9 +90,7 @@ function resolveExistingTrackMove({
 
 	const clampedAnchorStartTime = clampAnchorStartTime({
 		group,
-		tracks,
 		anchorStartTime,
-		targetTrackIdsByElementId,
 	});
 
 	const moves = group.members.map((member) => ({
@@ -137,51 +135,42 @@ function resolveNewTrackMove({
 		(leftMember, rightMember) =>
 			leftMember.displayIndex - rightMember.displayIndex,
 	);
-	const anchorMemberIndex = sortedMembers.findIndex(
+	// 같은 트랙에서 온 클립은 새 트랙 하나에 함께 놓는다. 원래 트랙 순서대로 새 트랙을 만든다
+	const sourceTrackIds = [
+		...new Set(sortedMembers.map((member) => member.trackId)),
+	];
+	const rankOf = (member: (typeof sortedMembers)[number]) =>
+		sourceTrackIds.indexOf(member.trackId);
+	const anchorMember = sortedMembers.find(
 		(member) => member.elementId === group.anchor.elementId,
 	);
-	if (anchorMemberIndex < 0 || newTrackIds.length < sortedMembers.length) {
+	if (!anchorMember || newTrackIds.length < sourceTrackIds.length) {
 		return null;
 	}
-
-	const hasAudioMember = sortedMembers.some(
-		(member) => member.trackSection === "audio",
-	);
-	const hasNonAudioMember = sortedMembers.some(
-		(member) => member.trackSection !== "audio",
-	);
-	if (hasAudioMember && hasNonAudioMember) {
-		return null;
-	}
+	const anchorMemberIndex = rankOf(anchorMember);
 
 	const clampedAnchorStartTime = clampAnchorStartTime({
 		group,
-		tracks,
 		anchorStartTime,
-		targetTrackIdsByElementId: new Map(),
 	});
-	const blockStartIndex = hasAudioMember
-		? clampAudioInsertIndex({
-				tracks,
-				insertIndex: anchorInsertIndex - anchorMemberIndex,
-			})
-		: Math.max(
-				0,
-				Math.min(anchorInsertIndex - anchorMemberIndex, tracks.overlay.length),
-			);
+	const blockStartIndex = Math.max(
+		0,
+		Math.min(anchorInsertIndex - anchorMemberIndex, tracks.length),
+	);
 
-	const createTracks: PlannedTrackCreation[] = sortedMembers.map(
-		(member, memberIndex) => ({
-			id: newTrackIds[memberIndex],
+	const createTracks: PlannedTrackCreation[] = sourceTrackIds.map(
+		(trackId, rank) => ({
+			id: newTrackIds[rank],
 			type: getTrackTypeForElementType({
-				elementType: member.elementType,
+				elementType: sortedMembers.find((member) => member.trackId === trackId)!
+					.elementType,
 			}),
-			index: blockStartIndex + memberIndex,
+			index: blockStartIndex + rank,
 		}),
 	);
-	const moves = sortedMembers.map((member, memberIndex) => ({
+	const moves = sortedMembers.map((member) => ({
 		sourceTrackId: member.trackId,
-		targetTrackId: newTrackIds[memberIndex],
+		targetTrackId: newTrackIds[rankOf(member)],
 		elementId: member.elementId,
 		newStartTime: addMediaTime({
 			a: clampedAnchorStartTime,
@@ -197,20 +186,6 @@ function resolveNewTrackMove({
 			elementId,
 		})),
 	};
-}
-
-function clampAudioInsertIndex({
-	tracks,
-	insertIndex,
-}: {
-	tracks: SceneTracks;
-	insertIndex: number;
-}): number {
-	const minimumAudioInsertIndex = tracks.overlay.length + 1;
-	return Math.max(
-		minimumAudioInsertIndex,
-		Math.min(insertIndex, minimumAudioInsertIndex + tracks.audio.length),
-	);
 }
 
 function resolveExistingTrackIdsByElementId({
@@ -317,8 +292,7 @@ function findCompatibleTrackPlacement({
 }) {
 	for (
 		let displayIndex = startDisplayIndex;
-		displayIndex >= 0 &&
-		displayIndex < tracks.overlay.length + 1 + tracks.audio.length;
+		displayIndex >= 0 && displayIndex < tracks.length;
 		displayIndex += step
 	) {
 		const placement = getTrackPlacementByDisplayIndex({
@@ -342,15 +316,12 @@ function findCompatibleTrackPlacement({
 
 function clampAnchorStartTime({
 	group,
-	tracks,
 	anchorStartTime,
-	targetTrackIdsByElementId,
 }: {
 	group: MoveGroup;
-	tracks: SceneTracks;
 	anchorStartTime: MediaTime;
-	targetTrackIdsByElementId: Map<string, string>;
 }): MediaTime {
+	// 가장 앞선 클립이 0초보다 앞으로 가지 않게 한다
 	const minimumAnchorStartTime = group.members.reduce(
 		(minimumStartTime, member) =>
 			member.timeOffset < ZERO_MEDIA_TIME
@@ -364,49 +335,9 @@ function clampAnchorStartTime({
 				: minimumStartTime,
 		ZERO_MEDIA_TIME,
 	);
-	let clampedAnchorStartTime =
-		anchorStartTime < minimumAnchorStartTime
-			? minimumAnchorStartTime
-			: anchorStartTime;
-
-	const memberOnMainTrack = group.members.find(
-		(member) =>
-			targetTrackIdsByElementId.get(member.elementId) === tracks.main.id,
-	);
-	if (!memberOnMainTrack) {
-		return clampedAnchorStartTime;
-	}
-
-	const movingElementIds = new Set(
-		group.members.map((member) => member.elementId),
-	);
-	const requestedMainStartTime = addMediaTime({
-		a: clampedAnchorStartTime,
-		b: memberOnMainTrack.timeOffset,
-	});
-	const earliestStationaryMainStartTime = tracks.main.elements
-		.filter((element) => !movingElementIds.has(element.id))
-		.reduce<MediaTime | null>((earliestStartTime, element) => {
-			if (earliestStartTime == null || element.startTime < earliestStartTime) {
-				return element.startTime;
-			}
-
-			return earliestStartTime;
-		}, null);
-	if (
-		earliestStationaryMainStartTime == null ||
-		requestedMainStartTime <= earliestStationaryMainStartTime
-	) {
-		clampedAnchorStartTime = maxMediaTime({
-			a: minimumAnchorStartTime,
-			b: subMediaTime({
-				a: ZERO_MEDIA_TIME,
-				b: memberOnMainTrack.timeOffset,
-			}),
-		});
-	}
-
-	return clampedAnchorStartTime;
+	return anchorStartTime < minimumAnchorStartTime
+		? minimumAnchorStartTime
+		: anchorStartTime;
 }
 
 function canApplyMovesToExistingTracks({

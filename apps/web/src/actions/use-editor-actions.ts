@@ -21,6 +21,10 @@ import { getElementsAtTime, hasMediaId } from "@/timeline";
 import { cancelInteraction } from "@/editor/cancel-interaction";
 import { invokeAction } from "@/actions";
 import { canToggleSourceAudio } from "@/timeline/audio-separation";
+import { buildCrossfadeToggleUpdates } from "@/timeline/audio-state";
+import { DEFAULTS } from "@/timeline/defaults";
+import { getMessages } from "@/i18n";
+import { toast } from "sonner";
 import {
 	activateScope,
 	clearActiveScope,
@@ -343,8 +347,14 @@ export function useEditorActions() {
 						elements: selectedElements,
 					});
 					return;
-				default:
+				default: {
+					// 클립·키프레임 선택이 없으면 선택된 트랙을 지운다
+					const trackIds = editor.selection.getSelectedTrackIds();
+					if (trackIds.length === 0) return;
+					editor.timeline.removeTracks({ trackIds });
+					editor.selection.setSelectedTrackIds({ trackIds: [] });
 					return;
+				}
 			}
 		},
 		undefined,
@@ -392,11 +402,7 @@ export function useEditorActions() {
 		"select-all",
 		() => {
 			const scene = editor.scenes.getActiveScene();
-			const allElements = [
-				...scene.tracks.overlay,
-				scene.tracks.main,
-				...scene.tracks.audio,
-			].flatMap((track) =>
+			const allElements = scene.tracks.flatMap((track) =>
 				track.elements.map((element) => ({
 					trackId: track.id,
 					elementId: element.id,
@@ -457,6 +463,35 @@ export function useEditorActions() {
 		"toggle-elements-muted-selected",
 		() => {
 			editor.timeline.toggleElementsMuted({ elements: selectedElements });
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"toggle-loop",
+		() => {
+			if (!editor.playback.getLoop()) {
+				toast.info(getMessages().timeline.noLoopRange);
+				return;
+			}
+			editor.playback.toggleLoop();
+		},
+		undefined,
+	);
+
+	useActionHandler(
+		"toggle-crossfade-selected",
+		() => {
+			const updates = buildCrossfadeToggleUpdates({
+				tracks: editor.scenes.getActiveScene().tracks,
+				selected: selectedElements,
+				length: DEFAULTS.element.crossfade,
+			});
+			if (updates.length === 0) {
+				toast.info(getMessages().timeline.noCrossfadePair);
+				return;
+			}
+			editor.timeline.updateElements({ updates });
 		},
 		undefined,
 	);

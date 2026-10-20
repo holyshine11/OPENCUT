@@ -39,11 +39,7 @@ function text({
 }
 
 function tracksOf(...elements: TextElement[]) {
-	return {
-		overlay: [{ elements }],
-		main: { elements: [] },
-		audio: [],
-	} as unknown as SceneTracks;
+	return [{ elements }] as unknown as SceneTracks;
 }
 
 const EMPTY = tracksOf();
@@ -53,14 +49,10 @@ beforeEach(() => {
 });
 
 test("captions and plain text are remembered separately, without content", () => {
-	const tracks = {
-		overlay: [
-			{ elements: [text({ id: "a", name: "Caption 1", color: "#ff0" })] },
-			{ elements: [text({ id: "b", name: "Title", color: "#0ff" })] },
-		],
-		main: { elements: [] },
-		audio: [],
-	} as unknown as SceneTracks;
+	const tracks = [
+		{ elements: [text({ id: "a", name: "Caption 1", color: "#ff0" })] },
+		{ elements: [text({ id: "b", name: "Title", color: "#0ff" })] },
+	] as unknown as SceneTracks;
 
 	rememberTextStyles({
 		before: EMPTY,

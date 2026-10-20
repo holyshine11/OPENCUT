@@ -20,19 +20,26 @@ export function ElementParamsTab({
 	trackId,
 	paramKeys,
 	sectionKey,
+	resolveParam,
 }: {
 	element: TimelineElement;
 	trackId: string;
 	paramKeys?: readonly string[];
 	sectionKey: string;
+	/** 클립마다 달라지는 범위를 정의에 덧씌운다. null이면 감춘다 */
+	resolveParam?: (
+		param: ElementParamDefinition,
+	) => ElementParamDefinition | null;
 }) {
 	const { localTime, isPlayheadWithinElementRange } = useElementPlayhead({
 		startTime: element.startTime,
 		duration: element.duration,
 	});
-	const params = getElementParams({ element }).filter(
-		(param) => !paramKeys || paramKeys.includes(param.key),
-	);
+	const params = getElementParams({ element }).flatMap((param) => {
+		if (paramKeys && !paramKeys.includes(param.key)) return [];
+		const resolved = resolveParam ? resolveParam(param) : param;
+		return resolved ? [resolved] : [];
+	});
 	const baseValues = buildValues({ element, params });
 
 	return (

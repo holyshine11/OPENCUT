@@ -21,11 +21,13 @@ import {
 	MusicNote03Icon,
 	MagicWand05Icon,
 	DashboardSpeed02Icon,
+	ChartIncreaseIcon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
 import { MasksTab } from "@/masks/components/masks-tab";
 import { SpeedTab } from "@/speed/components/speed-tab";
+import { FadeTab } from "./components/fade-tab";
 import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
 
@@ -77,6 +79,7 @@ export type PropertiesTabId =
 	| "blending"
 	| "audio"
 	| "speed"
+	| "fade"
 	| "masks"
 	| "effects"
 	| "text"
@@ -158,7 +161,19 @@ function buildSpeedTab({
 	return {
 		id: "speed",
 		icon: <HugeiconsIcon icon={DashboardSpeed02Icon} size={16} />,
-		content: ({ trackId }) => <SpeedTab element={element} trackId={trackId} />,
+		content: ({ trackId }) => <SpeedTab targets={[{ trackId, element }]} />,
+	};
+}
+
+function buildFadeTab({
+	element,
+}: {
+	element: AudioElement | VideoElement;
+}): PropertiesTabDef {
+	return {
+		id: "fade",
+		icon: <HugeiconsIcon icon={ChartIncreaseIcon} size={16} />,
+		content: ({ trackId }) => <FadeTab element={element} trackId={trackId} />,
 	};
 }
 
@@ -258,6 +273,7 @@ function getVideoConfig({
 			buildTransformTab({ element }),
 			...(showAudioTab ? [buildAudioTab({ element })] : []),
 			buildSpeedTab({ element }),
+			...(showAudioTab ? [buildFadeTab({ element })] : []),
 			buildBlendingTab({ element }),
 			buildMasksTab({ element }),
 			buildClipEffectsTab({ element }),
@@ -320,7 +336,11 @@ function getAudioConfig({
 }): ElementPropertiesConfig {
 	return {
 		defaultTab: "audio",
-		tabs: [buildAudioTab({ element }), buildSpeedTab({ element })],
+		tabs: [
+			buildAudioTab({ element }),
+			buildSpeedTab({ element }),
+			buildFadeTab({ element }),
+		],
 	};
 }
 

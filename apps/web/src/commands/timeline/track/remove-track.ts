@@ -12,11 +12,9 @@ export class RemoveTrackCommand extends Command {
 	execute(): CommandResult | undefined {
 		const editor = EditorCore.getInstance();
 		this.savedState = editor.scenes.getActiveScene().tracks;
-		const updatedTracks: SceneTracks = {
-			...this.savedState,
-			overlay: this.savedState.overlay.filter((track) => track.id !== this.trackId),
-			audio: this.savedState.audio.filter((track) => track.id !== this.trackId),
-		};
+		const updatedTracks: SceneTracks = this.savedState.filter(
+			(track) => track.id !== this.trackId,
+		);
 		editor.timeline.updateTracks(updatedTracks);
 		return undefined;
 	}

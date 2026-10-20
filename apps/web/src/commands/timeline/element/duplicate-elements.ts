@@ -31,11 +31,7 @@ export class DuplicateElementsCommand extends Command {
 
 		let updatedTracks = this.savedState;
 
-		for (const track of [
-			...this.savedState.overlay,
-			this.savedState.main,
-			...this.savedState.audio,
-		]) {
+		for (const track of this.savedState) {
 			const elementsToDuplicate = this.elements.filter(
 				(elementEntry) => elementEntry.trackId === track.id,
 			);
@@ -113,7 +109,7 @@ export class DuplicateElementsCommand extends Command {
 	}
 }
 
-function buildDuplicateElement({
+export function buildDuplicateElement({
 	element,
 	id,
 	startTime,

@@ -16,6 +16,8 @@ const ALLOWED = new Set([
 	"components/ui/color-picker.tsx: RGB",
 	"components/ui/color-picker.tsx: HSL",
 	"components/ui/color-picker.tsx: HSV",
+	// 음량 단위 표기
+	"timeline/components/audio-mixer.tsx: LUFS",
 	// 사용자가 그대로 입력해야 하는 확인 단어
 	'project/components/delete-project-dialog.tsx: placeholder="DELETE"',
 	// 글꼴 미리보기 견본 글자

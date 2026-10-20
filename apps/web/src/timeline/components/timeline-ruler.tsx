@@ -1,7 +1,11 @@
 import { type JSX } from "react";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/timeline/scale";
 import { mediaTimeToSeconds } from "opencut-wasm";
-import { TICKS_PER_SECOND } from "@/wasm";
+import {
+	mediaTimeFromSeconds,
+	roundFrameTime,
+	TICKS_PER_SECOND,
+} from "@/wasm";
 import { TIMELINE_RULER_HEIGHT_PX } from "./layout";
 import { DEFAULT_FPS } from "@/fps/defaults";
 import { useEditor } from "@/editor/use-editor";
@@ -9,6 +13,10 @@ import { getRulerConfig, shouldShowLabel } from "@/timeline/ruler-utils";
 import { useScrollPosition } from "@/timeline/hooks/use-scroll-position";
 import { TimelineTick } from "./timeline-tick";
 import { useMessages } from "@/i18n";
+import { cn } from "@/utils/ui";
+
+// 이보다 덜 움직이면 끌기가 아니라 Cmd+클릭(루프 지우기)으로 본다
+const LOOP_DRAG_THRESHOLD_PX = 3;
 
 interface TimelineRulerProps {
 	zoomLevel: number;
@@ -32,6 +40,8 @@ export function TimelineRuler({
 	handleRulerMouseDown,
 }: TimelineRulerProps) {
 	const m = useMessages();
+	const editor = useEditor();
+	const loop = useEditor((e) => e.playback.getLoop());
 	const durationTicks = useEditor((e) => e.timeline.getTotalDuration());
 	const durationSeconds = mediaTimeToSeconds({ time: durationTicks });
 	const pixelsPerSecond = BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel;
@@ -99,6 +109,48 @@ export function TimelineRuler({
 		);
 	}
 
+	// Cmd(Ctrl)+끌기로 루프 구간을 정하고, 끌지 않고 Cmd+클릭하면 지운다
+	const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+		if (event.button !== 0 || !(event.metaKey || event.ctrlKey)) {
+			handleRulerMouseDown(event);
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+		const rect = event.currentTarget.getBoundingClientRect();
+		const timeAt = (clientX: number) =>
+			roundFrameTime({
+				time: mediaTimeFromSeconds({
+					seconds: Math.max(0, (clientX - rect.left) / pixelsPerSecond),
+				}),
+				fps,
+			});
+		const startX = event.clientX;
+		const anchor = timeAt(startX);
+		let isDragging = false;
+
+		const handleMove = (moveEvent: MouseEvent) => {
+			if (Math.abs(moveEvent.clientX - startX) >= LOOP_DRAG_THRESHOLD_PX) {
+				isDragging = true;
+			}
+			if (!isDragging) return;
+			const time = timeAt(moveEvent.clientX);
+			editor.playback.setLoop({
+				range:
+					time < anchor
+						? { start: time, end: anchor }
+						: { start: anchor, end: time },
+			});
+		};
+		const handleUp = () => {
+			window.removeEventListener("mousemove", handleMove);
+			window.removeEventListener("mouseup", handleUp);
+			if (!isDragging) editor.playback.setLoop({ range: null });
+		};
+		window.addEventListener("mousemove", handleMove);
+		window.addEventListener("mouseup", handleUp);
+	};
+
 	return (
 		<div
 			role="slider"
@@ -128,8 +180,24 @@ export function TimelineRuler({
 					height: TIMELINE_RULER_HEIGHT_PX,
 					width: `${dynamicTimelineWidth}px`,
 				}}
-				onMouseDown={handleRulerMouseDown}
+				onMouseDown={handleMouseDown}
+				title={m.timeline.loopHint}
 			>
+				{loop && (
+					<div
+						className={cn(
+							"pointer-events-none absolute inset-y-0 border-x-2",
+							loop.enabled
+								? "border-primary bg-primary/25"
+								: "border-muted-foreground/50 bg-muted-foreground/15",
+						)}
+						style={{
+							left: (loop.start / TICKS_PER_SECOND) * pixelsPerSecond,
+							width:
+								((loop.end - loop.start) / TICKS_PER_SECOND) * pixelsPerSecond,
+						}}
+					/>
+				)}
 				{timelineTicks}
 			</div>
 		</div>

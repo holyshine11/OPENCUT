@@ -1,14 +1,10 @@
 import type { ElementRef, ElementType, TrackType } from "@/timeline";
 import type { MediaTime } from "@/wasm";
 
-export type GroupTrackSection = "overlay" | "main" | "audio";
-
 export interface GroupMember extends ElementRef {
 	elementType: ElementType;
 	duration: MediaTime;
 	timeOffset: MediaTime;
-	trackSection: GroupTrackSection;
-	sectionIndex: number;
 	displayIndex: number;
 }
 

@@ -11,6 +11,7 @@ import type {
 } from "@/timeline";
 import { DEFAULTS } from "@/timeline/defaults";
 import { VOLUME_DB_MAX, VOLUME_DB_MIN } from "@/timeline/audio-constants";
+import { DEFAULT_FADE_CURVE, type FadeCurveId } from "@/timeline/audio-fade";
 import {
 	CORNER_RADIUS_MAX,
 	CORNER_RADIUS_MIN,
@@ -138,6 +139,8 @@ const visualElementParams: ElementParamDefinition[] = [
 	{
 		key: "opacity",
 		label: "Opacity",
+		// 아이콘이 있어야 끌어서 바꿀 수 있다. 0~1이라 타이핑만으로는 다루기 어렵다
+		shortLabel: "α",
 		type: "number",
 		default: DEFAULTS.element.opacity,
 		min: 0,
@@ -154,6 +157,14 @@ const visualElementParams: ElementParamDefinition[] = [
 	},
 ];
 
+const FADE_CURVE_OPTIONS: Array<{ value: FadeCurveId; label: string }> = [
+	{ value: "linear", label: "Straight" },
+	{ value: "equalPower", label: "Equal Power" },
+	{ value: "exponential", label: "Exponential" },
+	{ value: "logarithmic", label: "Logarithmic" },
+	{ value: "sCurve", label: "S-Curve" },
+];
+
 const audioElementParams: ElementParamDefinition[] = [
 	{
 		key: "volume",
@@ -162,13 +173,63 @@ const audioElementParams: ElementParamDefinition[] = [
 		default: DEFAULTS.element.volume,
 		min: VOLUME_DB_MIN,
 		max: VOLUME_DB_MAX,
-		step: 0.01,
+		step: 0.1,
+		suffix: "dB",
+		slider: true,
 	},
 	{
 		key: "muted",
 		label: "Muted",
 		type: "boolean",
 		default: false,
+		keyframable: false,
+	},
+	// 페이드 길이(초). 클립 길이보다 길면 게인 계산에서 클립 길이로 자른다
+	{
+		key: "fadeIn",
+		label: "Fade In",
+		type: "number",
+		default: 0,
+		min: 0,
+		step: 0.01,
+		suffix: "s",
+		keyframable: false,
+	},
+	{
+		key: "fadeInCurve",
+		label: "Fade In Curve",
+		type: "select",
+		default: DEFAULT_FADE_CURVE,
+		keyframable: false,
+		options: FADE_CURVE_OPTIONS,
+	},
+	{
+		key: "fadeOut",
+		label: "Fade Out",
+		type: "number",
+		default: 0,
+		min: 0,
+		step: 0.01,
+		suffix: "s",
+		keyframable: false,
+	},
+	{
+		key: "fadeOutCurve",
+		label: "Fade Out Curve",
+		type: "select",
+		default: DEFAULT_FADE_CURVE,
+		keyframable: false,
+		options: FADE_CURVE_OPTIONS,
+	},
+	// 다음 클립과 맞붙은 경계의 크로스페이드 길이(초). 원본의 남은 부분만큼만 겹친다
+	{
+		key: "crossfade",
+		label: "Crossfade",
+		type: "number",
+		default: 0,
+		min: 0,
+		step: 0.01,
+		suffix: "s",
 		keyframable: false,
 	},
 ];

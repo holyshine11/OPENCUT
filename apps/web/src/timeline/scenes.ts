@@ -1,7 +1,6 @@
 import type { TScene } from "@/timeline";
 import { generateUUID } from "@/utils/id";
 import { calculateTotalDuration } from "@/timeline";
-import { MAIN_TRACK_NAME } from "@/timeline/placement/main-track";
 import { type MediaTime, ZERO_MEDIA_TIME } from "@/wasm";
 
 export function getMainScene({ scenes }: { scenes: TScene[] }): TScene | null {
@@ -28,18 +27,7 @@ export function buildDefaultScene({
 		id: generateUUID(),
 		name,
 		isMain,
-		tracks: {
-			overlay: [],
-			main: {
-				id: generateUUID(),
-				name: MAIN_TRACK_NAME,
-				type: "video",
-				elements: [],
-				muted: false,
-				hidden: false,
-			},
-			audio: [],
-		},
+		tracks: [],
 		bookmarks: [],
 		createdAt: new Date(),
 		updatedAt: new Date(),

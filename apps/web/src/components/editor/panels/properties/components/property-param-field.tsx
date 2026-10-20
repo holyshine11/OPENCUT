@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
 	ParamDefinition,
 	NumberParamDefinition,
@@ -13,6 +14,7 @@ import {
 import { SectionField } from "@/components/section";
 import { NumberField } from "@/components/ui/number-field";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { ColorPicker } from "@/components/ui/color-picker";
 import {
 	Select,
@@ -193,6 +195,10 @@ function TextParamField({
 	);
 }
 
+// 범위가 좁은 값(불투명도 0~1)은 이만큼 끌면 처음부터 끝까지 간다. 넓은 값은 원래 속도(1단위에 2px)를 지킨다
+const FULL_RANGE_SCRUB_PX = 200;
+const SLOW_SCRUB_PIXELS_PER_UNIT = 2;
+
 function NumberParamField({
 	param,
 	value,
@@ -204,6 +210,9 @@ function NumberParamField({
 	onPreview: (value: number) => void;
 	onCommit: () => void;
 }) {
+	const m = useMessages();
+	// 미리보기는 value에 바로 돌아오지 않아서, 끄는 동안 슬라이더·숫자 칸은 이 값을 보여 준다
+	const [slidingValue, setSlidingValue] = useState<number | null>(null);
 	const { min, max, step, displayMultiplier = 1 } = param;
 	const displayValue = value * displayMultiplier;
 	const clampDisplayValue = (nextDisplayValue: number) =>
@@ -213,9 +222,7 @@ function NumberParamField({
 		);
 
 	const previewFromDisplay = (displayVal: number) => {
-		const clamped = clampDisplayValue(
-			snapToStep({ value: displayVal, step }),
-		);
+		const clamped = clampDisplayValue(snapToStep({ value: displayVal, step }));
 		onPreview(clamped / displayMultiplier);
 	};
 
@@ -223,7 +230,7 @@ function NumberParamField({
 
 	const draft = usePropertyDraft({
 		displayValue: formatNumberForDisplay({
-			value: displayValue,
+			value: slidingValue ?? displayValue,
 			maxFractionDigits,
 		}),
 		parse: (input) => {
@@ -240,11 +247,27 @@ function NumberParamField({
 		onCommit();
 	};
 
-	return (
+	const field = (
 		<NumberField
 			icon={param.shortLabel}
+			suffix={param.suffix}
 			value={draft.displayValue}
 			dragSensitivity="slow"
+			scrubRanges={
+				max === undefined
+					? undefined
+					: [
+							{
+								from: min,
+								to: max,
+								pixelsPerUnit: Math.max(
+									SLOW_SCRUB_PIXELS_PER_UNIT,
+									FULL_RANGE_SCRUB_PX / (max - min),
+								),
+							},
+						]
+			}
+			scrubClamp={{ min, max }}
 			isDefault={value === param.default}
 			onFocus={draft.onFocus}
 			onChange={draft.onChange}
@@ -253,5 +276,28 @@ function NumberParamField({
 			onScrubEnd={onCommit}
 			onReset={handleReset}
 		/>
+	);
+	if (!param.slider || max === undefined) return field;
+
+	return (
+		<>
+			{field}
+			<Slider
+				aria-label={translateLabel({ messages: m, label: param.label })}
+				className="mt-2"
+				min={min}
+				max={max}
+				step={step}
+				value={[slidingValue ?? clampDisplayValue(displayValue)]}
+				onValueChange={([next]) => {
+					setSlidingValue(next);
+					previewFromDisplay(next);
+				}}
+				onValueCommit={() => {
+					setSlidingValue(null);
+					onCommit();
+				}}
+			/>
+		</>
 	);
 }

@@ -7,6 +7,7 @@ import type { TimelineElement as TimelineElementType } from "@/timeline";
 import { TIMELINE_LAYERS } from "./layers";
 import type { ElementDragView } from "@/timeline";
 import { translateLabel, useMessages } from "@/i18n";
+import { getTimelinePixelsPerSecond } from "@/timeline/pixel-utils";
 
 interface TimelineTrackContentProps {
 	track: TimelineTrack;
@@ -32,6 +33,8 @@ interface TimelineTrackContentProps {
 	onTrackMouseUp?: (event: React.MouseEvent) => void;
 	shouldIgnoreClick?: () => boolean;
 	targetElementId?: string | null;
+	/** 클립이 없는 곳을 두 번 눌렀을 때. x는 트랙 왼쪽에서 떨어진 픽셀, time은 초 */
+	onEmptyDoubleClick?: (params: { x: number; time: number }) => void;
 }
 
 export function TimelineTrackContent({
@@ -45,6 +48,7 @@ export function TimelineTrackContent({
 	onTrackMouseUp,
 	shouldIgnoreClick,
 	targetElementId = null,
+	onEmptyDoubleClick,
 }: TimelineTrackContentProps) {
 	const m = useMessages();
 	const { isElementSelected } = useElementSelection();
@@ -79,6 +83,15 @@ export function TimelineTrackContent({
 					if (event.target !== event.currentTarget) return;
 					event.preventDefault();
 					onTrackMouseDown?.(event);
+				}}
+				onDoubleClick={(event) => {
+					if (event.target !== event.currentTarget) return;
+					const x =
+						event.clientX - event.currentTarget.getBoundingClientRect().left;
+					onEmptyDoubleClick?.({
+						x,
+						time: x / getTimelinePixelsPerSecond({ zoomLevel }),
+					});
 				}}
 			>
 				{track.elements.length === 0 ? (

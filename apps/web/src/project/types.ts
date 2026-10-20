@@ -33,6 +33,10 @@ export interface TProjectSettings {
 	lastCustomCanvasSize?: TCanvasSize | null;
 	originalCanvasSize?: TCanvasSize | null;
 	background: TBackground;
+	/** 마스터 페이더(dB). 없으면 0 */
+	masterVolume?: number;
+	/** 마스터 출력을 모노로 합친다 */
+	audioMono?: boolean;
 }
 
 export interface TTimelineViewState {

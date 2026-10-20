@@ -22,6 +22,7 @@ import { computeDropTarget } from "@/timeline/components/drop-target";
 import { getMouseTimeFromClientX } from "@/timeline/drag-utils";
 import { isTrackLocked } from "@/timeline/track-capabilities";
 import { generateUUID } from "@/utils/id";
+import { findTrackInSceneTracks } from "@/timeline/track-element-update";
 import type { SnapPoint } from "@/timeline/snapping";
 import type {
 	DropTarget,
@@ -68,7 +69,9 @@ export interface PlaybackReader {
 }
 
 export interface TimelineOps {
-	moveElements: (args: Pick<GroupMoveResult, "moves" | "createTracks">) => void;
+	moveElements: (
+		args: Pick<GroupMoveResult, "moves" | "createTracks"> & { copy?: boolean },
+	) => void;
 }
 
 export interface SnapConfig {
@@ -155,7 +158,7 @@ function verticalDirection({
 }
 
 function orderedTracks(sceneTracks: SceneTracks): TimelineTrack[] {
-	return [...sceneTracks.overlay, sceneTracks.main, ...sceneTracks.audio];
+	return sceneTracks;
 }
 
 function movedPastDragThreshold({
@@ -382,7 +385,9 @@ export class ElementInteractionController {
 
 		const ref = { trackId: track.id, elementId: element.id };
 
-		if (event.metaKey || event.ctrlKey || event.shiftKey) {
+		// ⌥+⌘로 이미 고른 클립을 잡으면 선택을 풀지 않는다. 고른 클립 전체를 끌어 복사한다
+		const isCopyGrab = event.altKey && this.deps.selection.isSelected(ref);
+		if ((event.metaKey || event.ctrlKey || event.shiftKey) && !isCopyGrab) {
 			this.deps.selection.handleClick({ ...ref, isMultiKey: true });
 		}
 
@@ -455,10 +460,24 @@ export class ElementInteractionController {
 	}
 
 	private finishSession(): void {
+		document.body.style.cursor = "";
 		this.session = { kind: "idle" };
 		this.deactivate();
 		this.deps.snap.onChange?.(null);
 		this.notify();
+	}
+
+	private findElement({
+		sourceTrackId,
+		elementId,
+	}: {
+		sourceTrackId: string;
+		elementId: string;
+	}): TimelineElement | undefined {
+		return findTrackInSceneTracks({
+			tracks: this.deps.scene.getTracks(),
+			trackId: sourceTrackId,
+		})?.elements.find(({ id }) => id === elementId);
 	}
 
 	private snapResult({
@@ -538,9 +557,17 @@ export class ElementInteractionController {
 				: null;
 	}
 
-	private handleMouseMove = ({ clientX, clientY }: MouseEvent): void => {
+	private handleMouseMove = ({
+		clientX,
+		clientY,
+		altKey,
+	}: MouseEvent): void => {
 		const scrollContainer = this.deps.viewport.getTracksScrollEl();
 		if (!scrollContainer) return;
+		// ⌥(Alt)를 누른 채 놓으면 복사된다는 걸 커서로 알린다
+		if (this.session.kind === "dragging") {
+			document.body.style.cursor = altKey ? "copy" : "";
+		}
 
 		if (this.session.kind === "pending") {
 			this.beginDragFromPending({
@@ -689,7 +716,7 @@ export class ElementInteractionController {
 		this.notify();
 	}
 
-	private handleMouseUp = ({ clientX, clientY }: MouseEvent): void => {
+	private handleMouseUp = ({ clientX, clientY, altKey }: MouseEvent): void => {
 		if (this.session.kind === "pending") {
 			this.finishSession();
 			return;
@@ -731,10 +758,27 @@ export class ElementInteractionController {
 			);
 		});
 
-		if (didMove || groupMoveResult.createTracks.length > 0) {
+		// 복사는 원본이 제자리에 남아서, 원본과 같은 트랙에 겹쳐 놓이면 하지 않는다
+		const copyOverlapsSource =
+			altKey &&
+			groupMoveResult.moves.some((move) => {
+				if (move.targetTrackId !== move.sourceTrackId) return false;
+				const element = this.findElement(move);
+				return (
+					!!element &&
+					move.newStartTime < element.startTime + element.duration &&
+					element.startTime < move.newStartTime + element.duration
+				);
+			});
+
+		if (
+			(didMove || groupMoveResult.createTracks.length > 0) &&
+			!copyOverlapsSource
+		) {
 			this.deps.timeline.moveElements({
 				moves: groupMoveResult.moves,
 				createTracks: groupMoveResult.createTracks,
+				copy: altKey,
 			});
 		}
 

@@ -80,7 +80,7 @@ export function buildResizeMembers({
 		selectedElements.map((el) => el.elementId),
 	);
 	const trackMap = new Map(
-		[...tracks.overlay, tracks.main, ...tracks.audio].map((track) => [
+		tracks.map((track) => [
 			track.id,
 			track,
 		]),

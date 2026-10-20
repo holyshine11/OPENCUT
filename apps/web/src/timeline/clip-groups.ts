@@ -7,7 +7,7 @@ const MIN_GROUP_SIZE = 2;
 const keyOf = ({ trackId, elementId }: ElementRef) => `${trackId}:${elementId}`;
 
 function listGroupedRefs({ tracks }: { tracks: SceneTracks }) {
-	return [...tracks.overlay, tracks.main, ...tracks.audio].flatMap((track) =>
+	return tracks.flatMap((track) =>
 		track.elements.flatMap((element) =>
 			element.groupId
 				? [

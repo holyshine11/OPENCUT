@@ -190,6 +190,10 @@ export class RendererManager {
 					tracks,
 					mediaAssets,
 					duration,
+					master: {
+						volumeDb: activeProject.settings.masterVolume ?? 0,
+						mono: activeProject.settings.audioMono === true,
+					},
 				});
 			}
 

@@ -10,6 +10,7 @@ import {
 	FullScreenIcon,
 	PauseIcon,
 	PlayIcon,
+	PreviousIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Separator } from "@/components/ui/separator";
@@ -37,7 +38,10 @@ export function PreviewToolbar({
 	return (
 		<div className="grid grid-cols-[1fr_auto_1fr] items-center pb-3 pt-5 px-5">
 			<TimecodeDisplay />
-			<PlayPauseButton />
+			<div className="flex items-center gap-1">
+				<GotoStartButton />
+				<PlayPauseButton />
+			</div>
 			<div className="justify-self-end flex items-center gap-2.5">
 				<ZoomSelect />
 				<Separator orientation="vertical" className="h-4" />
@@ -156,6 +160,23 @@ function PlayPauseButton() {
 				onClick={() => invokeAction("toggle-play")}
 			>
 				<HugeiconsIcon icon={isPlaying ? PauseIcon : PlayIcon} />
+			</Button>
+		</ActionTooltip>
+	);
+}
+
+function GotoStartButton() {
+	const m = useMessages();
+
+	return (
+		<ActionTooltip label={m.actions["goto-start"]} action="goto-start">
+			<Button
+				variant="text"
+				size="icon"
+				aria-label={m.actions["goto-start"]}
+				onClick={() => invokeAction("goto-start")}
+			>
+				<HugeiconsIcon icon={PreviousIcon} />
 			</Button>
 		</ActionTooltip>
 	);

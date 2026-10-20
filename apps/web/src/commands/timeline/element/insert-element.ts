@@ -52,17 +52,9 @@ export class InsertElementCommand extends Command {
 			return;
 		}
 
-		const totalElementsInTimeline =
-			this.savedState.main.elements.length +
-			this.savedState.overlay.reduce(
-				(total, track) => total + track.elements.length,
-				0,
-			) +
-			this.savedState.audio.reduce(
-				(total, track) => total + track.elements.length,
-				0,
-			);
-		const isFirstElement = totalElementsInTimeline === 0;
+		const isFirstElement = this.savedState.every(
+			(track) => track.elements.length === 0,
+		);
 
 		const newElement = this.buildElement({ element: this.element });
 		const updateResult = this.applyPlacementResult({
@@ -243,11 +235,9 @@ export class InsertElementCommand extends Command {
 		});
 		if (!placementResult) {
 			if (placement.mode === "explicit") {
-				const targetTrack =
-					tracks.main.id === placement.trackId
-						? tracks.main
-						: (tracks.overlay.find((track) => track.id === placement.trackId) ??
-							tracks.audio.find((track) => track.id === placement.trackId));
+				const targetTrack = tracks.find(
+					(track) => track.id === placement.trackId,
+				);
 				if (!targetTrack) {
 					console.error("Track not found:", placement.trackId);
 					return null;

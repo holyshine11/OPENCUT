@@ -257,10 +257,9 @@ export function getVisibleElementsWithBounds({
 	mediaAssets: MediaAsset[];
 }): ElementWithBounds[] {
 	const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
-	const orderedTracks = [
-		...tracks.overlay.filter((track) => !("hidden" in track && track.hidden)),
-		...(!tracks.main.hidden ? [tracks.main] : []),
-	].reverse();
+	const orderedTracks = tracks
+		.filter((track) => track.type !== "audio" && !track.hidden)
+		.reverse();
 
 	const result: ElementWithBounds[] = [];
 

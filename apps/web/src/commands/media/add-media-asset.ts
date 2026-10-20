@@ -67,11 +67,7 @@ export class AddMediaAssetCommand extends Command {
 				const orphanedElements: Array<{ trackId: string; elementId: string }> =
 					[];
 
-				for (const track of [
-					...currentTracks.overlay,
-					currentTracks.main,
-					...currentTracks.audio,
-				]) {
+				for (const track of currentTracks) {
 					for (const element of track.elements) {
 						if (hasMediaId(element) && element.mediaId === this.assetId) {
 							orphanedElements.push({

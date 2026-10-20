@@ -20,6 +20,7 @@ import {
 	getFolderMembers,
 	getFolderToggleState,
 	groupTracksIntoFolder,
+	moveTrack,
 	ungroupFolder,
 } from "@/timeline/track-folders";
 import { updateSceneInArray } from "@/timeline/scenes";
@@ -103,6 +104,14 @@ export class TimelineManager {
 		this.editor.command.execute({ command });
 	}
 
+	removeTracks({ trackIds }: { trackIds: string[] }): void {
+		if (trackIds.length === 0) return;
+		const commands = trackIds.map((id) => new RemoveTrackCommand(id));
+		this.editor.command.execute({
+			command: commands.length === 1 ? commands[0] : new BatchCommand(commands),
+		});
+	}
+
 	insertElement({ element, placement }: InsertElementParams): void {
 		const command = new InsertElementCommand({ element, placement });
 		this.editor.command.execute({ command });
@@ -179,9 +188,11 @@ export class TimelineManager {
 	moveElements({
 		moves,
 		createTracks,
+		copy,
 	}: {
 		moves: PlannedElementMove[];
 		createTracks?: PlannedTrackCreation[];
+		copy?: boolean;
 	}): void {
 		if (moves.length === 0) {
 			return;
@@ -190,6 +201,7 @@ export class TimelineManager {
 		const command = new MoveElementCommand({
 			moves,
 			createTracks,
+			copy,
 		});
 		this.editor.command.execute({ command });
 	}
@@ -213,6 +225,29 @@ export class TimelineManager {
 		color: string | undefined;
 	}): void {
 		const command = new UpdateTrackCommand({ trackId, patch: { color } });
+		this.editor.command.execute({ command });
+	}
+
+	setTrackMix({
+		trackId,
+		volume,
+		pan,
+		solo,
+	}: {
+		trackId: string;
+		volume?: number;
+		pan?: number;
+		solo?: boolean;
+	}): void {
+		const command = new UpdateTrackCommand({
+			trackId,
+			patch: { volume, pan, solo },
+		});
+		this.editor.command.execute({ command });
+	}
+
+	renameTrack({ trackId, name }: { trackId: string; name: string }): void {
+		const command = new UpdateTrackCommand({ trackId, patch: { name } });
 		this.editor.command.execute({ command });
 	}
 
@@ -266,6 +301,21 @@ export class TimelineManager {
 				}) ?? current,
 		);
 		this.editor.command.execute({ command });
+	}
+
+	/** toIndex는 옮기기 전 같은 영역(오버레이·오디오) 안에서 끼워 넣을 자리 */
+	moveTrack({ trackId, toIndex }: { trackId: string; toIndex: number }): void {
+		const scene = this.editor.scenes.getActiveScene();
+		const result = moveTrack({
+			tracks: scene.tracks,
+			folders: scene.trackFolders,
+			trackId,
+			toIndex,
+		});
+		if (!result) return;
+		this.editor.command.execute({
+			command: new UpdateTrackFoldersCommand(() => result),
+		});
 	}
 
 	ungroupTrackFolder({ folderId }: { folderId: string }): void {
@@ -1007,11 +1057,7 @@ export class TimelineManager {
 			return { ...track, elements: nextElements } as TTrack;
 		};
 
-		return {
-			overlay: tracks.overlay.map((track) => applyTrackOverlay(track)),
-			main: applyTrackOverlay(tracks.main),
-			audio: tracks.audio.map((track) => applyTrackOverlay(track)),
-		};
+		return tracks.map((track) => applyTrackOverlay(track));
 	}
 
 	duplicateElements({
@@ -1151,27 +1197,11 @@ export class TimelineManager {
 			return null;
 		}
 
-		if (
-			activeScene.tracks.main.elements.some(
-				(element) => element.id === elementId,
-			)
-		) {
-			return activeScene.tracks.main.id;
-		}
-
-		for (const track of activeScene.tracks.overlay) {
-			if (track.elements.some((element) => element.id === elementId)) {
-				return track.id;
-			}
-		}
-
-		for (const track of activeScene.tracks.audio) {
-			if (track.elements.some((element) => element.id === elementId)) {
-				return track.id;
-			}
-		}
-
-		return null;
+		return (
+			activeScene.tracks.find((track) =>
+				track.elements.some((element) => element.id === elementId),
+			)?.id ?? null
+		);
 	}
 
 	updateTracks(newTracks: SceneTracks): void {

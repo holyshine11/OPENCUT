@@ -5,6 +5,7 @@ import { useEditor } from "@/editor/use-editor";
 import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
 import { AudioWaveform, WAVEFORM_GAIN_SAMPLE_COUNT } from "./audio-waveform";
 import { AudioVolumeLine } from "./audio-volume-line";
+import { ClipFadeHandles } from "./clip-fade-handles";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
 import {
 	useKeyframeDrag,
@@ -52,7 +53,11 @@ import {
 	getSourceAudioActionLabel,
 	isSourceAudioSeparated,
 } from "@/timeline/audio-separation";
-import { buildWaveformGainSamples, isElementMuted } from "@/timeline/audio-state";
+import {
+	buildWaveformGainSamples,
+	getCrossfadeExtents,
+	isElementMuted,
+} from "@/timeline/audio-state";
 import { getTimelinePixelsPerSecond } from "@/timeline";
 import { buildWaveformSourceKey } from "@/media/waveform-summary";
 import { addMediaTime, type MediaTime, TICKS_PER_SECOND } from "@/wasm";
@@ -79,7 +84,15 @@ import {
 	PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import {
+	useEffect,
+	useMemo,
+	useState,
+	type ComponentProps,
+	type ReactNode,
+} from "react";
+import { getClipFrameThumbnail } from "@/media/clip-frames";
+import { formatCueTime } from "@/subtitles/edit";
 import type { SelectedKeyframeRef, ElementKeyframe } from "@/animation/types";
 import { cn } from "@/utils/ui";
 import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
@@ -399,6 +412,10 @@ export function TimelineElement({
 							onElementMouseDown={onElementMouseDown}
 							onResizeStart={onResizeStart}
 							isDropTarget={isDropTarget}
+							canFade={
+								element.type === "audio" ||
+								(element.type === "video" && hasAudio)
+							}
 						/>
 						<AnchoredColorPopover
 							open={isColorPopoverOpen}
@@ -549,6 +566,7 @@ function ElementInner({
 	onElementMouseDown,
 	onResizeStart,
 	isDropTarget = false,
+	canFade = false,
 }: {
 	element: TimelineElementType;
 	displayElement?: TimelineElementType;
@@ -572,7 +590,9 @@ function ElementInner({
 		side: "left" | "right";
 	}) => void;
 	isDropTarget?: boolean;
+	canFade?: boolean;
 }) {
+	const pixelsPerSecond = useContext(PixelsPerSecondContext);
 	const visibleElement = displayElement ?? element;
 	const isReducedOpacity =
 		(canElementBeHidden(visibleElement) && visibleElement.hidden) ||
@@ -670,6 +690,25 @@ function ElementInner({
 					/>
 				</>
 			)}
+			{/* 길이 조절 핸들보다 뒤에 그려야 위쪽 모서리에서 페이드 핸들이 먼저 잡힌다 */}
+			{canFade &&
+				pixelsPerSecond !== null &&
+				(visibleElement.type === "audio" || visibleElement.type === "video") && (
+					<div
+						className="pointer-events-none absolute inset-x-0 top-0"
+						style={{ height: `${baseTrackHeight}px` }}
+					>
+						<ClipFadeHandles
+							element={visibleElement}
+							trackId={track.id}
+							pixelsPerSecond={pixelsPerSecond}
+							isSelected={isSelected && !track.locked}
+							crossfade={getCrossfadeExtents({
+								elements: track.elements,
+							}).get(element.id)}
+						/>
+					</div>
+				)}
 		</div>
 	);
 }
@@ -1147,10 +1186,19 @@ function TiledMediaContent({
 	const mediaAssets = useEditor((e) => e.media.getAssets());
 
 	const mediaAsset = mediaAssets.find((asset) => asset.id === element.mediaId);
-	const imageUrl =
-		element.type === "video"
-			? mediaAsset?.thumbnailUrl
-			: (mediaAsset?.thumbnailUrl ?? mediaAsset?.url);
+	const isVideo = element.type === "video";
+	const sourceStartSec = element.trimStart / TICKS_PER_SECOND;
+	const clipFrameUrl = useClipFrameThumbnail({
+		mediaId: isVideo ? element.mediaId : null,
+		file: mediaAsset?.file,
+		time: sourceStartSec,
+	});
+	const imageUrl = isVideo
+		? (clipFrameUrl ?? mediaAsset?.thumbnailUrl)
+		: (mediaAsset?.thumbnailUrl ?? mediaAsset?.url);
+	const headerName = isVideo
+		? `${formatCueTime({ seconds: sourceStartSec })} · ${mediaAsset?.name ?? ""}`
+		: mediaAsset?.name;
 
 	if (!imageUrl) {
 		return (
@@ -1177,7 +1225,7 @@ function TiledMediaContent({
 				}}
 			/>
 			<MediaElementHeader
-				name={mediaAsset?.name}
+				name={headerName}
 				leading={
 					hasElementEffects({ element }) ? (
 						<EffectsButton element={element} track={track} />
@@ -1187,6 +1235,37 @@ function TiledMediaContent({
 			/>
 		</>
 	);
+}
+
+const CLIP_FRAME_DEBOUNCE_MS = 150;
+
+/** 트림 드래그 중엔 디코딩하지 않고, 멈춘 뒤 시작 프레임을 불러온다. 그동안은 이전 프레임 유지 */
+function useClipFrameThumbnail({
+	mediaId,
+	file,
+	time,
+}: {
+	mediaId: string | null;
+	file: File | undefined;
+	time: number;
+}): string | null {
+	const [url, setUrl] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!mediaId || !file) return;
+		let cancelled = false;
+		const timer = setTimeout(() => {
+			getClipFrameThumbnail({ mediaId, file, time }).then((frame) => {
+				if (!cancelled && frame) setUrl(frame);
+			});
+		}, CLIP_FRAME_DEBOUNCE_MS);
+		return () => {
+			cancelled = true;
+			clearTimeout(timer);
+		};
+	}, [mediaId, file, time]);
+
+	return url;
 }
 
 function MediaElementHeader({

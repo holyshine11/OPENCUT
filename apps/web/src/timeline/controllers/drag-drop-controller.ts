@@ -130,7 +130,7 @@ function orderedTracks({
 }: {
 	sceneTracks: SceneTracks;
 }): TimelineTrack[] {
-	return [...sceneTracks.overlay, sceneTracks.main, ...sceneTracks.audio];
+	return sceneTracks;
 }
 
 // --- Controller ---
@@ -526,28 +526,6 @@ export class DragDropController {
 
 					const sceneTracks = this.config.getSceneTracks();
 					const currentTime = this.config.getCurrentPlayheadTime();
-
-					const reuseMainTrackId =
-						createdAsset.type !== "audio" &&
-						sceneTracks.overlay.length === 0 &&
-						sceneTracks.audio.length === 0 &&
-						sceneTracks.main.elements.length === 0
-							? sceneTracks.main.id
-							: null;
-
-					if (reuseMainTrackId) {
-						this.config.insertElement({
-							placement: { mode: "explicit", trackId: reuseMainTrackId },
-							element: buildElementFromMedia({
-								mediaId: createdAsset.id,
-								mediaType: createdAsset.type,
-								name: createdAsset.name,
-								duration,
-								startTime: currentTime,
-							}),
-						});
-						continue;
-					}
 
 					const dropTarget = computeDropTarget({
 						elementType: createdAsset.type,

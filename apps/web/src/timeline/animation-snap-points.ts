@@ -11,7 +11,7 @@ export function getAnimationKeyframeSnapPointsForTimeline({
 	excludeElementIds?: Set<string>;
 }): SnapPoint[] {
 	const snapPoints: SnapPoint[] = [];
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 
 	for (const track of orderedTracks) {
 		for (const element of track.elements) {

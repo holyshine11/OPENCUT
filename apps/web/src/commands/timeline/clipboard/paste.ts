@@ -7,11 +7,7 @@ import { EditorCore } from "@/core";
 import type { SceneTracks, TimelineElement } from "@/timeline";
 import type { ElementClipboardItem } from "@/clipboard";
 import { generateUUID } from "@/utils/id";
-import {
-	applyPlacement,
-	resolveTrackPlacement,
-	enforceMainTrackStart,
-} from "@/timeline/placement";
+import { applyPlacement, resolveTrackPlacement } from "@/timeline/placement";
 import { cloneAnimations } from "@/animation";
 import {
 	addMediaTime,
@@ -71,11 +67,9 @@ export class PasteCommand extends Command {
 			}
 
 			const trackType = items[0].trackType;
-			const sourceTrackIndex = [
-				...updatedTracks.overlay,
-				updatedTracks.main,
-				...updatedTracks.audio,
-			].findIndex((track) => track.id === trackId);
+			const sourceTrackIndex = updatedTracks.findIndex(
+				(track) => track.id === trackId,
+			);
 			const placementResult = resolveTrackPlacement({
 				tracks: updatedTracks,
 				trackType,
@@ -89,41 +83,7 @@ export class PasteCommand extends Command {
 				continue;
 			}
 
-			let elementsForPlacement = elementsToAdd;
-			if (placementResult.kind === "existingTrack") {
-				const targetTrack =
-					placementResult.trackIndex < updatedTracks.overlay.length
-						? updatedTracks.overlay[placementResult.trackIndex]
-						: placementResult.trackIndex === updatedTracks.overlay.length
-							? updatedTracks.main
-							: updatedTracks.audio[
-									placementResult.trackIndex - updatedTracks.overlay.length - 1
-								];
-				if (targetTrack?.id === updatedTracks.main.id) {
-					const earliestElement = elementsToAdd.reduce((earliest, element) =>
-						element.startTime < earliest.startTime ? element : earliest,
-					);
-					const adjustedEarliestStartTime = enforceMainTrackStart({
-						tracks: updatedTracks,
-						targetTrackId: targetTrack.id,
-						requestedStartTime: earliestElement.startTime,
-					});
-					const delta = subMediaTime({
-						a: adjustedEarliestStartTime,
-						b: earliestElement.startTime,
-					});
-
-					if (delta !== ZERO_MEDIA_TIME) {
-						elementsForPlacement = elementsToAdd.map((element) => ({
-							...element,
-							startTime: maxMediaTime({
-								a: ZERO_MEDIA_TIME,
-								b: addMediaTime({ a: element.startTime, b: delta }),
-							}),
-						}));
-					}
-				}
-			}
+			const elementsForPlacement = elementsToAdd;
 
 			const applied = applyPlacement({
 				tracks: updatedTracks,

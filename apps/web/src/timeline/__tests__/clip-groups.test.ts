@@ -41,25 +41,23 @@ function textTrack({
 	return { id, type: "text", name: id, hidden: false, elements };
 }
 
-const tracks: SceneTracks = {
-	overlay: [
-		textTrack({
-			id: "t1",
-			elements: [
-				textElement({ id: "a", groupId: "g1" }),
-				textElement({ id: "solo" }),
-			],
-		}),
-		textTrack({
-			id: "t2",
-			elements: [
-				textElement({ id: "b", groupId: "g1" }),
-				textElement({ id: "c", groupId: "g2" }),
-				textElement({ id: "d", groupId: "g2" }),
-			],
-		}),
-	],
-	main: {
+const tracks: SceneTracks = [
+	textTrack({
+		id: "t1",
+		elements: [
+			textElement({ id: "a", groupId: "g1" }),
+			textElement({ id: "solo" }),
+		],
+	}),
+	textTrack({
+		id: "t2",
+		elements: [
+			textElement({ id: "b", groupId: "g1" }),
+			textElement({ id: "c", groupId: "g2" }),
+			textElement({ id: "d", groupId: "g2" }),
+		],
+	}),
+	{
 		id: "main",
 		type: "video",
 		name: "Main",
@@ -67,8 +65,7 @@ const tracks: SceneTracks = {
 		hidden: false,
 		elements: [],
 	},
-	audio: [],
-};
+];
 
 // "트랙/클립" 형태로 ElementRef를 만든다
 const ref = (key: string) => {

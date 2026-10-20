@@ -15,6 +15,8 @@ import { getPropertiesConfig } from "./registry";
 import { cn } from "@/utils/ui";
 import { EmptyView } from "./empty-view";
 import { useMessages } from "@/i18n";
+import { isRetimableElement } from "@/timeline";
+import { SpeedTab } from "@/speed/components/speed-tab";
 
 export function PropertiesPanel() {
 	const editor = useEditor();
@@ -33,6 +35,19 @@ export function PropertiesPanel() {
 	}
 
 	if (selectedElements.length > 1) {
+		// 여러 개를 골랐어도 모두 영상·오디오 클립이면 속도는 한꺼번에 바꿀 수 있다
+		const speedTargets = editor.timeline
+			.getElementsWithTracks({ elements: selectedElements })
+			.flatMap(({ element, track }) =>
+				isRetimableElement(element) ? [{ trackId: track.id, element }] : [],
+			);
+		if (speedTargets.length === selectedElements.length) {
+			return (
+				<div className="panel bg-background h-full overflow-y-auto rounded-sm border">
+					<SpeedTab targets={speedTargets} />
+				</div>
+			);
+		}
 		return (
 			<div className="panel bg-background flex h-full flex-col items-center justify-center overflow-hidden rounded-sm border">
 				<p className="text-muted-foreground text-sm">

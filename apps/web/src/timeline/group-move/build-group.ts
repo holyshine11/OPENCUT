@@ -64,8 +64,6 @@ export function buildMoveGroup({
 					a: element.startTime,
 					b: anchorElement.startTime,
 				}),
-				trackSection: placement.section,
-				sectionIndex: placement.sectionIndex,
 				displayIndex: placement.displayIndex,
 			},
 		];

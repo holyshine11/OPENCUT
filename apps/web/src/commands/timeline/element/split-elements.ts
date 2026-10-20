@@ -16,6 +16,21 @@ import {
 	subMediaTime,
 } from "@/wasm";
 
+// 자른 자리에는 페이드가 없다. 왼쪽은 페이드 아웃과 크로스페이드(바로 뒤가 오른쪽 조각이 된다), 오른쪽은 페이드 인을 뗀다
+function clearFade({
+	element,
+	keys,
+}: {
+	element: TimelineElement;
+	keys: readonly ("fadeIn" | "fadeOut" | "crossfade")[];
+}): Pick<TimelineElement, "params"> {
+	const params = { ...element.params };
+	for (const key of keys) {
+		if (key in params) params[key] = 0;
+	}
+	return { params };
+}
+
 export class SplitElementsCommand extends Command {
 	private savedState: SceneTracks | null = null;
 	private rightSideElements: { trackId: string; elementId: string }[] = [];
@@ -136,6 +151,7 @@ export class SplitElementsCommand extends Command {
 							trimEnd: leftTrimEnd,
 							name: `${element.name} (left)`,
 							animations: leftAnimations,
+							...clearFade({ element, keys: ["fadeOut", "crossfade"] }),
 							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 						},
 					];
@@ -154,6 +170,7 @@ export class SplitElementsCommand extends Command {
 							trimStart: rightTrimStart,
 							name: `${element.name} (right)`,
 							animations: rightAnimations,
+							...clearFade({ element, keys: ["fadeIn"] }),
 							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 						},
 					];
@@ -170,6 +187,7 @@ export class SplitElementsCommand extends Command {
 							trimEnd: leftTrimEnd,
 							name: `${element.name} (left)`,
 							animations: leftAnimations,
+							...clearFade({ element, keys: ["fadeOut", "crossfade"] }),
 							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 						},
 						{
@@ -180,6 +198,7 @@ export class SplitElementsCommand extends Command {
 							trimStart: rightTrimStart,
 							name: `${element.name} (right)`,
 							animations: rightAnimations,
+							...clearFade({ element, keys: ["fadeIn"] }),
 							...(retimeRef !== undefined ? { retime: retimeRef } : {}),
 						},
 					];
@@ -191,11 +210,9 @@ export class SplitElementsCommand extends Command {
 			return { ...track, elements } as TTrack;
 		};
 
-		const updatedTracks: SceneTracks = {
-			overlay: this.savedState.overlay.map((track) => splitTrack(track)),
-			main: splitTrack(this.savedState.main),
-			audio: this.savedState.audio.map((track) => splitTrack(track)),
-		};
+		const updatedTracks: SceneTracks = this.savedState.map((track) =>
+			splitTrack(track),
+		);
 
 		editor.timeline.updateTracks(updatedTracks);
 

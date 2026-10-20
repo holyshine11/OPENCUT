@@ -14,6 +14,8 @@ import type {
 	PlannedTrackCreation,
 } from "@/timeline/group-move";
 import { findTrackInSceneTracks } from "@/timeline/track-element-update";
+import { generateUUID } from "@/utils/id";
+import { buildDuplicateElement } from "./duplicate-elements";
 
 export class MoveElementCommand extends Command {
 	private savedState: SceneTracks | null = null;
@@ -21,17 +23,25 @@ export class MoveElementCommand extends Command {
 	constructor({
 		moves,
 		createTracks = [],
+		copy = false,
 	}: {
 		moves: PlannedElementMove[];
 		createTracks?: PlannedTrackCreation[];
+		/** 원본은 두고 옮길 자리에 복제본을 놓는다 */
+		copy?: boolean;
 	}) {
 		super();
 		this.moves = moves;
 		this.createTracks = createTracks;
+		// 다시 실행해도 같은 복제본 id를 쓰도록 미리 정한다
+		this.copyIds = new Map(
+			copy ? moves.map(({ elementId }) => [elementId, generateUUID()]) : [],
+		);
 	}
 
 	private readonly moves: PlannedElementMove[];
 	private readonly createTracks: PlannedTrackCreation[];
+	private readonly copyIds: Map<string, string>;
 
 	execute(): CommandResult | undefined {
 		const editor = EditorCore.getInstance();
@@ -80,13 +90,22 @@ export class MoveElementCommand extends Command {
 				throw new Error(validation.errorMessage);
 			}
 
-			movedElementsById.set(move.elementId, {
-				...sourceElement,
-				startTime: move.newStartTime,
-			});
+			const copyId = this.copyIds.get(move.elementId);
+			movedElementsById.set(
+				move.elementId,
+				copyId
+					? buildDuplicateElement({
+							element: sourceElement,
+							id: copyId,
+							startTime: move.newStartTime,
+						})
+					: { ...sourceElement, startTime: move.newStartTime },
+			);
 		}
 
-		const movedElementIds = new Set(this.moves.map((move) => move.elementId));
+		const movedElementIds = new Set(
+			this.copyIds.size > 0 ? [] : this.moves.map((move) => move.elementId),
+		);
 		const movedElementsByTargetTrackId = new Map<string, TimelineElement[]>();
 		for (const move of this.moves) {
 			const movedElement = movedElementsById.get(move.elementId);
@@ -100,24 +119,22 @@ export class MoveElementCommand extends Command {
 			movedElementsByTargetTrackId.set(move.targetTrackId, nextTargetElements);
 		}
 
-		const updatedTracks = mapSceneTracks({
-			tracks: tracksToUpdate,
-			update: (track) => ({
-				...track,
-				elements: [
-					...track.elements.filter(
-						(element) => !movedElementIds.has(element.id),
-					),
-					...(movedElementsByTargetTrackId.get(track.id) ?? []),
-				],
-			}),
+		const placeMovedElements = <TTrack extends TimelineTrack>(
+			track: TTrack,
+		): TTrack => ({
+			...track,
+			elements: [
+				...track.elements.filter((element) => !movedElementIds.has(element.id)),
+				...(movedElementsByTargetTrackId.get(track.id) ?? []),
+			],
 		});
+		const updatedTracks = tracksToUpdate.map(placeMovedElements);
 
 		editor.timeline.updateTracks(updatedTracks);
 		return createElementSelectionResult(
 			this.moves.map(({ elementId, targetTrackId }) => ({
 				trackId: targetTrackId,
-				elementId,
+				elementId: this.copyIds.get(elementId) ?? elementId,
 			})),
 		);
 	}
@@ -130,20 +147,6 @@ export class MoveElementCommand extends Command {
 	}
 }
 
-function mapSceneTracks({
-	tracks,
-	update,
-}: {
-	tracks: SceneTracks;
-	update: <TTrack extends TimelineTrack>(track: TTrack) => TTrack;
-}): SceneTracks {
-	return {
-		overlay: tracks.overlay.map((track) => update(track)),
-		main: update(tracks.main),
-		audio: tracks.audio.map((track) => update(track)),
-	};
-}
-
 function insertTrackAtDisplayIndex({
 	tracks,
 	track,
@@ -153,31 +156,6 @@ function insertTrackAtDisplayIndex({
 	track: TimelineTrack;
 	insertIndex: number;
 }): SceneTracks {
-	if (track.type === "audio") {
-		const audioInsertIndex = Math.max(
-			0,
-			Math.min(insertIndex - tracks.overlay.length - 1, tracks.audio.length),
-		);
-		return {
-			...tracks,
-			audio: [
-				...tracks.audio.slice(0, audioInsertIndex),
-				track,
-				...tracks.audio.slice(audioInsertIndex),
-			],
-		};
-	}
-
-	const overlayInsertIndex = Math.max(
-		0,
-		Math.min(insertIndex, tracks.overlay.length),
-	);
-	return {
-		...tracks,
-		overlay: [
-			...tracks.overlay.slice(0, overlayInsertIndex),
-			track,
-			...tracks.overlay.slice(overlayInsertIndex),
-		],
-	};
+	const index = Math.max(0, Math.min(insertIndex, tracks.length));
+	return [...tracks.slice(0, index), track, ...tracks.slice(index)];
 }

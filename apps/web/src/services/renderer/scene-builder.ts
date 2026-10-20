@@ -234,12 +234,14 @@ export function buildScene({
 	const rootNode = new RootNode({ duration });
 	const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
 
-	const visibleTracks = [
-		...tracks.overlay.filter((track) => !("hidden" in track && track.hidden)),
-		...(!tracks.main.hidden ? [tracks.main] : []),
-	];
+	const visibleTracks = tracks.filter(
+		(track) => track.type !== "audio" && !track.hidden,
+	);
 	const orderedTracksBottomToTop = visibleTracks.slice().reverse();
-	const mainTrack = tracks.main.hidden ? undefined : tracks.main;
+	// 흐린 배경은 맨 아래 영상 트랙의 영상·사진으로 만든다
+	const backgroundTrack = orderedTracksBottomToTop.find(
+		(track) => track.type === "video",
+	);
 
 	const allNodes = buildTrackNodes({
 		tracks: orderedTracksBottomToTop,
@@ -250,7 +252,7 @@ export function buildScene({
 
 	if (background.type === "blur") {
 		const blurNodes = buildBlurBackgroundNodes({
-			track: mainTrack,
+			track: backgroundTrack,
 			mediaMap,
 			blurIntensity:
 				background.blurIntensity ?? DEFAULT_BACKGROUND_BLUR_INTENSITY,

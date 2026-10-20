@@ -1,5 +1,6 @@
 import type { SceneTracks, TrackType } from "@/timeline";
 
+/** 새 트랙의 기본 자리. 오디오는 맨 아래, 효과는 맨 위, 나머지는 오디오 트랙들 바로 위 */
 export function getDefaultInsertIndexForTrack({
 	tracks,
 	trackType,
@@ -8,16 +9,18 @@ export function getDefaultInsertIndexForTrack({
 	trackType: TrackType;
 }): number {
 	if (trackType === "audio") {
-		return tracks.overlay.length + 1 + tracks.audio.length;
+		return tracks.length;
 	}
 
 	if (trackType === "effect") {
 		return 0;
 	}
 
-	return tracks.overlay.length;
+	const firstAudioIndex = tracks.findIndex((track) => track.type === "audio");
+	return firstAudioIndex < 0 ? tracks.length : firstAudioIndex;
 }
 
+/** 새 트랙을 가장 위에 둘 때의 자리. 오디오는 오디오 트랙들 맨 위(없으면 맨 아래) */
 export function getHighestInsertIndexForTrack({
 	tracks,
 	trackType,
@@ -25,16 +28,16 @@ export function getHighestInsertIndexForTrack({
 	tracks: SceneTracks;
 	trackType: TrackType;
 }): number {
-	if (trackType === "audio") {
-		return tracks.overlay.length + 1;
+	if (trackType !== "audio") {
+		return 0;
 	}
 
-	return 0;
+	const firstAudioIndex = tracks.findIndex((track) => track.type === "audio");
+	return firstAudioIndex < 0 ? tracks.length : firstAudioIndex;
 }
 
 export function resolvePreferredNewTrackPlacement({
 	tracks,
-	trackType,
 	preferredIndex,
 	direction,
 }: {
@@ -43,46 +46,17 @@ export function resolvePreferredNewTrackPlacement({
 	preferredIndex: number;
 	direction: "above" | "below";
 }): { insertIndex: number; insertPosition: "above" | "below" | null } {
-	const trackCount = tracks.overlay.length + 1 + tracks.audio.length;
-	if (trackCount === 0) {
-		return {
-			insertIndex: 0,
-			insertPosition: trackType === "audio" ? "below" : null,
-		};
+	if (tracks.length === 0) {
+		return { insertIndex: 0, insertPosition: null };
 	}
 
 	const safePreferredIndex = Math.min(
 		Math.max(preferredIndex, 0),
-		trackCount - 1,
+		tracks.length - 1,
 	);
-	const mainTrackIndex = tracks.overlay.length;
-
-	if (trackType === "audio") {
-		if (safePreferredIndex <= mainTrackIndex) {
-			return {
-				insertIndex: mainTrackIndex + 1,
-				insertPosition: "below",
-			};
-		}
-
-		return {
-			insertIndex:
-				direction === "above" ? safePreferredIndex : safePreferredIndex + 1,
-			insertPosition: direction,
-		};
-	}
-
-	const insertIndex =
-		direction === "above" ? safePreferredIndex : safePreferredIndex + 1;
-	if (mainTrackIndex >= 0 && insertIndex > mainTrackIndex) {
-		return {
-			insertIndex: mainTrackIndex,
-			insertPosition: "above",
-		};
-	}
-
 	return {
-		insertIndex,
+		insertIndex:
+			direction === "above" ? safePreferredIndex : safePreferredIndex + 1,
 		insertPosition: direction,
 	};
 }

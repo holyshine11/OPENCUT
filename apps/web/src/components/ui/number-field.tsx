@@ -154,9 +154,12 @@ function NumberField({
 		if (ghostRef.current.textContent !== ghostValue) {
 			ghostRef.current.textContent = ghostValue;
 		}
+		// 접미사는 입력칸을 감싼 칸 기준으로 놓이므로 칸의 왼쪽 여백(입력칸 offsetLeft)까지 더한다
 		const paddingLeft =
 			parseFloat(getComputedStyle(inputRef.current).paddingLeft) || 0;
-		setSuffixLeft(paddingLeft + ghostRef.current.offsetWidth);
+		setSuffixLeft(
+			inputRef.current.offsetLeft + paddingLeft + ghostRef.current.offsetWidth,
+		);
 	}, [ghostValue, suffix]);
 
 	const { containerRef: wrapperRef } = useFocusLock<HTMLDivElement>({

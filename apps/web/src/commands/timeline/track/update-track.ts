@@ -1,10 +1,13 @@
 import { Command, type CommandResult } from "@/commands/base-command";
-import type { SceneTracks, TimelineTrack } from "@/timeline";
+import type { AudioTrack, SceneTracks, TimelineTrack } from "@/timeline";
 import { EditorCore } from "@/core";
-import { updateTrackInSceneTracks } from "@/timeline";
+import { canTrackHaveAudio, updateTrackInSceneTracks } from "@/timeline";
 
-/** 트랙 공통 속성(색·잠금)을 바꾼다 */
-export type TrackPatch = Partial<Pick<TimelineTrack, "color" | "locked">>;
+/** 트랙 공통 속성(이름·색·잠금)과 믹스(볼륨·팬)를 바꾼다. 믹스는 소리 나는 트랙에만 적용된다 */
+export type TrackPatch = Partial<
+	Pick<TimelineTrack, "name" | "color" | "locked">
+> &
+	Partial<Pick<AudioTrack, "volume" | "pan" | "solo">>;
 
 export class UpdateTrackCommand extends Command {
 	private savedState: SceneTracks | null = null;
@@ -25,7 +28,17 @@ export class UpdateTrackCommand extends Command {
 			updateTrackInSceneTracks({
 				tracks: this.savedState,
 				trackId: this.trackId,
-				update: (track) => ({ ...track, ...this.patch }),
+				update: (track) => {
+					const { volume, pan, solo, ...common } = this.patch;
+					if (!canTrackHaveAudio(track)) return { ...track, ...common };
+					return {
+						...track,
+						...common,
+						...(volume !== undefined && { volume }),
+						...(pan !== undefined && { pan }),
+						...(solo !== undefined && { solo }),
+					};
+				},
 			}),
 		);
 		return undefined;

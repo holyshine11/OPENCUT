@@ -194,6 +194,10 @@ export interface NumberParamDefinition<TKey extends string = string>
 	unit?: "percent";
 	/** Short label shown as the scrub handle icon in the number field (e.g. "W", "R"). */
 	shortLabel?: string;
+	/** 숫자 칸 뒤에 붙는 단위 (예: "dB") */
+	suffix?: string;
+	/** 숫자 칸 아래에 min~max 슬라이더를 함께 둔다. max가 있어야 한다 */
+	slider?: boolean;
 }
 
 export interface BooleanParamDefinition<TKey extends string = string>

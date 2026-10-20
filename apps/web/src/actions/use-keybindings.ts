@@ -4,6 +4,7 @@ import { useEditor } from "@/editor/use-editor";
 import { useKeybindingsStore } from "@/actions/keybindings-store";
 import { isTypableDOMElement } from "@/utils/browser";
 import { useTextStyleMemory } from "@/text/style-memory";
+import { cancelSpace, pressSpace, releaseSpace } from "@/timeline/space-pan";
 
 /**
  * a composable that hooks to the caller component's
@@ -36,15 +37,20 @@ export function useKeybindingsListener() {
 				isTypableDOMElement({ element: activeElement });
 			const boundAction = binding ? keybindings.get(binding) : undefined;
 
-			if (normalizedKey === "escape" && isTextInput) {
-				activeElement.blur();
-				return;
-			}
+			// 입력칸의 Esc는 아래 blurOnEscape가 버블 단계에서 처리한다
+			if (normalizedKey === "escape" && isTextInput) return;
 
 			if (!binding) return;
 			if (!boundAction) return;
 
 			if (isTextInput) return;
+			// 슬라이더에 포커스가 있으면 방향키는 슬라이더 값을 움직인다
+			if (
+				activeElement?.getAttribute("role") === "slider" &&
+				normalizedKey.startsWith("arrow")
+			) {
+				return;
+			}
 			if (boundAction === "paste-copied") {
 				if (!editor.clipboard.hasEntry()) return;
 				ev.preventDefault();
@@ -60,6 +66,12 @@ export function useKeybindingsListener() {
 			}
 
 			ev.preventDefault();
+
+			// Space 재생은 뗄 때 판단한다. 누른 채 끌면 타임라인 이동(space-pan)
+			if (boundAction === "toggle-play" && normalizedKey === " ") {
+				pressSpace();
+				return;
+			}
 
 			switch (boundAction) {
 				case "seek-forward":
@@ -79,10 +91,34 @@ export function useKeybindingsListener() {
 			}
 		};
 
+		// 버블 단계라 입력칸이 Esc를 먼저 받는다. 이름 입력칸은 Esc로 원래 값을 되돌린 뒤 스스로 빠진다
+		const blurOnEscape = (ev: KeyboardEvent) => {
+			const activeElement = document.activeElement;
+			if (
+				ev.key === "Escape" &&
+				activeElement instanceof HTMLElement &&
+				isTypableDOMElement({ element: activeElement })
+			) {
+				activeElement.blur();
+			}
+		};
+
+		const handleKeyUp = (ev: KeyboardEvent) => {
+			if (ev.key === " " && releaseSpace()) {
+				invokeAction("toggle-play", undefined, "keypress");
+			}
+		};
+
 		document.addEventListener("keydown", handleKeyDown, eventOptions);
+		document.addEventListener("keydown", blurOnEscape);
+		document.addEventListener("keyup", handleKeyUp, eventOptions);
+		window.addEventListener("blur", cancelSpace);
 
 		return () => {
 			document.removeEventListener("keydown", handleKeyDown, eventOptions);
+			document.removeEventListener("keydown", blurOnEscape);
+			document.removeEventListener("keyup", handleKeyUp, eventOptions);
+			window.removeEventListener("blur", cancelSpace);
 		};
 	}, [
 		keybindings,

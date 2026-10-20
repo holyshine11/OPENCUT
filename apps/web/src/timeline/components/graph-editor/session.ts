@@ -113,7 +113,7 @@ function findElementByKeyframe({
 	tracks: SceneTracks;
 	keyframe: SelectedKeyframeRef;
 }): { element: TimelineElement; trackId: string; elementId: string } | null {
-	for (const track of [...tracks.overlay, tracks.main, ...tracks.audio]) {
+	for (const track of tracks) {
 		if (track.id !== keyframe.trackId) {
 			continue;
 		}

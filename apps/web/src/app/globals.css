@@ -289,3 +289,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Space+드래그 타임라인 이동 중 커서 (timeline/space-pan.ts) */
+html[data-space-pan="ready"] [data-timeline-pan-surface],
+html[data-space-pan="ready"] [data-timeline-pan-surface] * {
+  cursor: grab !important;
+}
+html[data-space-pan="active"],
+html[data-space-pan="active"] * {
+  cursor: grabbing !important;
+}

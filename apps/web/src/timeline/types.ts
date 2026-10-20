@@ -53,6 +53,12 @@ export interface VideoTrack extends BaseTrack {
 	type: "video";
 	elements: (VideoElement | ImageElement)[];
 	muted: boolean;
+	/** 트랙 페이더(dB). 없으면 0 */
+	volume?: number;
+	/** 팬 -1(왼쪽)~1(오른쪽). 없으면 0 */
+	pan?: number;
+	/** 솔로. 솔로 트랙이 하나라도 있으면 나머지 트랙은 들리지 않는다 */
+	solo?: boolean;
 	hidden: boolean;
 }
 
@@ -66,6 +72,12 @@ export interface AudioTrack extends BaseTrack {
 	type: "audio";
 	elements: AudioElement[];
 	muted: boolean;
+	/** 트랙 페이더(dB). 없으면 0 */
+	volume?: number;
+	/** 팬 -1(왼쪽)~1(오른쪽). 없으면 0 */
+	pan?: number;
+	/** 솔로. 솔로 트랙이 하나라도 있으면 나머지 트랙은 들리지 않는다 */
+	solo?: boolean;
 }
 
 export interface GraphicTrack extends BaseTrack {
@@ -89,7 +101,11 @@ export type TimelineTrack =
 
 export type OverlayTrack = VideoTrack | TextTrack | GraphicTrack | EffectTrack;
 
-export interface SceneTracks {
+/** 장면의 트랙. 타임라인에 보이는 순서(위→아래)이고, 위 트랙이 화면에서도 앞에 그려진다 */
+export type SceneTracks = TimelineTrack[];
+
+/** 메인 트랙이 있던 옛 저장 형식(v31까지). 저장할 때 옛 버전을 위해 함께 남긴다 */
+export interface LegacySceneTracks {
 	overlay: OverlayTrack[];
 	main: VideoTrack;
 	audio: AudioTrack[];

@@ -48,15 +48,13 @@ const audio: AudioTrack = {
 	muted: true,
 };
 
-const sceneTracks: SceneTracks = {
-	overlay: [
-		textTrack({ id: "a" }),
-		textTrack({ id: "b" }),
-		textTrack({ id: "c" }),
-	],
+const sceneTracks: SceneTracks = [
+	textTrack({ id: "a" }),
+	textTrack({ id: "b" }),
+	textTrack({ id: "c" }),
 	main,
-	audio: [audio],
-};
+	audio,
+];
 
 const folder: TrackFolder = { id: "f", name: "folder" };
 

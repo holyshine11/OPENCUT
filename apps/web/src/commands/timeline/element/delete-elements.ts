@@ -38,18 +38,9 @@ export class DeleteElementsCommand extends Command {
 		const editor = EditorCore.getInstance();
 		this.savedState = editor.scenes.getActiveScene().tracks;
 
-		const updatedTracks: SceneTracks = {
-			overlay: this.savedState.overlay.map((track) =>
-				removeTrackElements({ track, elements: this.elements }),
-			),
-			main: removeTrackElements({
-				track: this.savedState.main,
-				elements: this.elements,
-			}),
-			audio: this.savedState.audio.map((track) =>
-				removeTrackElements({ track, elements: this.elements }),
-			),
-		};
+		const updatedTracks: SceneTracks = this.savedState.map((track) =>
+			removeTrackElements({ track, elements: this.elements }),
+		);
 
 		editor.timeline.updateTracks(updatedTracks);
 

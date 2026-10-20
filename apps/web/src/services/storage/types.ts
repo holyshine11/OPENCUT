@@ -4,7 +4,7 @@ import type {
 	TProjectMetadata,
 	TTimelineViewState,
 } from "@/project/types";
-import type { TScene } from "@/timeline";
+import type { LegacySceneTracks, SceneTracks, TScene } from "@/timeline";
 
 export interface StorageAdapter<T> {
 	get(key: string): Promise<T | null>;
@@ -29,9 +29,16 @@ export interface MediaAssetData {
 	thumbnailUrl?: string;
 }
 
-export type SerializedScene = Omit<TScene, "createdAt" | "updatedAt"> & {
+export type SerializedScene = Omit<
+	TScene,
+	"createdAt" | "updatedAt" | "tracks"
+> & {
 	createdAt: string;
 	updatedAt: string;
+	/** 트랙 목록(위→아래). v32부터 */
+	trackList?: SceneTracks;
+	/** 메인 트랙이 있던 옛 형식. 옛 버전을 위해 함께 저장한다 */
+	tracks?: LegacySceneTracks;
 };
 
 export type SerializedProjectMetadata = Omit<

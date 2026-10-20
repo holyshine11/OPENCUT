@@ -4,27 +4,35 @@ import type {
 	LibraryAudioElement,
 	RetimeConfig,
 	SceneTracks,
+	TimelineElement,
+	TimelineTrack,
 } from "@/timeline";
 import { shouldMaintainPitch } from "@/retime/rate";
 import type { MediaAsset } from "@/media/types";
 import { applyAudioMasteringToBuffer } from "@/media/audio-mastering";
 import type { AudioCapableElement } from "@/timeline/audio-state";
 import {
-	hasAnimatedVolume,
+	applyCrossfades,
+	hasGainAutomation,
 	isElementMuted,
+	resolveAudioGainAtTime,
 	resolveEffectiveAudioGain,
 } from "@/timeline/audio-state";
 import { doesElementHaveEnabledAudio } from "@/timeline/audio-separation";
 import { canElementHaveAudio, hasMediaId } from "@/timeline/element-utils";
 import { canTrackHaveAudio } from "@/timeline";
+import {
+	faderDbToGain,
+	getTrackGain,
+	getTrackPan,
+	isTrackSilencedBySolo,
+	panStereoSample,
+} from "@/timeline/audio-mix";
 import { mediaSupportsAudio } from "@/media/media-utils";
 import { getSourceTimeAtClipTime, renderRetimedBuffer } from "@/retime";
 import { Input, ALL_FORMATS, BlobSource, AudioBufferSink } from "mediabunny";
 import { TICKS_PER_SECOND } from "@/wasm";
-import {
-	computeRmsBuckets,
-	type SampleBucket,
-} from "@/media/waveform-summary";
+import { computeRmsBuckets, type SampleBucket } from "@/media/waveform-summary";
 
 const MAX_AUDIO_CHANNELS = 2;
 const EXPORT_SAMPLE_RATE = 44100;
@@ -39,6 +47,16 @@ export interface CollectedAudioElement {
 	volume: number;
 	muted: boolean;
 	retime?: RetimeConfig;
+	/** 트랙 페이더 선형 게인 */
+	trackGain: number;
+	/** 트랙 팬 -1~1 */
+	pan: number;
+}
+
+/** 마스터 버스. 내보내기 믹스에서 리미터 앞에 적용한다 */
+export interface AudioMasterSettings {
+	volumeDb: number;
+	mono: boolean;
 }
 
 export function createAudioContext({
@@ -89,6 +107,7 @@ export async function decodeAudioToFloat32({
 export interface AudibleElementCandidate {
 	element: AudioElement | VideoElement;
 	mediaAsset: MediaAsset | null;
+	track: TimelineTrack;
 }
 
 export function collectAudibleCandidates({
@@ -98,14 +117,14 @@ export function collectAudibleCandidates({
 	tracks: SceneTracks;
 	mediaAssets: MediaAsset[];
 }): AudibleElementCandidate[] {
-	const allTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const allTracks = tracks;
 	const mediaMap = new Map(mediaAssets.map((a) => [a.id, a]));
 	const candidates: AudibleElementCandidate[] = [];
 
 	for (const track of allTracks) {
 		if (canTrackHaveAudio(track) && track.muted) continue;
 
-		for (const element of track.elements) {
+		for (const element of applyCrossfades<TimelineElement>({ elements: track.elements })) {
 			if (!canElementHaveAudio(element)) continue;
 			if (element.duration <= 0) continue;
 
@@ -114,7 +133,7 @@ export function collectAudibleCandidates({
 				: null;
 			if (!doesElementHaveEnabledAudio({ element, mediaAsset })) continue;
 
-			candidates.push({ element, mediaAsset });
+			candidates.push({ element, mediaAsset, track });
 		}
 	}
 
@@ -148,7 +167,10 @@ export async function collectAudioElements({
 	);
 	const pendingElements: Array<Promise<CollectedAudioElement | null>> = [];
 
-	for (const { element, mediaAsset } of candidates) {
+	for (const { element, mediaAsset, track } of candidates) {
+		if (isTrackSilencedBySolo({ track, tracks })) continue;
+		const trackGain = getTrackGain(track);
+		const pan = getTrackPan(track);
 		if (element.type === "audio") {
 			pendingElements.push(
 				resolveAudioBufferForElement({
@@ -171,6 +193,8 @@ export async function collectAudioElements({
 						}),
 						muted: isElementMuted({ element }),
 						retime: element.retime,
+						trackGain,
+						pan,
 					};
 				}),
 			);
@@ -200,6 +224,8 @@ export async function collectAudioElements({
 						}),
 						muted: isElementMuted({ element }),
 						retime: element.retime,
+						trackGain,
+						pan,
 					};
 				}),
 			);
@@ -490,7 +516,7 @@ export async function collectAudioMixSources({
 	tracks: SceneTracks;
 	mediaAssets: MediaAsset[];
 }): Promise<AudioMixSource[]> {
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 	const audioMixSources: AudioMixSource[] = [];
 	const mediaMap = new Map<string, MediaAsset>(
 		mediaAssets.map((asset) => [asset.id, asset]),
@@ -553,7 +579,7 @@ export async function collectAudioClips({
 	tracks: SceneTracks;
 	mediaAssets: MediaAsset[];
 }): Promise<AudioClipSource[]> {
-	const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
+	const orderedTracks = tracks;
 	const clips: AudioClipSource[] = [];
 	const mediaMap = new Map<string, MediaAsset>(
 		mediaAssets.map((asset) => [asset.id, asset]),
@@ -563,7 +589,7 @@ export async function collectAudioClips({
 	for (const track of orderedTracks) {
 		const isTrackMuted = canTrackHaveAudio(track) && track.muted;
 
-		for (const element of track.elements) {
+		for (const element of applyCrossfades<TimelineElement>({ elements: track.elements })) {
 			if (!canElementHaveAudio(element)) continue;
 
 			const mediaAsset = hasMediaId(element)
@@ -628,12 +654,14 @@ export async function createTimelineAudioBuffer({
 	duration,
 	sampleRate = EXPORT_SAMPLE_RATE,
 	audioContext,
+	master,
 }: {
 	tracks: SceneTracks;
 	mediaAssets: MediaAsset[];
 	duration: number;
 	sampleRate?: number;
 	audioContext?: AudioContext;
+	master?: AudioMasterSettings;
 }): Promise<AudioBuffer | null> {
 	const context = audioContext ?? createAudioContext({ sampleRate });
 
@@ -682,6 +710,7 @@ export async function createTimelineAudioBuffer({
 		});
 	}
 
+	if (master) applyMasterBus({ audioBuffer: outputBuffer, master });
 	return await applyAudioMasteringToBuffer({ audioBuffer: outputBuffer });
 }
 
@@ -833,35 +862,68 @@ function mixAudioChannels({
 	const outputStartSample = Math.floor(startTime * sampleRate);
 	const renderedLength = Math.ceil(elementDuration * sampleRate);
 
-	const outputChannels = 2;
-	for (let channel = 0; channel < outputChannels; channel++) {
-		const outputData = outputBuffer.getChannelData(channel);
-		const sourceChannel = Math.min(channel, buffer.numberOfChannels - 1);
-		const sourceData = buffer.getChannelData(sourceChannel);
+	const outputL = outputBuffer.getChannelData(0);
+	const outputR = outputBuffer.getChannelData(1);
+	const isMono = buffer.numberOfChannels === 1;
+	const sourceL = buffer.getChannelData(0);
+	const sourceR = buffer.getChannelData(isMono ? 0 : 1);
+	const isAnimated = hasGainAutomation({ element: element.timelineElement });
 
-		for (let i = 0; i < renderedLength; i++) {
-			const outputIndex = outputStartSample + i;
-			if (outputIndex >= outputLength) break;
+	for (let i = 0; i < renderedLength; i++) {
+		const outputIndex = outputStartSample + i;
+		if (outputIndex >= outputLength) break;
 
-			const clipTime = i / sampleRate;
-			const sourceTime =
-				trimStart + getSourceTimeAtClipTime({ clipTime, retime });
-			const sourceIndex = sourceTime * buffer.sampleRate;
-			if (sourceIndex >= sourceData.length) break;
+		const clipTime = i / sampleRate;
+		const sourceTime =
+			trimStart + getSourceTimeAtClipTime({ clipTime, retime });
+		const sourceIndex = sourceTime * buffer.sampleRate;
+		if (sourceIndex >= sourceL.length) break;
 
-			const lowerIndex = Math.floor(sourceIndex);
-			const upperIndex = Math.min(sourceData.length - 1, lowerIndex + 1);
-			const fraction = sourceIndex - lowerIndex;
-			const gain = hasAnimatedVolume({ element: element.timelineElement })
-				? resolveEffectiveAudioGain({
+		const lowerIndex = Math.floor(sourceIndex);
+		const upperIndex = Math.min(sourceL.length - 1, lowerIndex + 1);
+		const fraction = sourceIndex - lowerIndex;
+		const gain =
+			(isAnimated
+				? resolveAudioGainAtTime({
 						element: element.timelineElement,
 						localTime: clipTime,
 					})
-				: element.volume;
-			outputData[outputIndex] +=
-				(sourceData[lowerIndex] * (1 - fraction) +
-					sourceData[upperIndex] * fraction) *
-				gain;
+				: element.volume) * element.trackGain;
+		const [l, r] = panStereoSample({
+			l:
+				(sourceL[lowerIndex] * (1 - fraction) +
+					sourceL[upperIndex] * fraction) *
+				gain,
+			r:
+				(sourceR[lowerIndex] * (1 - fraction) +
+					sourceR[upperIndex] * fraction) *
+				gain,
+			pan: element.pan,
+			isMono,
+		});
+		outputL[outputIndex] += l;
+		outputR[outputIndex] += r;
+	}
+}
+
+function applyMasterBus({
+	audioBuffer,
+	master,
+}: {
+	audioBuffer: AudioBuffer;
+	master: AudioMasterSettings;
+}): void {
+	const gain = faderDbToGain(master.volumeDb);
+	const left = audioBuffer.getChannelData(0);
+	const right = audioBuffer.getChannelData(1);
+	for (let i = 0; i < left.length; i++) {
+		if (master.mono) {
+			const mid = (left[i] + right[i]) * 0.5 * gain;
+			left[i] = mid;
+			right[i] = mid;
+		} else {
+			left[i] *= gain;
+			right[i] *= gain;
 		}
 	}
 }

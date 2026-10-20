@@ -25,24 +25,12 @@ export function applyRippleAdjustments({
 		adjustmentsByTrack.set(adjustment.trackId, trackAdjustments);
 	}
 
-	return {
-		overlay: tracks.overlay.map((track) =>
-			applyTrackRippleAdjustments({
-				track,
-				adjustments: adjustmentsByTrack.get(track.id) ?? [],
-			}),
-		),
-		main: applyTrackRippleAdjustments({
-			track: tracks.main,
-			adjustments: adjustmentsByTrack.get(tracks.main.id) ?? [],
+	return tracks.map((track) =>
+		applyTrackRippleAdjustments({
+			track,
+			adjustments: adjustmentsByTrack.get(track.id) ?? [],
 		}),
-		audio: tracks.audio.map((track) =>
-			applyTrackRippleAdjustments({
-				track,
-				adjustments: adjustmentsByTrack.get(track.id) ?? [],
-			}),
-		),
-	};
+	);
 }
 
 function applyTrackRippleAdjustments<

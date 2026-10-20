@@ -17,7 +17,7 @@ export function listSubtitleGroups({
 	tracks: SceneTracks;
 }): SubtitleGroup[] {
 	const groups = new Map<string, SubtitleEntry[]>();
-	for (const track of tracks.overlay) {
+	for (const track of tracks) {
 		if (track.type !== "text") continue;
 		for (const element of track.elements) {
 			if (!element.subtitleGroupId) continue;

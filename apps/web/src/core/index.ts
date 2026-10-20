@@ -53,15 +53,8 @@ export class EditorCore {
 			}
 
 			const tracks = activeScene.tracks;
-			const prunedTracks = {
-				...tracks,
-				overlay: tracks.overlay.filter((track) => track.elements.length > 0),
-				audio: tracks.audio.filter((track) => track.elements.length > 0),
-			};
-			if (
-				prunedTracks.overlay.length !== tracks.overlay.length ||
-				prunedTracks.audio.length !== tracks.audio.length
-			) {
+			const prunedTracks = tracks.filter((track) => track.elements.length > 0);
+			if (prunedTracks.length !== tracks.length) {
 				this.timeline.updateTracks(prunedTracks);
 			}
 		});

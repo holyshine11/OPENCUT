@@ -138,7 +138,7 @@ function textElementsOf({
 	tracks: SceneTracks;
 	elementIds: ReadonlySet<string>;
 }): TextElement[] {
-	return [...tracks.overlay, tracks.main, ...tracks.audio].flatMap((track) =>
+	return tracks.flatMap((track) =>
 		track.elements.filter(
 			(element): element is TextElement =>
 				element.type === "text" && elementIds.has(element.id),

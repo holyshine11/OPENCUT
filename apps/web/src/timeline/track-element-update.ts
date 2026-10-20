@@ -7,15 +7,7 @@ export function findTrackInSceneTracks({
 	tracks: SceneTracks;
 	trackId: string;
 }): TimelineTrack | null {
-	if (tracks.main.id === trackId) {
-		return tracks.main;
-	}
-
-	return (
-		tracks.overlay.find((track) => track.id === trackId) ??
-		tracks.audio.find((track) => track.id === trackId) ??
-		null
-	);
+	return tracks.find((track) => track.id === trackId) ?? null;
 }
 
 export function updateTrackInSceneTracks({
@@ -27,34 +19,7 @@ export function updateTrackInSceneTracks({
 	trackId: string;
 	update: <TTrack extends TimelineTrack>(track: TTrack) => TTrack;
 }): SceneTracks {
-	if (tracks.main.id === trackId) {
-		return {
-			...tracks,
-			main: update(tracks.main),
-		};
-	}
-
-	const overlayTrackIndex = tracks.overlay.findIndex((track) => track.id === trackId);
-	if (overlayTrackIndex >= 0) {
-		return {
-			...tracks,
-			overlay: tracks.overlay.map((track, index) =>
-				index === overlayTrackIndex ? update(track) : track,
-			),
-		};
-	}
-
-	const audioTrackIndex = tracks.audio.findIndex((track) => track.id === trackId);
-	if (audioTrackIndex >= 0) {
-		return {
-			...tracks,
-			audio: tracks.audio.map((track, index) =>
-				index === audioTrackIndex ? update(track) : track,
-			),
-		};
-	}
-
-	return tracks;
+	return tracks.map((track) => (track.id === trackId ? update(track) : track));
 }
 
 function updateElementInTrack<TTrack extends TimelineTrack>({
@@ -97,51 +62,10 @@ export function updateElementInSceneTracks({
 	update: (element: TimelineElement) => TimelineElement;
 	elementPredicate?: (element: TimelineElement) => boolean;
 }): SceneTracks {
-	if (tracks.main.id === trackId) {
-		return {
-			...tracks,
-			main: updateElementInTrack({
-				track: tracks.main,
-				elementId,
-				update,
-				elementPredicate,
-			}),
-		};
-	}
-
-	const overlayTrackIndex = tracks.overlay.findIndex((track) => track.id === trackId);
-	if (overlayTrackIndex >= 0) {
-		return {
-			...tracks,
-			overlay: tracks.overlay.map((track, index) =>
-				index === overlayTrackIndex
-					? updateElementInTrack({
-							track,
-							elementId,
-							update,
-							elementPredicate,
-						})
-					: track,
-			),
-		};
-	}
-
-	const audioTrackIndex = tracks.audio.findIndex((track) => track.id === trackId);
-	if (audioTrackIndex >= 0) {
-		return {
-			...tracks,
-			audio: tracks.audio.map((track, index) =>
-				index === audioTrackIndex
-					? updateElementInTrack({
-							track,
-							elementId,
-							update,
-							elementPredicate,
-						})
-					: track,
-			),
-		};
-	}
-
-	return tracks;
+	return updateTrackInSceneTracks({
+		tracks,
+		trackId,
+		update: (track) =>
+			updateElementInTrack({ track, elementId, update, elementPredicate }),
+	});
 }

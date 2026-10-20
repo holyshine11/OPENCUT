@@ -256,16 +256,15 @@ function buildSceneTracks({
 	main?: VideoTrack;
 	audio?: Array<AudioTrack>;
 }): SceneTracks {
-	return {
-		overlay,
-		main:
-			main ??
+	return [
+		...overlay,
+		main ??
 			buildTrack({
 				id: "video-main",
 				type: "video",
 			}),
-		audio,
-	};
+		...audio,
+	];
 }
 
 describe("resolveTrackPlacement", () => {
@@ -404,7 +403,7 @@ describe("resolveTrackPlacement", () => {
 		});
 	});
 
-	test("preferIndex creates a new overlay track above the main track", () => {
+	test("preferIndex creates a new track next to the hovered track", () => {
 		const tracks = buildSceneTracks({
 			main: buildTrack({ id: "video-main", type: "video" }),
 			audio: [buildTrack({ id: "audio-1", type: "audio" })],
@@ -424,12 +423,12 @@ describe("resolveTrackPlacement", () => {
 		).toEqual({
 			kind: "newTrack",
 			trackType: "graphic",
-			insertIndex: 0,
-			insertPosition: "above",
+			insertIndex: 2,
+			insertPosition: "below",
 		});
 	});
 
-	test("preferIndex keeps audio tracks below the main track", () => {
+	test("preferIndex places a new audio track where it is dropped", () => {
 		const tracks = buildSceneTracks({
 			overlay: [buildTrack({ id: "text-1", type: "text" })],
 			main: buildTrack({ id: "video-main", type: "video" }),
@@ -451,8 +450,8 @@ describe("resolveTrackPlacement", () => {
 		).toEqual({
 			kind: "newTrack",
 			trackType: "audio",
-			insertIndex: 2,
-			insertPosition: "below",
+			insertIndex: 0,
+			insertPosition: "above",
 		});
 	});
 
@@ -588,7 +587,7 @@ describe("resolveTrackPlacement", () => {
 		});
 	});
 
-	test("handles main-only timelines, single tracks, and track-type derivation", () => {
+	test("handles single-track timelines and track-type derivation", () => {
 		expect(
 			resolveTrackPlacement({
 				tracks: buildSceneTracks({}),
@@ -604,8 +603,8 @@ describe("resolveTrackPlacement", () => {
 		).toEqual({
 			kind: "newTrack",
 			trackType: "video",
-			insertIndex: 0,
-			insertPosition: "above",
+			insertIndex: 1,
+			insertPosition: "below",
 		});
 
 		expect(
@@ -625,7 +624,7 @@ describe("resolveTrackPlacement", () => {
 		});
 	});
 
-	test("existingTrack on main video includes adjustedStartTime when start snaps", () => {
+	test("existingTrack keeps the requested start time on any video track", () => {
 		const tracks = buildSceneTracks({
 			main: buildTrack({
 				id: "video-main",
@@ -648,7 +647,6 @@ describe("resolveTrackPlacement", () => {
 			trackId: "video-main",
 			trackIndex: 0,
 			trackType: "video",
-			adjustedStartTime: ZERO_MEDIA_TIME,
 		});
 	});
 
@@ -674,7 +672,7 @@ describe("resolveTrackPlacement", () => {
 		).toEqual({
 			kind: "newTrack",
 			trackType: "audio",
-			insertIndex: 2,
+			insertIndex: 1,
 			insertPosition: "below",
 		});
 	});
