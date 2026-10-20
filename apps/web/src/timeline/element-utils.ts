@@ -127,15 +127,19 @@ export function buildEffectElement({
 	effectType,
 	startTime,
 	duration,
+	params,
+	name,
 }: {
 	effectType: string;
 	startTime: MediaTime;
 	duration?: MediaTime;
+	params?: ParamValues;
+	name?: string;
 }): CreateEffectElement {
-	const instance = buildDefaultEffectInstance({ effectType });
+	const instance = buildDefaultEffectInstance({ effectType, params });
 	return {
 		type: "effect",
-		name: capitalizeFirstLetter({ string: instance.type }),
+		name: name ?? capitalizeFirstLetter({ string: instance.type }),
 		effectType,
 		params: instance.params,
 		duration: duration ?? DEFAULT_NEW_ELEMENT_DURATION,

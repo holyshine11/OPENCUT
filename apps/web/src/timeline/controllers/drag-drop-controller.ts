@@ -7,6 +7,7 @@ import {
 } from "@/timeline/creation";
 import { BASE_TIMELINE_PIXELS_PER_SECOND } from "@/timeline/scale";
 import type { FrameRate } from "opencut-wasm";
+import type { ParamValues } from "@/params";
 import {
 	buildTextElement,
 	buildGraphicElement,
@@ -60,6 +61,7 @@ export interface DragDropConfig {
 		trackId: string;
 		elementId: string;
 		effectType: string;
+		params?: ParamValues;
 	}) => void;
 }
 
@@ -469,6 +471,7 @@ export class DragDropController {
 				trackId: target.targetElement.trackId,
 				elementId: target.targetElement.elementId,
 				effectType: dragData.effectType,
+				params: dragData.params,
 			});
 			return;
 		}
@@ -476,6 +479,8 @@ export class DragDropController {
 		const element = buildEffectElement({
 			effectType: dragData.effectType,
 			startTime: target.xPosition,
+			params: dragData.params,
+			name: dragData.name,
 		});
 
 		const existingEffectTrack = orderedTracks({

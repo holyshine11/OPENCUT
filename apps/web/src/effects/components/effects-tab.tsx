@@ -27,6 +27,8 @@ import { cn } from "@/utils/ui";
 import { Separator } from "@/components/ui/separator";
 import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
 import { translateLabel, useMessages } from "@/i18n";
+import { ADJUST_EFFECT_TYPE } from "@/effects/definitions/adjust";
+import { AdjustControls } from "./adjust-controls";
 
 export function StandaloneEffectTab({
 	element,
@@ -49,9 +51,9 @@ export function StandaloneEffectTab({
 		enabled: true,
 	};
 
-	const previewParam = (key: string) => (value: number | string | boolean) => {
+	const previewParams = (updates: ParamValues) => {
 		previewUpdates({
-			params: { ...(renderElement as EffectElement).params, [key]: value },
+			params: { ...(renderElement as EffectElement).params, ...updates },
 		});
 	};
 
@@ -63,7 +65,7 @@ export function StandaloneEffectTab({
 			<EffectSection
 				effect={effect}
 				renderParams={(renderElement as EffectElement).params}
-				previewParam={previewParam}
+				previewParams={previewParams}
 				onCommit={commit}
 			/>
 		</div>
@@ -98,19 +100,15 @@ export function ClipEffectsTab({
 		);
 	};
 
-	const buildPreviewParam =
-		(effectId: string) =>
-		(key: string) =>
-		(value: number | string | boolean) => {
-			const updatedEffects = (
-				(renderElement as VisualElement).effects ?? []
-			).map((existing) =>
+	const buildPreviewParams = (effectId: string) => (updates: ParamValues) => {
+		const updatedEffects = ((renderElement as VisualElement).effects ?? []).map(
+			(existing) =>
 				existing.id !== effectId
 					? existing
-					: { ...existing, params: { ...existing.params, [key]: value } },
-			);
-			previewUpdates({ effects: updatedEffects });
-		};
+					: { ...existing, params: { ...existing.params, ...updates } },
+		);
+		previewUpdates({ effects: updatedEffects });
+	};
 
 	const handleDragStart = ({ index }: { index: number }) => setDragIndex(index);
 
@@ -180,7 +178,7 @@ export function ClipEffectsTab({
 								<EffectSection
 									effect={effect}
 									renderParams={getRenderParams({ effectId: effect.id })}
-									previewParam={buildPreviewParam(effect.id)}
+									previewParams={buildPreviewParams(effect.id)}
 									onCommit={commit}
 									onToggle={() =>
 										editor.timeline.toggleClipEffect({
@@ -239,19 +237,20 @@ function EmptyView() {
 function EffectSection({
 	effect,
 	renderParams,
-	previewParam,
+	previewParams,
 	onCommit,
 	onToggle,
 	onRemove,
 }: {
 	effect: Effect;
 	renderParams: ParamValues;
-	previewParam: (key: string) => (value: number | string | boolean) => void;
+	previewParams: (updates: ParamValues) => void;
 	onCommit: () => void;
 	onToggle?: () => void;
 	onRemove?: () => void;
 }) {
 	const m = useMessages();
+	const editor = useEditor();
 	const definition = effectsRegistry.get(effect.type);
 	const name = translateLabel({ messages: m, label: definition.name });
 
@@ -296,21 +295,31 @@ function EffectSection({
 			<SectionContent
 				className={cn("p-0", onToggle && !effect.enabled && "opacity-50")}
 			>
-				<SectionFields>
-					{definition.params.map((param) => (
-						<div key={param.key} className="flex flex-col gap-3.5">
-							<div className="px-4">
-								<PropertyParamField
-									param={param}
-									value={renderParams[param.key] ?? param.default}
-									onPreview={previewParam(param.key)}
-									onCommit={onCommit}
-								/>
+				{effect.type === ADJUST_EFFECT_TYPE ? (
+					<AdjustControls
+						effectId={effect.id}
+						params={renderParams}
+						onPreview={previewParams}
+						onCommit={onCommit}
+						onDiscard={() => editor.timeline.discardPreview()}
+					/>
+				) : (
+					<SectionFields>
+						{definition.params.map((param) => (
+							<div key={param.key} className="flex flex-col gap-3.5">
+								<div className="px-4">
+									<PropertyParamField
+										param={param}
+										value={renderParams[param.key] ?? param.default}
+										onPreview={(value) => previewParams({ [param.key]: value })}
+										onCommit={onCommit}
+									/>
+								</div>
+								<Separator />
 							</div>
-							<Separator />
-						</div>
-					))}
-				</SectionFields>
+						))}
+					</SectionFields>
+				)}
 			</SectionContent>
 		</Section>
 	);

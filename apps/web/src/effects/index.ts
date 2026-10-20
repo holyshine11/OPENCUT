@@ -32,11 +32,16 @@ export const EFFECT_TARGET_ELEMENT_TYPES = VISUAL_ELEMENT_TYPES;
 
 export function buildDefaultEffectInstance({
 	effectType,
+	params: overrides,
 }: {
 	effectType: string;
+	params?: ParamValues;
 }): Effect {
 	const definition = effectsRegistry.get(effectType);
-	const params: ParamValues = buildDefaultParamValues(definition.params);
+	const params: ParamValues = {
+		...buildDefaultParamValues(definition.params),
+		...overrides,
+	};
 
 	return {
 		id: generateUUID(),

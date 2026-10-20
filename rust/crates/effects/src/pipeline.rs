@@ -9,6 +9,10 @@ use crate::{EffectPass, UniformValue};
 
 const GAUSSIAN_BLUR_SHADER_ID: &str = "gaussian-blur";
 const GAUSSIAN_BLUR_SHADER_SOURCE: &str = include_str!("shaders/gaussian_blur.wgsl");
+const COLOR_ADJUST_SHADER_ID: &str = "color-adjust";
+const COLOR_ADJUST_SHADER_SOURCE: &str = include_str!("shaders/color_adjust.wgsl");
+const COLOR_ADJUST_PARAM_COUNT: usize = 28;
+const COLOR_ADJUST_PARAM_VEC4_COUNT: usize = COLOR_ADJUST_PARAM_COUNT / 4;
 
 pub struct ApplyEffectsOptions<'a> {
     pub source: &'a wgpu::Texture,
@@ -50,6 +54,7 @@ struct EffectUniformBuffer {
     resolution: [f32; 2],
     direction: [f32; 2],
     scalars: [f32; 4],
+    params: [[f32; 4]; COLOR_ADJUST_PARAM_VEC4_COUNT],
 }
 
 impl EffectPipeline {
@@ -77,13 +82,6 @@ impl EffectPipeline {
                     label: Some("effects-fullscreen-shader"),
                     source: wgpu::ShaderSource::Wgsl(FULLSCREEN_SHADER_SOURCE.into()),
                 });
-        let gaussian_blur_shader_module =
-            context
-                .device()
-                .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("effects-gaussian-blur-shader"),
-                    source: wgpu::ShaderSource::Wgsl(GAUSSIAN_BLUR_SHADER_SOURCE.into()),
-                });
         let pipeline_layout =
             context
                 .device()
@@ -95,11 +93,18 @@ impl EffectPipeline {
                     ],
                     immediate_size: 0,
                 });
-        let gaussian_blur_pipeline =
+        let create_pipeline = |id: &str, source: &str| {
+            let shader_module =
+                context
+                    .device()
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: Some(&format!("effects-{id}-shader")),
+                        source: wgpu::ShaderSource::Wgsl(source.into()),
+                    });
             context
                 .device()
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("effects-gaussian-blur-pipeline"),
+                    label: Some(&format!("effects-{id}-pipeline")),
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &vertex_shader_module,
@@ -116,7 +121,7 @@ impl EffectPipeline {
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
-                        module: &gaussian_blur_shader_module,
+                        module: &shader_module,
                         entry_point: Some("fragment_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: context.texture_format(),
@@ -130,9 +135,18 @@ impl EffectPipeline {
                     multisample: wgpu::MultisampleState::default(),
                     multiview_mask: None,
                     cache: None,
-                });
-        let pipelines =
-            HashMap::from([(GAUSSIAN_BLUR_SHADER_ID.to_string(), gaussian_blur_pipeline)]);
+                })
+        };
+        let pipelines = HashMap::from([
+            (
+                GAUSSIAN_BLUR_SHADER_ID.to_string(),
+                create_pipeline(GAUSSIAN_BLUR_SHADER_ID, GAUSSIAN_BLUR_SHADER_SOURCE),
+            ),
+            (
+                COLOR_ADJUST_SHADER_ID.to_string(),
+                create_pipeline(COLOR_ADJUST_SHADER_ID, COLOR_ADJUST_SHADER_SOURCE),
+            ),
+        ]);
 
         Self {
             uniform_bind_group_layout,
@@ -267,26 +281,47 @@ fn pack_effect_uniforms(
     width: u32,
     height: u32,
 ) -> Result<EffectUniformBuffer, EffectsError> {
-    let shader = pass.shader.as_str();
-    let sigma = read_number_uniform(pass, "u_sigma")?;
-    let step = read_number_uniform(pass, "u_step")?;
-    let direction = read_vec2_uniform(pass, "u_direction")?;
-
-    for uniform in pass.uniforms.keys() {
-        if uniform == "u_sigma" || uniform == "u_step" || uniform == "u_direction" {
-            continue;
+    let resolution = [width as f32, height as f32];
+    if pass.shader == COLOR_ADJUST_SHADER_ID {
+        ensure_known_uniforms(pass, &["u_params"])?;
+        let values = read_vector_uniform(pass, "u_params", COLOR_ADJUST_PARAM_COUNT)?;
+        let mut params = [[0.0; 4]; COLOR_ADJUST_PARAM_VEC4_COUNT];
+        for (index, value) in values.iter().enumerate() {
+            params[index / 4][index % 4] = *value;
         }
-        return Err(EffectsError::UnsupportedUniform {
-            shader: shader.to_string(),
-            uniform: uniform.clone(),
+        return Ok(EffectUniformBuffer {
+            resolution,
+            direction: [0.0, 0.0],
+            scalars: [0.0; 4],
+            params,
         });
     }
 
+    let sigma = read_number_uniform(pass, "u_sigma")?;
+    let step = read_number_uniform(pass, "u_step")?;
+    let direction = read_vec2_uniform(pass, "u_direction")?;
+    ensure_known_uniforms(pass, &["u_sigma", "u_step", "u_direction"])?;
+
     Ok(EffectUniformBuffer {
-        resolution: [width as f32, height as f32],
+        resolution,
         direction,
         scalars: [sigma, step, 0.0, 0.0],
+        params: [[0.0; 4]; COLOR_ADJUST_PARAM_VEC4_COUNT],
     })
+}
+
+fn ensure_known_uniforms(pass: &EffectPass, known: &[&str]) -> Result<(), EffectsError> {
+    match pass
+        .uniforms
+        .keys()
+        .find(|key| !known.contains(&key.as_str()))
+    {
+        Some(uniform) => Err(EffectsError::UnsupportedUniform {
+            shader: pass.shader.clone(),
+            uniform: uniform.clone(),
+        }),
+        None => Ok(()),
+    }
 }
 
 fn read_number_uniform(pass: &EffectPass, uniform: &str) -> Result<f32, EffectsError> {
@@ -306,25 +341,59 @@ fn read_number_uniform(pass: &EffectPass, uniform: &str) -> Result<f32, EffectsE
 }
 
 fn read_vec2_uniform(pass: &EffectPass, uniform: &str) -> Result<[f32; 2], EffectsError> {
+    let values = read_vector_uniform(pass, uniform, 2)?;
+    Ok([values[0], values[1]])
+}
+
+fn read_vector_uniform<'a>(
+    pass: &'a EffectPass,
+    uniform: &str,
+    expected_length: usize,
+) -> Result<&'a [f32], EffectsError> {
     let Some(value) = pass.uniforms.get(uniform) else {
         return Err(EffectsError::MissingUniform {
             shader: pass.shader.clone(),
             uniform: uniform.to_string(),
         });
     };
-    let UniformValue::Vector(values) = value else {
-        return Err(EffectsError::InvalidVectorUniform {
+    match value {
+        UniformValue::Vector(values) if values.len() == expected_length => Ok(values),
+        _ => Err(EffectsError::InvalidVectorUniform {
             shader: pass.shader.clone(),
             uniform: uniform.to_string(),
-            expected_length: 2,
-        });
-    };
-    if values.len() != 2 {
-        return Err(EffectsError::InvalidVectorUniform {
-            shader: pass.shader.clone(),
-            uniform: uniform.to_string(),
-            expected_length: 2,
-        });
+            expected_length,
+        }),
     }
-    Ok([values[0], values[1]])
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    #[test]
+    fn packs_color_adjust_params_into_vec4_slots() {
+        let values: Vec<f32> = (0..COLOR_ADJUST_PARAM_COUNT).map(|i| i as f32).collect();
+        let pass = EffectPass {
+            shader: COLOR_ADJUST_SHADER_ID.to_string(),
+            uniforms: HashMap::from([("u_params".to_string(), UniformValue::Vector(values))]),
+        };
+        let packed = pack_effect_uniforms(&pass, 1920, 1080).unwrap();
+        assert_eq!(packed.resolution, [1920.0, 1080.0]);
+        assert_eq!(packed.params[0], [0.0, 1.0, 2.0, 3.0]);
+        assert_eq!(packed.params[6], [24.0, 25.0, 26.0, 27.0]);
+    }
+
+    #[test]
+    fn rejects_color_adjust_with_wrong_param_count() {
+        let pass = EffectPass {
+            shader: COLOR_ADJUST_SHADER_ID.to_string(),
+            uniforms: HashMap::from([(
+                "u_params".to_string(),
+                UniformValue::Vector(vec![0.0; 12]),
+            )]),
+        };
+        assert!(pack_effect_uniforms(&pass, 1, 1).is_err());
+    }
 }
