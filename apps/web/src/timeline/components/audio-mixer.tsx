@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+	Cancel01Icon,
 	SlidersVerticalIcon,
 	VolumeHighIcon,
 	VolumeOffIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Popover as PopoverPrimitive } from "radix-ui";
 import {
-	Popover,
+	PopoverClose,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
@@ -455,9 +457,33 @@ function MasterChannelStrip() {
 	);
 }
 
-/** 트랙별 페이더·팬·음소거·솔로와 마스터 페이더·라우드니스·모노 전환 */
+/**
+ * 트랙별 페이더·팬·음소거·솔로와 마스터 페이더·라우드니스·모노 전환.
+ * 띄워 둔 채 클립을 편집하도록 바깥을 눌러도 닫히지 않고 단축키도 막지 않는다(공용 Popover를 쓰지 않는 이유).
+ * 닫기 버튼이나 믹서 버튼으로 닫고, 머리 줄을 끌어 옮긴다
+ */
 export function AudioMixerButton() {
 	const m = useMessages();
+	const [offset, setOffset] = useState({ x: 0, y: 0 });
+	const startMove = (event: React.PointerEvent<HTMLDivElement>) => {
+		if (event.target !== event.currentTarget) return;
+		const header = event.currentTarget;
+		header.setPointerCapture(event.pointerId);
+		const start = { x: event.clientX - offset.x, y: event.clientY - offset.y };
+		const onMove = (moveEvent: PointerEvent) =>
+			setOffset({
+				x: moveEvent.clientX - start.x,
+				y: moveEvent.clientY - start.y,
+			});
+		const onEnd = () => {
+			header.removeEventListener("pointermove", onMove);
+			header.removeEventListener("pointerup", onEnd);
+			header.removeEventListener("pointercancel", onEnd);
+		};
+		header.addEventListener("pointermove", onMove);
+		header.addEventListener("pointerup", onEnd);
+		header.addEventListener("pointercancel", onEnd);
+	};
 	const tracks = useEditor(
 		(e) => e.scenes.getActiveSceneOrNull()?.tracks ?? [],
 	);
@@ -466,7 +492,7 @@ export function AudioMixerButton() {
 	);
 
 	return (
-		<Popover>
+		<PopoverPrimitive.Root modal={false}>
 			<ActionTooltip label={m.timeline.audioMixer}>
 				<PopoverTrigger asChild>
 					<Button
@@ -481,9 +507,28 @@ export function AudioMixerButton() {
 			</ActionTooltip>
 			<PopoverContent
 				align="end"
-				className="w-auto max-w-[90vw] p-2"
+				className="w-auto max-w-[90vw] p-2 pt-0"
+				style={{ translate: `${offset.x}px ${offset.y}px` }}
 				onPointerDown={(event) => event.stopPropagation()}
+				onInteractOutside={(event) => event.preventDefault()}
+				onOpenAutoFocus={(event) => event.preventDefault()}
 			>
+				<div
+					className="flex cursor-move items-center justify-between py-1 pl-1 text-xs font-medium select-none"
+					onPointerDown={startMove}
+				>
+					{m.timeline.audioMixer}
+					<PopoverClose asChild>
+						<Button
+							variant="text"
+							size="icon"
+							className="size-6 rounded-sm"
+							aria-label={m.dialogs.close}
+						>
+							<HugeiconsIcon icon={Cancel01Icon} className="size-3.5" />
+						</Button>
+					</PopoverClose>
+				</div>
 				<div className="flex gap-2 overflow-x-auto">
 					{audibleTracks.length === 0 ? (
 						<p className="text-muted-foreground self-center px-4 text-xs">
@@ -502,6 +547,6 @@ export function AudioMixerButton() {
 					<MasterChannelStrip />
 				</div>
 			</PopoverContent>
-		</Popover>
+		</PopoverPrimitive.Root>
 	);
 }
