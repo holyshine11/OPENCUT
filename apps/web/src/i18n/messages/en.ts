@@ -159,7 +159,15 @@ export const en = {
 			sounds: "Sound effects",
 			settings: "Settings",
 		},
-		transitionsComingSoon: "Transitions view coming soon...",
+		transitionsHint:
+			"Select a clip and pick a transition. It goes on the cut right after the clip, or the cut before it when nothing follows.",
+		transitionNames: {
+			none: "None",
+			dissolve: "Dissolve",
+			fadeBlack: "Fade to black",
+			fadeWhite: "Flash white",
+		},
+		noTransitionTarget: "Select a clip that touches another clip on its track",
 		adjustmentHint:
 			"Press + to add an adjustment layer over every track below. Drop onto a clip to adjust only that clip.",
 		adjustmentLayer: "Adjustment layer",

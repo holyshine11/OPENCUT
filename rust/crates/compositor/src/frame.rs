@@ -31,6 +31,33 @@ pub enum FrameItemDescriptor {
     SceneEffect {
         effect_pass_groups: Vec<Vec<EffectPassDescriptor>>,
     },
+    /// Composites `from_items` and `to_items` onto separate transparent canvases,
+    /// mixes them with the transition shader, then blends the result over the scene.
+    Transition {
+        kind: TransitionKind,
+        progress: f32,
+        from_items: Vec<FrameItemDescriptor>,
+        to_items: Vec<FrameItemDescriptor>,
+    },
+}
+
+/// Mirrors `TRANSITION_TYPES` in apps/web/src/transitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TransitionKind {
+    Dissolve,
+    FadeBlack,
+    FadeWhite,
+}
+
+impl TransitionKind {
+    pub fn shader_code(self) -> u32 {
+        match self {
+            Self::Dissolve => 0,
+            Self::FadeBlack => 1,
+            Self::FadeWhite => 2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,5 +128,26 @@ mod tests {
             panic!("expected a scene effect");
         };
         assert_eq!(effect_pass_groups[0][0].shader, "color-adjust");
+    }
+
+    #[test]
+    fn transition_reads_nested_items_sent_by_typescript() {
+        let item: FrameItemDescriptor = serde_json::from_str(
+            r#"{"type":"transition","kind":"fadeBlack","progress":0.25,"fromItems":[{"type":"sceneEffect","effectPassGroups":[]}],"toItems":[]}"#,
+        )
+        .unwrap();
+        let FrameItemDescriptor::Transition {
+            kind,
+            progress,
+            from_items,
+            to_items,
+        } = item
+        else {
+            panic!("expected a transition");
+        };
+        assert_eq!(kind, TransitionKind::FadeBlack);
+        assert_eq!(progress, 0.25);
+        assert_eq!(from_items.len(), 1);
+        assert!(to_items.is_empty());
     }
 }

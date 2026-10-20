@@ -16,6 +16,9 @@ export interface VisualNodeParams {
 	blendMode?: BlendMode;
 	effects?: Effect[];
 	masks?: Mask[];
+	/** 전환 구간 때문에 클립 앞뒤로 더 그릴 길이(틱). 원본이 모자라면 첫·끝 프레임에서 멈춘다 */
+	extendBefore?: number;
+	extendAfter?: number;
 }
 
 export interface ResolvedVisualNodeState {

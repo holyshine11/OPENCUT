@@ -150,7 +150,15 @@ export const ko: Messages = {
 			sounds: "효과음",
 			settings: "설정",
 		},
-		transitionsComingSoon: "전환 기능은 곧 추가됩니다",
+		transitionsHint:
+			"클립을 선택하고 전환을 고르세요. 클립 바로 뒤 경계에 걸리고, 뒤에 붙은 클립이 없으면 앞 경계에 걸립니다.",
+		transitionNames: {
+			none: "없음",
+			dissolve: "디졸브",
+			fadeBlack: "검은 화면",
+			fadeWhite: "흰 화면 플래시",
+		},
+		noTransitionTarget: "같은 트랙에서 다른 클립과 맞붙은 클립을 선택하세요",
 		adjustmentHint:
 			"+를 누르면 아래 트랙 전체에 적용되는 조정 레이어가 추가됩니다. 클립 위에 끌어 놓으면 그 클립에만 적용됩니다.",
 		adjustmentLayer: "조정 레이어",

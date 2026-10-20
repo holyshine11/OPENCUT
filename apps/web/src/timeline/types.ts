@@ -154,6 +154,14 @@ interface BaseTimelineElement {
 	color?: string;
 }
 
+/** 바로 뒤에 맞붙은 클립으로 넘어가는 전환. 맞붙은 클립이 없으면 무시된다 */
+export interface ElementTransition {
+	/** transitions 레지스트리의 전환 id */
+	type: string;
+	/** 초 */
+	duration: number;
+}
+
 export interface VideoElement extends BaseTimelineElement {
 	type: "video";
 	mediaId: string;
@@ -162,6 +170,7 @@ export interface VideoElement extends BaseTimelineElement {
 	retime?: RetimeConfig;
 	effects?: Effect[];
 	masks?: Mask[];
+	transition?: ElementTransition;
 }
 
 export interface ImageElement extends BaseTimelineElement {
@@ -170,6 +179,7 @@ export interface ImageElement extends BaseTimelineElement {
 	hidden?: boolean;
 	effects?: Effect[];
 	masks?: Mask[];
+	transition?: ElementTransition;
 }
 
 export interface TextElement extends BaseTimelineElement {

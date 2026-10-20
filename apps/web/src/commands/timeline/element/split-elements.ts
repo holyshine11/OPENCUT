@@ -31,6 +31,13 @@ function clearFade({
 	return { params };
 }
 
+// 경계에 걸린 전환은 경계 왼쪽 클립에 있다. 자르면 원래 끝 경계를 가진 오른쪽 조각이 이어받는다
+function withoutTransition(element: TimelineElement): TimelineElement {
+	if (!("transition" in element)) return element;
+	const { transition: _transition, ...rest } = element;
+	return rest;
+}
+
 export class SplitElementsCommand extends Command {
 	private savedState: SceneTracks | null = null;
 	private rightSideElements: { trackId: string; elementId: string }[] = [];
@@ -146,7 +153,7 @@ export class SplitElementsCommand extends Command {
 				if (this.retainSide === "left") {
 					splitResult = [
 						{
-							...element,
+							...withoutTransition(element),
 							duration: leftVisibleDuration,
 							trimEnd: leftTrimEnd,
 							name: `${element.name} (left)`,
@@ -182,7 +189,7 @@ export class SplitElementsCommand extends Command {
 					});
 					splitResult = [
 						{
-							...element,
+							...withoutTransition(element),
 							duration: leftVisibleDuration,
 							trimEnd: leftTrimEnd,
 							name: `${element.name} (left)`,

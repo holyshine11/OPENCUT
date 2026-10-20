@@ -4,6 +4,8 @@ import { BaseNode } from "./base-node";
 
 export type BlurBackgroundNodeParams = {
 	mediaId: string;
+	/** VideoNode.cacheKey와 같은 값 */
+	cacheKey: string;
 	url: string;
 	file: File;
 	mediaType: "video" | "image";

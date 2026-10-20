@@ -39,6 +39,10 @@ import {
 import { ImageNode, loadImageSource } from "./nodes/image-node";
 import { StickerNode, loadStickerSource } from "./nodes/sticker-node";
 import { TextNode, type ResolvedTextNodeState } from "./nodes/text-node";
+import {
+	TransitionNode,
+	type ResolvedTransitionNodeState,
+} from "./nodes/transition-node";
 import { VideoNode } from "./nodes/video-node";
 import type {
 	ResolvedVisualNodeState,
@@ -90,6 +94,8 @@ async function resolveNode({
 		node.resolved = await resolveBlurBackgroundNode({ node, context });
 	} else if (node instanceof EffectLayerNode) {
 		node.resolved = resolveEffectLayerNode({ node, context });
+	} else if (node instanceof TransitionNode) {
+		node.resolved = resolveTransitionNode({ node, context });
 	}
 
 	await Promise.all(
@@ -129,6 +135,20 @@ function resolveEffectPassGroups({
 		});
 }
 
+/** 전환 구간으로 늘린 길이까지 포함해 클립이 그려지는 시간인지 */
+function isWithinExtendedClip({
+	params,
+	clipTime,
+}: {
+	params: VisualNodeParams;
+	clipTime: number;
+}): boolean {
+	return (
+		clipTime >= -(params.extendBefore ?? 0) &&
+		clipTime < params.duration + (params.extendAfter ?? 0)
+	);
+}
+
 function resolveVisualState({
 	params,
 	context,
@@ -141,7 +161,7 @@ function resolveVisualState({
 	sourceHeight: number;
 }): ResolvedVisualNodeState | null {
 	const clipTime = context.time - params.timeOffset;
-	if (clipTime < 0 || clipTime >= params.duration) {
+	if (!isWithinExtendedClip({ params, clipTime })) {
 		return null;
 	}
 
@@ -200,18 +220,13 @@ async function resolveVideoNode({
 	context: ResolveContext;
 }): Promise<ResolvedVisualSourceNodeState | null> {
 	const clipTime = context.time - node.params.timeOffset;
-	if (clipTime < 0 || clipTime >= node.params.duration) {
+	if (!isWithinExtendedClip({ params: node.params, clipTime })) {
 		return null;
 	}
 
-	const sourceTimeTicks =
-		node.params.trimStart +
-		getSourceTimeAtClipTime({
-			clipTime,
-			retime: node.params.retime,
-		});
+	const sourceTimeTicks = getExtendedSourceTime({ node, clipTime });
 	const frame = await videoCache.getFrameAt({
-		mediaId: node.params.mediaId,
+		mediaId: node.params.cacheKey,
 		file: node.params.file,
 		time: mediaTimeToSeconds({ time: roundMediaTime({ time: sourceTimeTicks }) }),
 	});
@@ -235,6 +250,28 @@ async function resolveVideoNode({
 		sourceWidth: frame.canvas.width,
 		sourceHeight: frame.canvas.height,
 	};
+}
+
+/**
+ * 클립 범위 밖(전환으로 늘린 구간)이면 원본의 남은 부분을 쓰고, 그마저 없으면 첫·끝 프레임에 멈춘다
+ */
+function getExtendedSourceTime({
+	node,
+	clipTime,
+}: {
+	node: VideoNode;
+	clipTime: number;
+}): number {
+	const { trimStart, trimEnd, duration, retime } = node.params;
+	const sourceTime =
+		trimStart + getSourceTimeAtClipTime({ clipTime, retime });
+	if (clipTime >= 0 && clipTime < duration) {
+		return sourceTime;
+	}
+	const sourceEnd =
+		trimStart + getSourceTimeAtClipTime({ clipTime: duration, retime }) + trimEnd;
+	// 끝 시각 자체에는 프레임이 없어서 마지막 틱 앞에서 멈춘다
+	return Math.min(Math.max(sourceTime, 0), sourceEnd - 1);
 }
 
 async function resolveImageNode({
@@ -432,7 +469,7 @@ async function resolveBackdropSource({
 				retime: node.params.retime,
 			});
 		const frame = await videoCache.getFrameAt({
-			mediaId: node.params.mediaId,
+			mediaId: node.params.cacheKey,
 			file: node.params.file,
 			time: mediaTimeToSeconds({ time: roundMediaTime({ time: sourceTimeTicks }) }),
 		});
@@ -484,4 +521,18 @@ function resolveEffectLayerNode({
 	return {
 		passes,
 	};
+}
+
+function resolveTransitionNode({
+	node,
+	context,
+}: {
+	node: TransitionNode;
+	context: ResolveContext;
+}): ResolvedTransitionNodeState | null {
+	const elapsed = context.time - node.params.start;
+	if (elapsed < 0 || elapsed >= node.params.duration) {
+		return null;
+	}
+	return { progress: elapsed / node.params.duration };
 }

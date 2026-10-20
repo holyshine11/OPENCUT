@@ -11,22 +11,17 @@ import { StickersView } from "@/stickers/components/assets-view";
 import { TextView } from "@/text/components/assets-view";
 import { AdjustmentView, EffectsView } from "@/effects/components/assets-view";
 import { SoundsView } from "@/sounds/components/assets-view";
-import { useMessages } from "@/i18n";
+import { TransitionsView } from "@/transitions/components/assets-view";
 
 export function AssetsPanel() {
 	const { activeTab } = useAssetsPanelStore();
-	const m = useMessages();
 
 	const viewMap: Record<Tab, React.ReactNode> = {
 		media: <MediaView />,
 		text: <TextView />,
 		stickers: <StickersView />,
 		effects: <EffectsView />,
-		transitions: (
-			<div className="text-muted-foreground p-4">
-				{m.assets.transitionsComingSoon}
-			</div>
-		),
+		transitions: <TransitionsView />,
 		captions: <Captions />,
 		subtitles: <SubtitleListView />,
 		adjustment: <AdjustmentView />,

@@ -25,6 +25,7 @@ import { ImageNode } from "../nodes/image-node";
 import { RootNode } from "../nodes/root-node";
 import { StickerNode } from "../nodes/sticker-node";
 import { renderTextToContext, TextNode } from "../nodes/text-node";
+import { TransitionNode } from "../nodes/transition-node";
 import { VideoNode } from "../nodes/video-node";
 import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
 import type {
@@ -88,11 +89,50 @@ async function collectNode({
 	textures: Map<string, TextureUploadDescriptor>;
 }): Promise<void> {
 	if (node instanceof RootNode) {
-		for (let index = 0; index < node.children.length; index++) {
+		// 전환 구간 안의 두 클립은 제자리에서 그리지 않고 전환 노드가 모아서 그린다
+		const claimedByTransition = new Set<AnyBaseNode>();
+		for (const child of node.children) {
+			if (child instanceof TransitionNode && child.resolved) {
+				claimedByTransition.add(child.params.from);
+				claimedByTransition.add(child.params.to);
+			}
+		}
+		const childPath = (child: AnyBaseNode) =>
+			`${path}:${node.children.indexOf(child)}`;
+
+		for (const child of node.children) {
+			if (claimedByTransition.has(child)) continue;
+			if (child instanceof TransitionNode) {
+				if (!child.resolved) continue;
+				const fromItems: FrameItemDescriptor[] = [];
+				const toItems: FrameItemDescriptor[] = [];
+				await collectNode({
+					node: child.params.from,
+					renderer,
+					path: childPath(child.params.from),
+					items: fromItems,
+					textures,
+				});
+				await collectNode({
+					node: child.params.to,
+					renderer,
+					path: childPath(child.params.to),
+					items: toItems,
+					textures,
+				});
+				items.push({
+					type: "transition",
+					kind: child.params.type,
+					progress: child.resolved.progress,
+					fromItems,
+					toItems,
+				});
+				continue;
+			}
 			await collectNode({
-				node: node.children[index],
+				node: child,
 				renderer,
-				path: `${path}:${index}`,
+				path: childPath(child),
 				items,
 				textures,
 			});

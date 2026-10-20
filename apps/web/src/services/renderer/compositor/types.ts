@@ -1,5 +1,6 @@
 import type { BlendMode } from "@/rendering";
 import type { EffectPass } from "@/effects/types";
+import type { TransitionType } from "@/transitions";
 
 export type FrameDescriptor = {
 	width: number;
@@ -23,6 +24,14 @@ export type FrameItemDescriptor =
 	| {
 			type: "sceneEffect";
 			effectPassGroups: EffectPass[][];
+	  }
+	| {
+			/** 두 클립을 각각 투명 바탕에 합성한 뒤 전환 셰이더로 섞어 씬에 얹는다 */
+			type: "transition";
+			kind: TransitionType;
+			progress: number;
+			fromItems: FrameItemDescriptor[];
+			toItems: FrameItemDescriptor[];
 	  };
 
 export type QuadTransformDescriptor = {

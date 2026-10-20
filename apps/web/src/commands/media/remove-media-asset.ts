@@ -4,6 +4,7 @@ import type { MediaAsset } from "@/media/types";
 import { buildWaveformSourceKey } from "@/media/waveform-summary";
 import { storageService } from "@/services/storage/service";
 import { videoCache } from "@/services/video-cache/service";
+import { ALTERNATE_DECODER_SUFFIX } from "@/transitions";
 import { clearClipFrames } from "@/media/clip-frames";
 import { waveformCache } from "@/services/waveform-cache/service";
 import { hasMediaId } from "@/timeline/element-utils";
@@ -52,6 +53,9 @@ export class RemoveMediaAssetCommand extends Command {
 		}
 
 		videoCache.clearVideo({ mediaId: this.assetId });
+		videoCache.clearVideo({
+			mediaId: `${this.assetId}${ALTERNATE_DECODER_SUFFIX}`,
+		});
 		clearClipFrames({ mediaId: this.assetId });
 		waveformCache.clearSource({
 			sourceKey: buildWaveformSourceKey({

@@ -9,7 +9,7 @@ use crate::{
     BlendMode,
     frame::{
         EffectPassDescriptor, EffectUniformValueDescriptor, FrameDescriptor, FrameItemDescriptor,
-        LayerDescriptor,
+        LayerDescriptor, TransitionKind,
     },
     texture_pool::TexturePool,
     texture_store::TextureStore,
@@ -18,6 +18,8 @@ use crate::{
 const LAYER_SHADER_SOURCE: &str = include_str!("shaders/layer.wgsl");
 const BLEND_SHADER_SOURCE: &str = include_str!("shaders/blend.wgsl");
 const MASK_SHADER_SOURCE: &str = include_str!("shaders/mask.wgsl");
+const TRANSITION_SHADER_SOURCE: &str = include_str!("shaders/transition.wgsl");
+const TRANSPARENT: [f32; 4] = [0.0; 4];
 
 pub struct RenderFrameOptions<'a, 'surface> {
     pub frame: &'a FrameDescriptor,
@@ -35,6 +37,8 @@ pub struct Compositor {
     blend_pipeline: wgpu::RenderPipeline,
     mask_uniform_bind_group_layout: wgpu::BindGroupLayout,
     mask_pipeline: wgpu::RenderPipeline,
+    transition_uniform_bind_group_layout: wgpu::BindGroupLayout,
+    transition_pipeline: wgpu::RenderPipeline,
 }
 
 #[derive(Debug, Error)]
@@ -69,6 +73,14 @@ struct BlendUniformBuffer {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
+struct TransitionUniformBuffer {
+    kind: u32,
+    progress: f32,
+    _padding: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct MaskUniformBuffer {
     inverted: f32,
     _padding: [f32; 3],
@@ -92,6 +104,10 @@ impl Compositor {
         let mask_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("compositor-mask-shader"),
             source: wgpu::ShaderSource::Wgsl(MASK_SHADER_SOURCE.into()),
+        });
+        let transition_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("compositor-transition-shader"),
+            source: wgpu::ShaderSource::Wgsl(TRANSITION_SHADER_SOURCE.into()),
         });
 
         let layer_uniform_bind_group_layout =
@@ -137,6 +153,21 @@ impl Compositor {
                 }],
             });
 
+        let transition_uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("compositor-transition-uniform-layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         let layer_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compositor-layer-pipeline-layout"),
@@ -165,6 +196,17 @@ impl Compositor {
             ],
             immediate_size: 0,
         });
+
+        let transition_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("compositor-transition-pipeline-layout"),
+                bind_group_layouts: &[
+                    Some(context.texture_sampler_bind_group_layout()),
+                    Some(context.texture_sampler_bind_group_layout()),
+                    Some(&transition_uniform_bind_group_layout),
+                ],
+                immediate_size: 0,
+            });
 
         let layer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("compositor-layer-pipeline"),
@@ -266,6 +308,40 @@ impl Compositor {
             cache: None,
         });
 
+        let transition_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("compositor-transition-pipeline"),
+            layout: Some(&transition_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &fullscreen_shader,
+                entry_point: Some("vertex_main"),
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<[f32; 2]>() as u64,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &[wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x2,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                }],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &transition_shader,
+                entry_point: Some("fragment_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: context.texture_format(),
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
         Self {
             textures: TextureStore::default(),
             texture_pool: TexturePool::default(),
@@ -277,6 +353,8 @@ impl Compositor {
             blend_pipeline,
             mask_uniform_bind_group_layout,
             mask_pipeline,
+            transition_uniform_bind_group_layout,
+            transition_pipeline,
         }
     }
 
@@ -302,40 +380,14 @@ impl Compositor {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("compositor-frame-encoder"),
                 });
-        let mut scene = self.create_cleared_texture(
+        let cleared = self.create_cleared_texture(
             context,
             &mut encoder,
             frame.width,
             frame.height,
             frame.clear.color,
         );
-
-        for item in &frame.items {
-            match item {
-                FrameItemDescriptor::Layer(layer) => {
-                    let layer_texture = self.render_layer(context, &mut encoder, frame, layer)?;
-                    scene = self.blend_texture(
-                        context,
-                        &mut encoder,
-                        &scene,
-                        &layer_texture,
-                        layer.blend_mode,
-                        frame.width,
-                        frame.height,
-                    )?;
-                }
-                FrameItemDescriptor::SceneEffect { effect_pass_groups } => {
-                    scene = self.apply_effect_groups(
-                        context,
-                        &mut encoder,
-                        &scene,
-                        frame.width,
-                        frame.height,
-                        effect_pass_groups,
-                    )?;
-                }
-            }
-        }
+        let scene = self.composite_items(context, &mut encoder, frame, &frame.items, cleared)?;
 
         context.queue().submit([encoder.finish()]);
         Ok(scene)
@@ -358,40 +410,14 @@ impl Compositor {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("compositor-frame-encoder"),
                 });
-        let mut scene = self.create_cleared_texture(
+        let cleared = self.create_cleared_texture(
             context,
             &mut encoder,
             frame.width,
             frame.height,
             frame.clear.color,
         );
-
-        for item in &frame.items {
-            match item {
-                FrameItemDescriptor::Layer(layer) => {
-                    let layer_texture = self.render_layer(context, &mut encoder, frame, layer)?;
-                    scene = self.blend_texture(
-                        context,
-                        &mut encoder,
-                        &scene,
-                        &layer_texture,
-                        layer.blend_mode,
-                        frame.width,
-                        frame.height,
-                    )?;
-                }
-                FrameItemDescriptor::SceneEffect { effect_pass_groups } => {
-                    scene = self.apply_effect_groups(
-                        context,
-                        &mut encoder,
-                        &scene,
-                        frame.width,
-                        frame.height,
-                        effect_pass_groups,
-                    )?;
-                }
-            }
-        }
+        let scene = self.composite_items(context, &mut encoder, frame, &frame.items, cleared)?;
 
         context.encode_texture_blit_to_view(
             &mut encoder,
@@ -402,6 +428,175 @@ impl Compositor {
         context.queue().submit([encoder.finish()]);
         surface_texture.present();
         Ok(())
+    }
+
+    fn composite_items(
+        &mut self,
+        context: &GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: &FrameDescriptor,
+        items: &[FrameItemDescriptor],
+        mut scene: wgpu::Texture,
+    ) -> Result<wgpu::Texture, CompositorError> {
+        for item in items {
+            match item {
+                FrameItemDescriptor::Layer(layer) => {
+                    let layer_texture = self.render_layer(context, encoder, frame, layer)?;
+                    scene = self.blend_texture(
+                        context,
+                        encoder,
+                        &scene,
+                        &layer_texture,
+                        layer.blend_mode,
+                        frame.width,
+                        frame.height,
+                    )?;
+                }
+                FrameItemDescriptor::SceneEffect { effect_pass_groups } => {
+                    scene = self.apply_effect_groups(
+                        context,
+                        encoder,
+                        &scene,
+                        frame.width,
+                        frame.height,
+                        effect_pass_groups,
+                    )?;
+                }
+                FrameItemDescriptor::Transition {
+                    kind,
+                    progress,
+                    from_items,
+                    to_items,
+                } => {
+                    let from_base = self.create_cleared_texture(
+                        context,
+                        encoder,
+                        frame.width,
+                        frame.height,
+                        TRANSPARENT,
+                    );
+                    let from =
+                        self.composite_items(context, encoder, frame, from_items, from_base)?;
+                    let to_base = self.create_cleared_texture(
+                        context,
+                        encoder,
+                        frame.width,
+                        frame.height,
+                        TRANSPARENT,
+                    );
+                    let to = self.composite_items(context, encoder, frame, to_items, to_base)?;
+                    let mixed = self.mix_transition(
+                        context,
+                        encoder,
+                        &from,
+                        &to,
+                        *kind,
+                        *progress,
+                        frame.width,
+                        frame.height,
+                    );
+                    scene = self.blend_texture(
+                        context,
+                        encoder,
+                        &scene,
+                        &mixed,
+                        BlendMode::Normal,
+                        frame.width,
+                        frame.height,
+                    )?;
+                }
+            }
+        }
+        Ok(scene)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn mix_transition(
+        &mut self,
+        context: &GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        from: &wgpu::Texture,
+        to: &wgpu::Texture,
+        kind: TransitionKind,
+        progress: f32,
+        width: u32,
+        height: u32,
+    ) -> wgpu::Texture {
+        let target =
+            self.texture_pool
+                .acquire(context, width, height, "compositor-transition-texture");
+        let from_view = from.create_view(&wgpu::TextureViewDescriptor::default());
+        let to_view = to.create_view(&wgpu::TextureViewDescriptor::default());
+        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let texture_bind_group = |label: &'static str, view: &wgpu::TextureView| {
+            context
+                .device()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(label),
+                    layout: context.texture_sampler_bind_group_layout(),
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(context.linear_sampler()),
+                        },
+                    ],
+                })
+        };
+        let from_bind_group =
+            texture_bind_group("compositor-transition-from-bind-group", &from_view);
+        let to_bind_group = texture_bind_group("compositor-transition-to-bind-group", &to_view);
+        let uniform_buffer =
+            context
+                .device()
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("compositor-transition-uniform-buffer"),
+                    contents: bytemuck::bytes_of(&TransitionUniformBuffer {
+                        kind: kind.shader_code(),
+                        progress,
+                        _padding: [0.0; 2],
+                    }),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                });
+        let uniform_bind_group = context
+            .device()
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("compositor-transition-uniform-bind-group"),
+                layout: &self.transition_uniform_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                }],
+            });
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("compositor-transition-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &target_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            render_pass.set_pipeline(&self.transition_pipeline);
+            render_pass.set_vertex_buffer(0, context.fullscreen_quad().slice(..));
+            render_pass.set_bind_group(0, &from_bind_group, &[]);
+            render_pass.set_bind_group(1, &to_bind_group, &[]);
+            render_pass.set_bind_group(2, &uniform_bind_group, &[]);
+            render_pass.draw(0..6, 0..1);
+        }
+        target
     }
 
     fn render_layer(
@@ -867,4 +1062,20 @@ fn map_effect_passes(passes: &[EffectPassDescriptor]) -> Vec<EffectPass> {
                 .collect(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transition_shader_is_valid_wgsl() {
+        let module = wgpu::naga::front::wgsl::parse_str(TRANSITION_SHADER_SOURCE).unwrap();
+        wgpu::naga::valid::Validator::new(
+            wgpu::naga::valid::ValidationFlags::all(),
+            wgpu::naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .unwrap();
+    }
 }
