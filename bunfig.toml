@@ -1,0 +1,2 @@
+[test]
+preload = ["./apps/web/scripts/test-wasm-preload.ts"]

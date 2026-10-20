@@ -22,6 +22,24 @@ import type {
 	TextMaskParams,
 } from "@/masks/types";
 
+// bun에는 canvas가 없다. 텍스트 마스크 측정에 필요한 만큼만 흉내 낸다.
+if (typeof OffscreenCanvas === "undefined") {
+	globalThis.OffscreenCanvas = class {
+		getContext() {
+			return {
+				font: "",
+				save() {},
+				restore() {},
+				measureText: (text: string) => ({
+					width: text.length * 10,
+					actualBoundingBoxAscent: 8,
+					actualBoundingBoxDescent: 2,
+				}),
+			};
+		}
+	} as unknown as typeof OffscreenCanvas;
+}
+
 const bounds: ElementBounds = {
 	cx: 200,
 	cy: 150,
@@ -346,7 +364,8 @@ describe("mask snapping", () => {
 		// bounds.width=200 → localCanvasSize.width/2=100 is the right snap target.
 		// width=0.4, scale=1 → aabbHalfW = (0.4*200)/2 * 1 = 40.
 		// At scale=2.48 → rightEdge=0+40*2.48=99.2; |99.2-100|=0.8 < threshold(8)
-		// → snaps to scale=1*(100/40)=2.5; line at position 100.
+		// → snaps to scale=1*(100/40)=2.5. Scale grows from the center, so the
+		// left edge lands on -100 at the same time; both lines are active.
 		const result = snapBoxMaskInteraction({
 			handleId: { kind: "scale" },
 			startParams: buildRectangleParams({ scale: 1 }),
@@ -357,7 +376,10 @@ describe("mask snapping", () => {
 		});
 
 		expect(result.params.scale).toBe(2.5);
-		expect(result.activeLines).toEqual([{ type: "vertical", position: 100 }]);
+		expect(result.activeLines).toEqual([
+			{ type: "vertical", position: -100 },
+			{ type: "vertical", position: 100 },
+		]);
 	});
 
 	test("snaps text mask movement using intrinsic text bounds", () => {

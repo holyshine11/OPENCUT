@@ -556,6 +556,24 @@ export function insertPointIntoFreeformSegment({
 	const startPoint = points[indices.startIndex];
 	const endPoint = points[indices.endIndex];
 	const clampedT = Math.min(0.999, Math.max(0.001, t));
+	const isStraight =
+		startPoint.outX === 0 &&
+		startPoint.outY === 0 &&
+		endPoint.inX === 0 &&
+		endPoint.inY === 0;
+	if (isStraight) {
+		// 직선 구간은 핸들 없는 모서리 점으로 나눠야 새 점을 끌어도 직선이 유지된다.
+		const nextPoints = [...points];
+		nextPoints.splice(indices.endIndex, 0, {
+			id: pointId,
+			...lerpPoint({ a: startPoint, b: endPoint, t: clampedT }),
+			inX: 0,
+			inY: 0,
+			outX: 0,
+			outY: 0,
+		});
+		return nextPoints;
+	}
 	const p0 = { x: startPoint.x, y: startPoint.y };
 	const p1 = {
 		x: startPoint.x + startPoint.outX,
