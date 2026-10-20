@@ -147,6 +147,7 @@ export const ko: Messages = {
 			captions: "자막",
 			subtitles: "자막 목록",
 			adjustment: "조정",
+			sounds: "효과음",
 			settings: "설정",
 		},
 		transitionsComingSoon: "전환 기능은 곧 추가됩니다",
@@ -192,6 +193,18 @@ export const ko: Messages = {
 		sortTooltip: ({ field, ascending }) =>
 			`${field}순 정렬 (${ascending ? "오름차순" : "내림차순"})`,
 		import: "가져오기",
+	},
+	sounds: {
+		title: "효과음",
+		empty: "효과음이 없어요. 가져오기로 추가하세요",
+		loading: "효과음을 불러오는 중...",
+		searchPlaceholder: "효과음 검색",
+		preview: "미리 듣기",
+		stopPreview: "미리 듣기 정지",
+		delete: "라이브러리에서 삭제",
+		added: ({ count }) => `효과음 ${count}개를 라이브러리에 추가했어요`,
+		addFailed: "효과음을 추가하지 못했어요",
+		dropFailed: "효과음을 타임라인에 넣지 못했어요",
 	},
 	properties: {
 		tabs: {
@@ -692,7 +705,7 @@ export const ko: Messages = {
 		ruler: "타임라인 눈금자",
 		playhead: "재생 헤드",
 		dragPlayhead: "재생 헤드 끌기",
-		dragVolume: "끌어서 클립 볼륨 조절",
+		dragVolume: "끌어서 클립 볼륨 조절 (⌘-클릭하면 0 dB로 초기화)",
 		dragFadeIn: "끌어서 페이드 인 길이 조절",
 		dragFadeOut: "끌어서 페이드 아웃 길이 조절",
 		noCrossfadePair: "크로스페이드를 걸 맞붙은 클립이 없어요",

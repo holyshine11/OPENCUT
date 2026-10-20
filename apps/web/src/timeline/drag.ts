@@ -28,6 +28,14 @@ export interface GraphicDragData extends BaseDragData {
 	params: Partial<ParamValues>;
 }
 
+export interface SoundDragData extends BaseDragData {
+	type: "sound";
+	url: string;
+	fileName: string;
+	size: number;
+	duration: number;
+}
+
 export interface EffectDragData extends BaseDragData {
 	type: "effect";
 	effectType: string;
@@ -41,4 +49,5 @@ export type TimelineDragData =
 	| TextDragData
 	| StickerDragData
 	| GraphicDragData
-	| EffectDragData;
+	| EffectDragData
+	| SoundDragData;

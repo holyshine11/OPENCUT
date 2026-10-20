@@ -156,6 +156,7 @@ export const en = {
 			captions: "Captions",
 			subtitles: "Subtitle list",
 			adjustment: "Adjustment",
+			sounds: "Sound effects",
 			settings: "Settings",
 		},
 		transitionsComingSoon: "Transitions view coming soon...",
@@ -208,6 +209,19 @@ export const en = {
 		}) =>
 			`Sort by ${field.toLowerCase()} (${ascending ? "ascending" : "descending"})`,
 		import: "Import",
+	},
+	sounds: {
+		title: "Sound effects",
+		empty: "No sound effects yet. Use Import to add some",
+		loading: "Loading sound effects...",
+		searchPlaceholder: "Search sound effects",
+		preview: "Preview",
+		stopPreview: "Stop preview",
+		delete: "Remove from library",
+		added: ({ count }: { count: number }) =>
+			`Added ${count} sound effect${count === 1 ? "" : "s"} to the library`,
+		addFailed: "Couldn't add sound effects",
+		dropFailed: "Couldn't add the sound effect to the timeline",
 	},
 	properties: {
 		tabs: {
@@ -727,7 +741,7 @@ export const en = {
 		ruler: "Timeline ruler",
 		playhead: "Timeline playhead",
 		dragPlayhead: "Drag playhead",
-		dragVolume: "Drag to adjust clip volume",
+		dragVolume: "Drag to adjust clip volume (⌘-click to reset to 0 dB)",
 		dragFadeIn: "Drag to adjust fade in",
 		dragFadeOut: "Drag to adjust fade out",
 		noCrossfadePair: "No adjacent clips to crossfade",

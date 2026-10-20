@@ -12,6 +12,7 @@ import {
 	SlidersHorizontalIcon,
 	ColorsIcon,
 	LeftToRightListDashIcon,
+	MusicNote03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
@@ -24,6 +25,7 @@ export const TAB_KEYS = [
 	"captions",
 	"subtitles",
 	"adjustment",
+	"sounds",
 	"settings",
 ] as const;
 
@@ -60,6 +62,9 @@ export const tabs = {
 	adjustment: {
 		icon: createHugeiconsIcon({ icon: SlidersHorizontalIcon }),
 	},
+	sounds: {
+		icon: createHugeiconsIcon({ icon: MusicNote03Icon }),
+	},
 	settings: {
 		icon: createHugeiconsIcon({ icon: Settings01Icon }),
 	},
@@ -68,6 +73,7 @@ export const tabs = {
 export type MediaViewMode = "grid" | "list";
 export type MediaSortKey = "name" | "type" | "duration" | "size";
 export type MediaSortOrder = "asc" | "desc";
+export type SoundSortKey = "name" | "duration" | "size";
 
 interface AssetsPanelStore {
 	activeTab: Tab;
@@ -82,6 +88,13 @@ interface AssetsPanelStore {
 	mediaSortBy: MediaSortKey;
 	mediaSortOrder: MediaSortOrder;
 	setMediaSort: (args: { key: MediaSortKey; order: MediaSortOrder }) => void;
+
+	/* Sounds */
+	soundViewMode: MediaViewMode;
+	setSoundViewMode: (mode: MediaViewMode) => void;
+	soundSortBy: SoundSortKey;
+	soundSortOrder: MediaSortOrder;
+	setSoundSort: (args: { key: SoundSortKey; order: MediaSortOrder }) => void;
 }
 
 export const useAssetsPanelStore = create<AssetsPanelStore>()(
@@ -99,6 +112,12 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 			mediaSortOrder: "asc",
 			setMediaSort: ({ key, order }) =>
 				set({ mediaSortBy: key, mediaSortOrder: order }),
+			soundViewMode: "list",
+			setSoundViewMode: (mode) => set({ soundViewMode: mode }),
+			soundSortBy: "name",
+			soundSortOrder: "asc",
+			setSoundSort: ({ key, order }) =>
+				set({ soundSortBy: key, soundSortOrder: order }),
 		}),
 		{
 			name: "assets-panel",
@@ -106,6 +125,9 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 				mediaViewMode: state.mediaViewMode,
 				mediaSortBy: state.mediaSortBy,
 				mediaSortOrder: state.mediaSortOrder,
+				soundViewMode: state.soundViewMode,
+				soundSortBy: state.soundSortBy,
+				soundSortOrder: state.soundSortOrder,
 			}),
 		},
 	),

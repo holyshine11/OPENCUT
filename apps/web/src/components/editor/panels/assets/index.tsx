@@ -10,6 +10,7 @@ import { SettingsView } from "./views/settings";
 import { StickersView } from "@/stickers/components/assets-view";
 import { TextView } from "@/text/components/assets-view";
 import { AdjustmentView, EffectsView } from "@/effects/components/assets-view";
+import { SoundsView } from "@/sounds/components/assets-view";
 import { useMessages } from "@/i18n";
 
 export function AssetsPanel() {
@@ -29,6 +30,7 @@ export function AssetsPanel() {
 		captions: <Captions />,
 		subtitles: <SubtitleListView />,
 		adjustment: <AdjustmentView />,
+		sounds: <SoundsView />,
 		settings: <SettingsView />,
 	};
 

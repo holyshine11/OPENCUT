@@ -1,4 +1,6 @@
 import type { DragEvent } from "react";
+import { toast } from "sonner";
+import { getMessages } from "@/i18n";
 import { processMediaAssets } from "@/media/processing";
 import { showMediaUploadToast } from "@/media/upload-toast";
 import {
@@ -33,6 +35,7 @@ import type { TimelineDragData } from "@/timeline/drag";
 import type { MediaAsset } from "@/media/types";
 import type { ProcessedMediaAsset } from "@/media/processing";
 import { roundFrameTime, type MediaTime } from "@/wasm";
+import { importSoundAsMedia } from "@/sounds/sound-library";
 
 // --- Config ---
 
@@ -102,6 +105,8 @@ function elementTypeFromDrag({
 			return "effect";
 		case "media":
 			return dragData.mediaType;
+		case "sound":
+			return "audio";
 	}
 }
 
@@ -122,6 +127,9 @@ function getDurationForDrag({
 	dragData: TimelineDragData;
 	mediaAssets: MediaAsset[];
 }): MediaTime {
+	if (dragData.type === "sound") {
+		return toElementDurationTicks({ seconds: dragData.duration });
+	}
 	if (dragData.type !== "media") return DEFAULT_NEW_ELEMENT_DURATION;
 	const media = mediaAssets.find((asset) => asset.id === dragData.id);
 	return toElementDurationTicks({ seconds: media?.duration });
@@ -379,7 +387,41 @@ export class DragDropController {
 			case "media":
 				this.executeMediaDrop({ target, dragData });
 				return;
+			case "sound":
+				this.executeSoundDrop({ target, dragData }).catch((error) => {
+					console.error("Failed to process sound drop:", error);
+					toast.error(getMessages().sounds.dropFailed);
+				});
+				return;
 		}
+	}
+
+	private async executeSoundDrop({
+		target,
+		dragData,
+	}: {
+		target: DropTarget;
+		dragData: Extract<TimelineDragData, { type: "sound" }>;
+	}): Promise<void> {
+		const projectId = this.config.getActiveProjectId();
+		if (!projectId) return;
+
+		const mediaAsset = await importSoundAsMedia({
+			sound: dragData,
+			projectId,
+			mediaAssets: this.config.getMediaAssets(),
+			addMediaAsset: this.config.addMediaAsset,
+		});
+		if (!mediaAsset) return;
+
+		const element = buildElementFromMedia({
+			mediaId: mediaAsset.id,
+			mediaType: mediaAsset.type,
+			name: mediaAsset.name,
+			duration: toElementDurationTicks({ seconds: mediaAsset.duration }),
+			startTime: target.xPosition,
+		});
+		this.insertAtTarget({ element, target, trackType: "audio" });
 	}
 
 	private executeTextDrop({

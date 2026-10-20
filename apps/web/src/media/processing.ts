@@ -195,7 +195,7 @@ export async function processMediaAssets({
 	return processedAssets;
 }
 
-const getMediaDuration = ({ file }: { file: File }): Promise<number> => {
+export const getMediaDuration = ({ file }: { file: File }): Promise<number> => {
 	return new Promise((resolve, reject) => {
 		const element = document.createElement(
 			file.type.startsWith("video/") ? "video" : "audio",
