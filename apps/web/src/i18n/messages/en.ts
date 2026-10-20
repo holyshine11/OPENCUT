@@ -766,7 +766,9 @@ export const en = {
 		dragFadeOut: "Drag to adjust fade out",
 		noCrossfadePair: "No adjacent clips to crossfade",
 		noLoopRange: "Hold ⌘ and drag on the ruler to set a loop range first",
-		loopHint: "⌘-drag: set loop range · ⌘-click: clear",
+		loopHint:
+			"⌘-click twice: set start and end · ⌘-drag: set range · Esc: cancel start",
+		clearLoop: "Clear range",
 		audioMixer: "Audio mixer",
 		masterBus: "Master",
 		outputLevel: "Output level (pre-limiter)",
@@ -870,6 +872,8 @@ export const en = {
 			`${fps} fps - Same as project, larger file`,
 		audio: "Audio",
 		includeAudio: "Include audio in export",
+		exportRange: ({ start, end }: { start: string; end: string }) =>
+			`Export selected range only (${start} – ${end})`,
 		cancel: "Cancel",
 		failed: "Export failed",
 		unknownError: "Unknown error occurred",
@@ -1062,6 +1066,7 @@ export const en = {
 		export: {
 			noActiveProject: "No active project",
 			projectEmpty: "Project is empty",
+			rangeEmpty: "The selected range has nothing to export",
 			noOutput: "Export failed to produce a file",
 		},
 		shortcuts: {

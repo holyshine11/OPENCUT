@@ -5,7 +5,7 @@ import type { ExportOptions, ExportResult } from "@/export";
 import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import { SceneExporter } from "@/services/renderer/scene-exporter";
 import { buildScene } from "@/services/renderer/scene-builder";
-import { createTimelineAudioBuffer } from "@/media/audio";
+import { createTimelineAudioBuffer, sliceAudioBuffer } from "@/media/audio";
 import { formatTimecode } from "opencut-wasm";
 import { downloadBlob } from "@/utils/browser";
 import { getMessages } from "@/i18n";
@@ -178,6 +178,14 @@ export class RendererManager {
 			if (duration === 0) {
 				return { success: false, error: getMessages().notices.export.projectEmpty };
 			}
+			// 루프 구간이 타임라인 끝을 넘을 수 있어 타임라인 안으로 자른다
+			const range = options.range && {
+				start: Math.max(0, options.range.start),
+				end: Math.min(duration, options.range.end),
+			};
+			if (range && range.end <= range.start) {
+				return { success: false, error: getMessages().notices.export.rangeEmpty };
+			}
 
 			const exportFps = fps ?? activeProject.settings.fps;
 			const canvasSize = activeProject.settings.canvasSize;
@@ -194,6 +202,13 @@ export class RendererManager {
 						mono: activeProject.settings.audioMono === true,
 					},
 				});
+				if (audioBuffer && range) {
+					audioBuffer = sliceAudioBuffer({
+						buffer: audioBuffer,
+						start: range.start,
+						end: range.end,
+					});
+				}
 			}
 
 			const scene = buildScene({
@@ -233,7 +248,7 @@ export class RendererManager {
 			const cancelInterval = setInterval(checkCancel, 100);
 
 			try {
-				const buffer = await exporter.export({ rootNode: scene });
+				const buffer = await exporter.export({ rootNode: scene, range });
 				clearInterval(cancelInterval);
 
 				if (cancelled) {

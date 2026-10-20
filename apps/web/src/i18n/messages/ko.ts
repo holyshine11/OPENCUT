@@ -730,7 +730,9 @@ export const ko: Messages = {
 		dragFadeOut: "끌어서 페이드 아웃 길이 조절",
 		noCrossfadePair: "크로스페이드를 걸 맞붙은 클립이 없어요",
 		noLoopRange: "룰러에서 ⌘를 누른 채 끌어 루프 구간을 먼저 정하세요",
-		loopHint: "⌘ 누르고 끌기: 루프 구간 정하기 · ⌘ 클릭: 지우기",
+		loopHint:
+			"⌘ 클릭 두 번: 시작·끝 지정 · ⌘ 누르고 끌기: 구간 정하기 · Esc: 시작점 취소",
+		clearLoop: "구간 지우기",
 		audioMixer: "오디오 믹서",
 		masterBus: "마스터",
 		outputLevel: "출력 레벨 (리미터 앞)",
@@ -831,6 +833,7 @@ export const ko: Messages = {
 		fpsProject: ({ fps }) => `${fps} fps - 프로젝트와 같음, 파일 크기 큼`,
 		audio: "오디오",
 		includeAudio: "오디오 포함",
+		exportRange: ({ start, end }) => `선택 구간만 내보내기 (${start} ~ ${end})`,
 		cancel: "취소",
 		failed: "내보내지 못했습니다",
 		unknownError: "알 수 없는 오류가 발생했습니다",
@@ -993,6 +996,7 @@ export const ko: Messages = {
 		export: {
 			noActiveProject: "열려 있는 프로젝트가 없습니다",
 			projectEmpty: "프로젝트가 비어 있습니다",
+			rangeEmpty: "선택한 구간에 내보낼 내용이 없습니다",
 			noOutput: "내보낸 파일을 만들지 못했습니다",
 		},
 		shortcuts: {

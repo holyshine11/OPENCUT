@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { FrameRate } from "opencut-wasm";
+import { formatTimecode, type FrameRate } from "opencut-wasm";
 import { TransitionTopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -126,6 +126,11 @@ function ExportPopover({
 		DEFAULT_EXPORT_OPTIONS.includeAudio ?? true,
 	);
 	const [useProjectFps, setUseProjectFps] = useState(false);
+	// 타임라인 룰러에 구간이 있으면 기본으로 그 구간만 내보낸다
+	const loop = useEditor((e) => e.playback.getLoop());
+	const [shouldExportRange, setShouldExportRange] = useState(true);
+	const range =
+		loop && shouldExportRange ? { start: loop.start, end: loop.end } : undefined;
 	const projectFps = activeProject.settings.fps;
 	const recommendedFps = defaultExportFps({ projectFps });
 	const exportFps = useProjectFps ? projectFps : recommendedFps;
@@ -142,6 +147,7 @@ function ExportPopover({
 				quality,
 				fps: exportFps,
 				includeAudio: shouldIncludeAudio,
+				range,
 			},
 		});
 
@@ -191,6 +197,33 @@ function ExportPopover({
 										format === "mp4" ? "MP4 (H.264/AAC)" : "WebM (VP9/Opus)"
 									}`}
 								</p>
+								{loop && (
+									<div className="flex items-center space-x-2 px-3">
+										<Checkbox
+											id="export-range"
+											checked={shouldExportRange}
+											onCheckedChange={(checked) =>
+												setShouldExportRange(!!checked)
+											}
+										/>
+										<Label htmlFor="export-range">
+											{m.exportDialog.exportRange({
+												start:
+													formatTimecode({
+														time: loop.start,
+														format: "HH:MM:SS:FF",
+														rate: projectFps,
+													}) ?? "",
+												end:
+													formatTimecode({
+														time: loop.end,
+														format: "HH:MM:SS:FF",
+														rate: projectFps,
+													}) ?? "",
+											})}
+										</Label>
+									</div>
+								)}
 								<div className="flex flex-col">
 									<Section
 										collapsible

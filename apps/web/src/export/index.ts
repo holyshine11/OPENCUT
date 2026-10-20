@@ -1,4 +1,5 @@
 import type { FrameRate } from "opencut-wasm";
+import type { MediaTime } from "@/wasm";
 import { EXPORT_MIME_TYPES } from "./mime-types";
 
 export const EXPORT_QUALITY_VALUES = [
@@ -18,6 +19,8 @@ export interface ExportOptions {
 	quality: ExportQuality;
 	fps?: FrameRate;
 	includeAudio?: boolean;
+	/** 이 구간만 내보낸다. 없으면 타임라인 전체 */
+	range?: { start: MediaTime; end: MediaTime };
 }
 
 export interface ExportResult {

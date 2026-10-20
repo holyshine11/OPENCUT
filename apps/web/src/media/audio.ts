@@ -778,6 +778,37 @@ function collectPeakRange({
 	return peaks;
 }
 
+/** 틱 구간만 잘라 낸 새 버퍼. 구간 내보내기에서 전체 믹스를 자를 때 쓴다 */
+export function sliceAudioBuffer({
+	buffer,
+	start,
+	end,
+}: {
+	buffer: AudioBuffer;
+	start: number;
+	end: number;
+}): AudioBuffer {
+	const toSample = (ticks: number) =>
+		Math.min(
+			buffer.length,
+			Math.max(0, Math.round((ticks / TICKS_PER_SECOND) * buffer.sampleRate)),
+		);
+	const from = toSample(start);
+	const to = toSample(end);
+	const sliced = new AudioBuffer({
+		length: Math.max(1, to - from),
+		numberOfChannels: buffer.numberOfChannels,
+		sampleRate: buffer.sampleRate,
+	});
+	for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+		sliced.copyToChannel(
+			buffer.getChannelData(channel).subarray(from, to),
+			channel,
+		);
+	}
+	return sliced;
+}
+
 export function extractPeakRange({
 	buffer,
 	count,

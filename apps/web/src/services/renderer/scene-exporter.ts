@@ -90,15 +90,20 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 
 	async export({
 		rootNode,
+		range,
 	}: {
 		rootNode: RootNode;
+		/** 틱. 없으면 처음부터 끝까지 */
+		range?: { start: number; end: number };
 	}): Promise<ArrayBuffer | null> {
 		const fps = this.renderer.fps;
 		const fpsFloat = frameRateToFloat(fps);
 		const ticksPerFrame = Math.round(
 			(TICKS_PER_SECOND * fps.denominator) / fps.numerator,
 		);
-		const frameCount = Math.floor(rootNode.duration / ticksPerFrame);
+		const startTicks = range?.start ?? 0;
+		const endTicks = range?.end ?? rootNode.duration;
+		const frameCount = Math.floor((endTicks - startTicks) / ticksPerFrame);
 
 		const outputFormat =
 			this.format === "webm" ? new WebMOutputFormat() : new Mp4OutputFormat();
@@ -162,9 +167,12 @@ export class SceneExporter extends EventEmitter<SceneExporterEvents> {
 				return null;
 			}
 
-			const timeTicks = i * ticksPerFrame;
-			const timeSeconds = mediaTimeToSeconds({ time: timeTicks });
-			await this.renderer.render({ node: rootNode, time: timeTicks });
+			const frameOffset = i * ticksPerFrame;
+			const timeSeconds = mediaTimeToSeconds({ time: frameOffset });
+			await this.renderer.render({
+				node: rootNode,
+				time: startTicks + frameOffset,
+			});
 			if (resized && resizedContext && fit) {
 				resizedContext.fillStyle = "#000000";
 				resizedContext.fillRect(0, 0, resized.width, resized.height);
