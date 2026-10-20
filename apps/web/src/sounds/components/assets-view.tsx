@@ -205,7 +205,7 @@ function SoundItemRow({
 	const editor = useEditor();
 
 	const addAtTime = async ({ startTime }: { startTime: MediaTime }) => {
-		const project = editor.project.getActive();
+		const project = editor.project.getActiveOrNull();
 		if (!project) return;
 		try {
 			const asset = await importSoundAsMedia({

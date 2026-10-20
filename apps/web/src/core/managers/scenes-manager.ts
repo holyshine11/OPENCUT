@@ -37,7 +37,7 @@ export class ScenesManager {
 		name: string;
 		isMain: boolean;
 	}): Promise<string> {
-		if (!this.editor.project.getActive()) {
+		if (!this.editor.project.getActiveOrNull()) {
 			throw new Error("No active project");
 		}
 
@@ -58,7 +58,7 @@ export class ScenesManager {
 			throw new Error(reason);
 		}
 
-		if (!this.editor.project.getActive()) {
+		if (!this.editor.project.getActiveOrNull()) {
 			throw new Error("No active project");
 		}
 
@@ -73,7 +73,7 @@ export class ScenesManager {
 		sceneId: string;
 		name: string;
 	}): Promise<void> {
-		if (!this.editor.project.getActive()) {
+		if (!this.editor.project.getActiveOrNull()) {
 			throw new Error("No active project");
 		}
 

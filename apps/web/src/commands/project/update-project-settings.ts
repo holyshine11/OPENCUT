@@ -12,7 +12,7 @@ export class UpdateProjectSettingsCommand extends Command {
 
 	execute(): CommandResult | undefined {
 		const editor = EditorCore.getInstance();
-		const activeProject = editor.project.getActive();
+		const activeProject = editor.project.getActiveOrNull();
 		if (!activeProject) return;
 
 		this.savedSettings = activeProject.settings;
