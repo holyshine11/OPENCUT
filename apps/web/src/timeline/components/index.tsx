@@ -757,6 +757,10 @@ function TrackLabelsPanel({
 		[selectedElements],
 	);
 	const pickedTrackIds = useEditor((e) => e.selection.getSelectedTrackIds());
+	const folderIds = useMemo(
+		() => new Set(scene?.trackFolders?.map(({ id }) => id)),
+		[scene],
+	);
 	const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
 	const trackListRef = useRef<HTMLDivElement>(null);
 	const trackZones = useMemo(
@@ -909,6 +913,10 @@ function TrackLabelsPanel({
 												data-track-row-id={track.id}
 												className={cn(
 													"group relative flex flex-col",
+													// 폴더 안 트랙은 들여 써서 폴더에 든 것으로 보이게 한다
+													track.folderId &&
+														folderIds.has(track.folderId) &&
+														"ml-3",
 													tracksWithSelection.has(track.id) &&
 														SELECTED_TRACK_ROW_CLASS,
 													pickedTrackIds.includes(track.id) &&
