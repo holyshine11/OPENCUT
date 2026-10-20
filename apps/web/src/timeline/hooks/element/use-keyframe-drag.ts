@@ -35,7 +35,7 @@ export function useKeyframeDrag({
 		zoomLevel,
 		element,
 		displayedStartTime,
-		getFps: () => editor.project.getActive()?.settings.fps ?? null,
+		getFps: () => editor.project.getActiveOrNull()?.settings.fps ?? null,
 		selectedKeyframes,
 		isKeyframeSelected,
 		setKeyframeSelection,

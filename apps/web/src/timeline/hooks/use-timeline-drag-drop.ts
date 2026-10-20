@@ -26,7 +26,7 @@ export function useTimelineDragDrop({
 		getContainerEl: () => containerRef.current,
 		getHeaderEl: () => headerRef?.current ?? null,
 		getTracksScrollEl: () => tracksScrollRef?.current ?? null,
-		getActiveProjectFps: () => editor.project.getActive()?.settings.fps ?? null,
+		getActiveProjectFps: () => editor.project.getActiveOrNull()?.settings.fps ?? null,
 		getActiveProjectId: () =>
 			editor.project.getActiveOrNull()?.metadata.id ?? null,
 		getSceneTracks: () => editor.scenes.getActiveScene().tracks,

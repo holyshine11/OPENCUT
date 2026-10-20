@@ -22,6 +22,8 @@ head=$(git rev-parse HEAD)
 if [ "$(cat "$BUILT_MARK" 2>/dev/null)" != "$head" ]; then
 	echo "설치·빌드 중 (몇 분 걸릴 수 있습니다)..."
 	bun install
+	# 받아쓰기 모델 (이미 받은 파일은 건너뜀). 실패하면 받아쓰기만 안 되고 앱은 뜬다
+	bun run --cwd apps/web models || echo "모델 다운로드 실패, 인터넷 연결 후 다시 실행하세요."
 	bun run build:web
 	echo "$head" > "$BUILT_MARK"
 fi

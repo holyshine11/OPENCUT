@@ -85,7 +85,7 @@ export class RendererManager {
 	private async createSnapshot(): Promise<SnapshotResult> {
 		try {
 			const renderTree = this.getRenderTree();
-			const activeProject = this.editor.project.getActive();
+			const activeProject = this.editor.project.getActiveOrNull();
 
 			if (!renderTree || !activeProject) {
 				return {
@@ -165,7 +165,7 @@ export class RendererManager {
 		try {
 			const tracks = this.editor.scenes.getActiveScene().tracks;
 			const mediaAssets = this.editor.media.getAssets();
-			const activeProject = this.editor.project.getActive();
+			const activeProject = this.editor.project.getActiveOrNull();
 
 			if (!activeProject) {
 				return {

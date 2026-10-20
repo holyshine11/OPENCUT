@@ -34,7 +34,7 @@ export function useTimelinePlayhead({
 	const config: PlayheadConfig = {
 		zoomLevel,
 		duration: editor.timeline.getTotalDuration(),
-		getActiveProjectFps: () => editor.project.getActive()?.settings.fps ?? null,
+		getActiveProjectFps: () => editor.project.getActiveOrNull()?.settings.fps ?? null,
 		isShiftHeld: () => isShiftHeldRef.current,
 		getIsPlaying: () => editor.playback.getIsPlaying(),
 		getRulerEl: () => rulerRef.current,

@@ -412,7 +412,7 @@ function TrackChannelStrip({
 function MasterChannelStrip() {
 	const m = useMessages();
 	const editor = useEditor();
-	const settings = useEditor((e) => e.project.getActive()?.settings);
+	const settings = useEditor((e) => e.project.getActiveOrNull()?.settings);
 	const isMono = settings?.audioMono === true;
 
 	return (

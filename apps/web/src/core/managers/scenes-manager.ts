@@ -91,7 +91,7 @@ export class ScenesManager {
 			throw new Error("Scene not found");
 		}
 
-		const activeProject = this.editor.project.getActive();
+		const activeProject = this.editor.project.getActiveOrNull();
 
 		if (activeProject) {
 			const updatedProject = {
@@ -117,7 +117,7 @@ export class ScenesManager {
 
 	isBookmarked({ time }: { time: MediaTime }): boolean {
 		const activeScene = this.getActiveScene();
-		const activeProject = this.editor.project.getActive();
+		const activeProject = this.editor.project.getActiveOrNull();
 
 		if (!activeScene || !this.active || !activeProject) return false;
 
@@ -158,7 +158,7 @@ export class ScenesManager {
 
 	getBookmarkAtTime({ time }: { time: MediaTime }) {
 		const activeScene = this.active;
-		const activeProject = this.editor.project.getActive();
+		const activeProject = this.editor.project.getActiveOrNull();
 
 		if (!activeScene || !activeProject) return null;
 
@@ -215,7 +215,7 @@ export class ScenesManager {
 
 		const hasAddedMainScene = ensuredScenes.length > scenes.length;
 		if (hasAddedMainScene) {
-			const activeProject = this.editor.project.getActive();
+			const activeProject = this.editor.project.getActiveOrNull();
 
 			if (activeProject) {
 				const updatedProject = {
@@ -268,7 +268,7 @@ export class ScenesManager {
 			: null;
 		this.notify();
 
-		const activeProject = this.editor.project.getActive();
+		const activeProject = this.editor.project.getActiveOrNull();
 		if (activeProject) {
 			const updatedProject = {
 				...activeProject,
@@ -308,7 +308,7 @@ export class ScenesManager {
 		this.active = updatedScene;
 		this.notify();
 
-		const activeProject = this.editor.project.getActive();
+		const activeProject = this.editor.project.getActiveOrNull();
 		if (activeProject) {
 			const updatedProject = {
 				...activeProject,

@@ -43,10 +43,6 @@ export function sourcePointsToTimeline<TPoint extends { time: number }>({
 		.filter((point) => point.time > element.startTime && point.time < elementEnd);
 }
 
-/**
- * 클립 위에 놓인 자막의 단어 시각을 클립의 소스 시간(초)으로 모은다. VAD가 놓친 말도 자막이 있으면 자르지 않는다.
- * 단어 끝은 다음 단어 시작이나 자막 끝이다
- */
 /** 타임라인 시각(초)을 클립 원본 시각(초)으로. 배속이 걸린 클립도 맞춘다 */
 export function timelineToSource({
 	element,
@@ -62,6 +58,10 @@ export function timelineToSource({
 	);
 }
 
+/**
+ * 클립 위에 놓인 자막의 단어 시각을 클립의 소스 시간(초)으로 모은다.
+ * 단어 끝은 다음 단어 시작이나 자막 끝이다
+ */
 export function collectSubtitleWords({
 	tracks,
 	element,

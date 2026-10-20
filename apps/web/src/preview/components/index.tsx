@@ -26,7 +26,7 @@ import {
 
 function usePreviewSize() {
 	const canvasSize = useEditor(
-		(e) => e.project.getActive()?.settings.canvasSize,
+		(e) => e.project.getActive().settings.canvasSize,
 	);
 
 	return {

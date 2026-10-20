@@ -45,7 +45,7 @@ export function useElementInteraction({
 		scene: {
 			getTracks: () => editor.scenes.getActiveScene().tracks,
 			getTrackFolders: () => editor.scenes.getActiveScene().trackFolders,
-			getActiveFps: () => editor.project.getActive()?.settings.fps ?? null,
+			getActiveFps: () => editor.project.getActiveOrNull()?.settings.fps ?? null,
 		},
 		selection: {
 			getSelected: () => selection.selectedElements,
