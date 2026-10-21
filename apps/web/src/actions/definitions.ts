@@ -202,6 +202,7 @@ export type TAction = keyof typeof ACTIONS;
 
 const ACTION_DEFAULT_SHORTCUTS = [
 	["toggle-play", ["space", "k"]],
+	["stop-playback", ["shift+space"]],
 	["seek-forward", ["l"]],
 	["seek-backward", ["j"]],
 	["frame-step-forward", ["right"]],
@@ -221,6 +222,11 @@ const ACTION_DEFAULT_SHORTCUTS = [
 	["split-caption-at-playhead", ["shift+enter"]],
 	["merge-caption-with-next", ["shift+backspace"]],
 	["toggle-snapping", ["n"]],
+	["toggle-ripple-editing", ["r"]],
+	["toggle-source-audio", ["shift+a"]],
+	["toggle-bookmark", ["m"]],
+	["toggle-elements-muted-selected", ["shift+m"]],
+	["toggle-elements-visibility-selected", ["v"]],
 	["select-all", ["ctrl+a"]],
 	["cancel-interaction", ["escape"]],
 	["duplicate-selected", ["ctrl+d"]],

@@ -266,3 +266,24 @@ describe("v13 to v14 migration", () => {
 		expect(kept?.keybindings.get("ctrl+g")).toBe("undo");
 	});
 });
+
+describe("v14 to v15 migration", () => {
+	test("adds the previously unbound toggle shortcuts", () => {
+		const added = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { c: "split" }, isCustomized: false },
+				fromVersion: 14,
+			}),
+		});
+		expect(added?.keybindings.get("m")).toBe("toggle-bookmark");
+		expect(added?.keybindings.get("shift+space")).toBe("stop-playback");
+
+		const kept = decodePersistedKeybindingsState({
+			state: migratePersistedKeybindingsState({
+				state: { keybindings: { m: "undo" }, isCustomized: true },
+				fromVersion: 14,
+			}),
+		});
+		expect(kept?.keybindings.get("m")).toBe("undo");
+	});
+});
