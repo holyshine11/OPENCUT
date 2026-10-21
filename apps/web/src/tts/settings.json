@@ -1,0 +1,7 @@
+{
+	"format": "wav",
+	"maxSentenceChars": 60,
+	"fileNumberDigits": 3,
+	"level": { "min": 0, "max": 100, "step": 1 },
+	"fallbackLevels": { "strength": 100, "expressiveness": 50 }
+}

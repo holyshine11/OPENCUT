@@ -18,6 +18,9 @@ fi
 
 git pull --ff-only || echo "업데이트 실패, 기존 버전으로 실행합니다. (오프라인이거나 로컬 변경 있음)"
 
+# 대본 읽기(TTS) 서버 주소 등 기본 설정. 이미 있으면 건드리지 않는다
+[ -f apps/web/.env.local ] || cp apps/web/.env.example apps/web/.env.local
+
 head=$(git rev-parse HEAD)
 if [ "$(cat "$BUILT_MARK" 2>/dev/null)" != "$head" ]; then
 	echo "설치·빌드 중 (몇 분 걸릴 수 있습니다)..."

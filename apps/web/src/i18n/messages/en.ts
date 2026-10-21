@@ -157,6 +157,7 @@ export const en = {
 			subtitles: "Subtitle list",
 			adjustment: "Adjustment",
 			sounds: "Sound effects",
+			tts: "Read script",
 			settings: "Settings",
 		},
 		transitionsHint:
@@ -704,6 +705,34 @@ export const en = {
 			},
 			stripPunctuation: "Remove periods and commas",
 		},
+	},
+	tts: {
+		connecting: "Connecting to the TTS server...",
+		offlineTitle: "The TTS server is not reachable",
+		offlineHint:
+			"Run tts-web.sh in the TTS repository (TTS/tts-web.sh), then check again.",
+		retry: "Check again",
+		voice: "Voice",
+		preset: "Preset",
+		customPreset: "Custom",
+		style: "Style",
+		strength: "Emotion strength",
+		expressiveness: "Expressiveness",
+		speed: "Speed",
+		pause: "Pause between sentences",
+		seconds: ({ value }: { value: string }) => `${value}s`,
+		makeCaptions: "Also create captions",
+		script: "Script",
+		scriptPlaceholder:
+			"Paste the script. Each sentence becomes one voice clip and its captions.",
+		sentenceCount: ({ count }: { count: number }) => `${count} sentence(s)`,
+		generate: "Create at playhead",
+		progress: ({ current, total }: { current: number; total: number }) =>
+			`Sentence ${current}/${total}...`,
+		cancel: "Cancel",
+		processFailed: "Could not process the audio file",
+		failed: ({ sentence, reason }: { sentence: number; reason: string }) =>
+			`Sentence ${sentence} failed: ${reason}. Nothing was added.`,
 	},
 	subtitleList: {
 		exportSrt: "Export SRT",

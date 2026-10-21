@@ -124,6 +124,19 @@ interface BaseAudioElement extends BaseTimelineElement {
 	type: "audio";
 	buffer?: AudioBuffer;
 	retime?: RetimeConfig;
+	/** 대본 읽기로 만든 음성. 다시 만들 때 이 값으로 요청한다 */
+	tts?: {
+		text: string;
+		voice: string;
+		style: string;
+		speed: number;
+		strength: number;
+		expressiveness: number;
+		/** 만들 때 쓴 목소리 모델. 모델을 새로 학습한 뒤 예전 음성을 구분한다 */
+		model: string;
+		/** 같은 문장의 자막 클립들이 같은 값을 갖는다 */
+		lineId: string;
+	};
 }
 
 export interface UploadAudioElement extends BaseAudioElement {
@@ -193,6 +206,8 @@ export interface TextElement extends BaseTimelineElement {
 	 * 앞을 자르거나 나눠도 그대로 맞는다. 자막을 단어 경계에서 나눌 때 쓴다
 	 */
 	subtitleWordOffsets?: number[];
+	/** 대본 읽기로 함께 만든 음성 클립의 tts.lineId. 자막 글자를 합친 값이 tts.text와 다르면 음성이 낡았다 */
+	ttsLineId?: string;
 }
 
 export interface StickerElement extends BaseTimelineElement {

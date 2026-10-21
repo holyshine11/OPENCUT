@@ -2,8 +2,10 @@ import type { EditorCore } from "@/core";
 import {
 	AddTrackCommand,
 	BatchCommand,
+	type Command,
 	InsertElementCommand,
 } from "@/commands";
+import type { TextElement } from "@/timeline";
 import { buildSubtitleTextElement } from "./build-subtitle-text-element";
 import type { SubtitleCue } from "./types";
 import { generateUUID } from "@/utils/id";
@@ -21,6 +23,23 @@ export function insertCaptionChunksAsTextTrack({
 		return null;
 	}
 
+	const { trackId, commands } = buildCaptionTrackCommands({ editor, captions });
+	editor.command.execute({ command: new BatchCommand(commands) });
+
+	return trackId;
+}
+
+/**
+ * 자막 트랙 하나를 맨 위에 만들고 자막을 넣는 명령들. 실행은 부르는 쪽이 한다.
+ * 대본 읽기는 음성 트랙과 함께 BatchCommand 하나로 묶어 ⌘Z 한 번에 지운다
+ */
+export function buildCaptionTrackCommands({
+	editor,
+	captions,
+}: {
+	editor: EditorCore;
+	captions: (SubtitleCue & Pick<TextElement, "ttsLineId">)[];
+}): { trackId: string; commands: Command[] } {
 	const addTrackCommand = new AddTrackCommand({ type: "text", index: 0 });
 	const trackId = addTrackCommand.getTrackId();
 	const canvasSize = editor.project.getActive().settings.canvasSize;
@@ -35,14 +54,12 @@ export function insertCaptionChunksAsTextTrack({
 					subtitleWordOffsets: caption.wordStarts?.map(
 						(start) => start - caption.startTime,
 					),
+					...(caption.ttsLineId ? { ttsLineId: caption.ttsLineId } : {}),
 				},
 			}),
 	);
-	editor.command.execute({
-		command: new BatchCommand([addTrackCommand, ...insertCommands]),
-	});
 
-	return trackId;
+	return { trackId, commands: [addTrackCommand, ...insertCommands] };
 }
 
 /**
