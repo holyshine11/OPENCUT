@@ -363,6 +363,7 @@ function StickerItem({
 		provider: item.provider,
 		stickerId: item.id,
 		name: item.name,
+		koName: item.metadata.koName,
 		locale: m.dateLocale,
 		translate: (label) => translateLabel({ messages: m, label }),
 	});
@@ -478,20 +479,23 @@ function StickerItem({
 	);
 }
 
-/** 국기는 국가 코드로 브라우저 내장 국가 이름을, 나머지는 라벨 사전을 쓴다. 타임라인에 저장되는 이름은 그대로 둔다 */
+/** 국기는 국가 코드로 브라우저 내장 국가 이름을, 이모지는 함께 둔 한국어 이름을, 나머지는 라벨 사전을 쓴다. 타임라인에 저장되는 이름은 그대로 둔다 */
 function localizeStickerName({
 	provider,
 	stickerId,
 	name,
+	koName,
 	locale,
 	translate,
 }: {
 	provider: string;
 	stickerId: string;
 	name: string;
+	koName: unknown;
 	locale: string;
 	translate: (label: string) => string;
 }): string {
+	if (typeof koName === "string" && locale.startsWith("ko")) return koName;
 	if (provider !== FLAGS_PROVIDER_ID) return translate(name);
 	try {
 		const { providerValue } = parseStickerId({ stickerId });

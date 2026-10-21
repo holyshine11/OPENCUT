@@ -621,6 +621,11 @@ export const ko: Messages = {
 	stickers: {
 		categories: {
 			all: "전체",
+			food: "음식",
+			ingredients: "재료",
+			kitchen: "주방",
+			reactions: "리액션",
+			decor: "꾸미기",
 			flags: "국기",
 			shapes: "도형",
 		},

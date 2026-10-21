@@ -643,6 +643,11 @@ export const en = {
 	stickers: {
 		categories: {
 			all: "All",
+			food: "Food",
+			ingredients: "Ingredients",
+			kitchen: "Kitchen",
+			reactions: "Reactions",
+			decor: "Decor",
 			flags: "Flags",
 			shapes: "Shapes",
 		},
