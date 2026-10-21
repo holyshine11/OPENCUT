@@ -4,6 +4,8 @@
 
 대본을 붙여 넣고 목소리(송이, 송강)를 고르면 문장마다 음성 클립과 자막이 타임라인에 함께 들어간다. 음성은 이미 만들어 둔 TTS 저장소(`/Users/Dev/TTS`, GitHub `holyshine11/TTS_TEST`, 비공개)의 합성 서버가 만들고, OPENCUT은 HTTP로 요청만 보낸다. 최종 사용처는 아내의 M1 16GB 맥북이고 인터넷 없이 돌아가야 한다.
 
+> 2026-10-21 갱신: 합성 서버 코드를 OPENCUT `apps/tts/`로 옮겼다. `bun run dev:web`과 `start-mac.command`가 웹과 함께 켜고 끈다. 목소리 묶음은 비공개 저장소 `holyshine11/OPENCUT-voices`의 Release로만 주고받는다. `TTS_TEST`는 학습·실험용 별도 프로젝트로 남고 OPENCUT은 그 저장소도 폴더도 참조하지 않는다. 아래 3-1의 "별도 저장소" 결정은 이 갱신으로 바뀌었고, 실제 설치·운영 방법은 8절을 따른다.
+
 ## 1. 지금 있는 것
 
 ### TTS 저장소
@@ -150,9 +152,9 @@ OPENCUT 쪽은 할 일이 없게 만드는 것이 목표다. 새 목소리나 �
 
 1. 개발 맥(M5)에서 `train.sh`로 학습한다. 학습은 아내 맥에서 하지 않는다.
 2. `measure/`로 기존 모델과 비교해 나아졌는지 확인한다.
-3. `tts-voices.json`에 목소리를 추가하거나 가중치 경로를 바꾼다. 말투 파일(`tts-styles-*.json`)을 만든다.
-4. 목소리 묶음(가중치 + 참조 음성)을 새 버전으로 올린다(8절).
-5. 아내 맥에서 업데이트 스크립트를 한 번 돌린다.
+3. 고른 가중치(`GPT-SoVITS/GPT_weights_v2ProPlus/`, `SoVITS_weights_v2ProPlus/`)와 참조 음성을 OPENCUT `apps/tts/`의 같은 경로로 복사하고, `apps/tts/tts-voices.json`에 목소리를 추가하거나 가중치 경로를 바꾼다. 말투 파일(`tts-styles-*.json`)도 `apps/tts/`에 둔다. 학습 쪽에서 OPENCUT으로 넘어오는 것은 이 파일들뿐이다.
+4. `apps/tts/voices-release.sh`로 목소리 묶음을 새 버전으로 올린다(8절).
+5. 아내 맥에서 `apps/tts/setup-mac.sh`를 한 번 돌린다.
 
 이를 위해 TTS 저장소에서 먼저 고칠 것:
 
@@ -162,26 +164,24 @@ OPENCUT 쪽은 할 일이 없게 만드는 것이 목표다. 새 목소리나 �
 
 ## 8. 아내 맥북으로 옮기기
 
-GitHub 저장소 하나에 다 담을 수 없다. 가중치 파일 하나가 155~173MB라 GitHub 파일 한도(100MB)를 넘고, 사전학습 모델 4.6GB, 파이썬 가상환경 2.1GB가 따로 있다. 그래서 세 덩어리로 나눈다.
+가중치 파일 하나가 155~173MB라 GitHub 파일 한도(100MB)를 넘고, 목소리는 실제 사람 목소리라 공개 저장소에 둘 수 없다. 그래서 나눠서 받는다.
 
 | 덩어리 | 어디에 | 아내 맥에서 받는 방법 |
 |---|---|---|
-| OPENCUT 코드 | GitHub `OPENCUT` (공개) | `git clone`, 이후 `start-mac.command`가 `git pull` |
-| TTS 스크립트·설정 | GitHub `TTS_TEST` (비공개) | `git clone` |
-| GPT-SoVITS 엔진 | upstream 고정 커밋 + 로컬 수정 패치 | `setup-mac.sh`가 clone → `patches/gpt-sovits.patch` 적용 → venv 설치 |
-| 사전학습 모델 | Hugging Face 공식(`lj1995/GPT-SoVITS`) | `setup-mac.sh`가 필요한 파일만 받음 |
-| 목소리 묶음 (가중치 + 참조 음성) | `TTS_TEST` GitHub Release 첨부 파일 (비공개, 파일당 2GB까지) | `gh release download voices-YYYYMMDD` |
+| OPENCUT 코드 + TTS 스크립트·설정(`apps/tts/`) | GitHub `OPENCUT` (공개) | `git clone`, 이후 `start-mac.command`가 `git pull` |
+| GPT-SoVITS 엔진 | upstream 고정 커밋 + 로컬 수정 패치 | `apps/tts/setup-mac.sh`가 clone → `patches/gpt-sovits.patch` 적용 → venv 설치 |
+| 사전학습 모델, 울림 제거 모델, 발음 검사 Whisper | Hugging Face 공식 | `setup-mac.sh`가 필요한 파일만 받음 |
+| 목소리 묶음 (가중치 + 참조 음성) | `OPENCUT-voices` GitHub Release 첨부 파일 (비공개, 파일당 2GB까지) | `setup-mac.sh`가 가장 최근 `voices-YYYYMMDD`를 받음 |
 
-목소리 묶음은 GitHub Release를 권한다. 이미 GitHub를 쓰고 있어 계정이 늘지 않고, 저장소가 비공개라 목소리가 공개되지 않으며, 버전 이름으로 예전 묶음을 되돌릴 수 있다. 다른 선택지는 Hugging Face 비공개 저장소(계정 추가)와 AirDrop·USB(버전 관리 없음)다.
+엔진, 모델, 가중치, `*.wav`는 `apps/tts/.gitignore`에 걸려 있어 OPENCUT에 커밋되지 않는다.
 
-`start-mac.command`는 옆 폴더 `../TTS`가 있으면 `tts-web.sh`를 먼저 켜고 `TTS_URL`을 넘긴 뒤 Next를 띄운다. TTS 폴더가 없으면 대본 읽기 탭만 "서버 없음"으로 뜨고 나머지는 그대로 동작한다.
+`bun run dev:web`은 turbo로 `@opencut/web`과 `@opencut/tts`를 같이 켠다. `apps/tts/tts-web.sh`는 합성 서버(9880)를 켜고 웹 서버(7860)를 띄우며, 끝날 때 둘 다 끈다. 설치 전이거나 이미 켜져 있으면 그냥 끝나서 웹만 뜬다. `start-mac.command`도 같은 스크립트를 쓰고, 창을 닫으면 같이 끈다. 쉬는 상태로 약 2.7GB를 쓴다.
 
 아내 맥에서 처음 설치하는 순서(터미널, 인터넷 연결 상태):
 
 1. Homebrew를 설치한다(https://brew.sh 첫 화면의 명령 한 줄).
-2. `brew install gh && gh auth login`. `TTS_TEST`가 비공개라 GitHub 로그인이 필요하다.
-3. OPENCUT을 받은 폴더 옆에서 `gh repo clone holyshine11/TTS_TEST TTS`를 실행하고, 이어서 `TTS/setup-mac.sh`를 실행한다. 패키지 2GB 남짓과 모델·목소리 약 1GB를 받는다.
-4. 그 뒤로는 `start-mac.command`를 더블클릭하면 TTS도 함께 켜진다. 목소리를 업데이트할 때는 `TTS/setup-mac.sh`를 다시 실행한다.
+2. OPENCUT 폴더에서 `apps/tts/setup-mac.sh`를 실행한다. GitHub 로그인을 물으면 `OPENCUT-voices`를 볼 수 있는 계정으로 로그인한다. 패키지 2GB 남짓과 모델·목소리 약 1.5GB를 받는다.
+3. 그 뒤로는 `start-mac.command`를 더블클릭하면 TTS도 함께 켜진다. 목소리를 업데이트할 때는 `apps/tts/setup-mac.sh`를 다시 실행한다.
 
 설치가 끝나면 Wi-Fi를 끈 상태로 대본 → 음성·자막 생성이 되는지 확인한다(기존 오프라인 테스트 방식).
 
@@ -215,6 +215,7 @@ GitHub 저장소 하나에 다 담을 수 없다. 가중치 파일 하나가 155
 
 ## 11. 정한 것 (2026-10-21)
 
-- 목소리 묶음은 `TTS_TEST` GitHub Release로 보낸다.
+- 목소리 묶음은 GitHub Release로 보낸다. 처음엔 `TTS_TEST`였고, 같은 날 `TTS_TEST`가 공개로 바뀌면서 비공개 `OPENCUT-voices`로 옮겼다(`TTS_TEST`의 Release는 삭제).
+- TTS 서버 코드는 OPENCUT `apps/tts/`에서 관리한다. `TTS_TEST`와는 학습한 가중치·참조 음성을 넘겨받는 것 말고는 섞지 않는다.
 - 대본 읽기는 에셋 패널의 새 탭으로 둔다.
 - 송강을 울림 없는 데이터로 다시 학습하는 일은 학습을 다 마친 뒤로 미룬다. 그전까지는 6절 2번의 "UVR5를 쓸 때만 올리고 내리기"로 메모리를 줄인다.

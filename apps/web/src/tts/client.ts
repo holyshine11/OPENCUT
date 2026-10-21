@@ -1,4 +1,4 @@
-// 대본 읽기 합성 서버(TTS 저장소 tts-web.py)와 주고받는 값. 브라우저는 /api/tts 라우트를 거친다.
+// 대본 읽기 합성 서버(apps/tts/tts-web.py)와 주고받는 값. 브라우저는 /api/tts 라우트를 거친다.
 // 목소리·말투·프리셋·슬라이더 범위는 전부 서버가 준다. 목소리를 새로 학습해도 여기를 고치지 않는다
 import settings from "@/tts/settings.json";
 

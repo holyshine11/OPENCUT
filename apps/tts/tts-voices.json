@@ -1,0 +1,18 @@
+[
+  {
+    "name": "송이",
+    "gpt_weights": "GPT_weights_v2ProPlus/sample_vox2_narr-e5.ckpt",
+    "sovits_weights": "SoVITS_weights_v2ProPlus/sample_vox3_e8_s440.pth",
+    "model": "sample_vox2_narr-e5+sample_vox3_e8_s440",
+    "styles_file": "tts-styles.json"
+  },
+  {
+    "name": "송강",
+    "gpt_weights": "GPT_weights_v2ProPlus/songkang2-e15.ckpt",
+    "sovits_weights": "SoVITS_weights_v2ProPlus/songkang2_e24_s528.pth",
+    "model": "songkang2-e15+songkang2_e24_s528",
+    "styles_file": "tts-styles-songkang.json",
+    "post_filter": "highpass=f=60,afftdn=nr=6:nf=-55:tn=1,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "dereverb_agg": 5
+  }
+]

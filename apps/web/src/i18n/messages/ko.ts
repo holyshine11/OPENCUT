@@ -684,7 +684,8 @@ export const ko: Messages = {
 	tts: {
 		connecting: "TTS 서버에 연결하는 중...",
 		offlineTitle: "TTS 서버에 연결할 수 없어요",
-		offlineHint: "TTS 저장소에서 tts-web.sh를 실행한 뒤(TTS/tts-web.sh) 다시 확인을 누르세요.",
+		offlineHint:
+			"OPENCUT을 다시 켜면(bun run dev:web) TTS 서버도 같이 켜져요. 처음이면 apps/tts/setup-mac.sh로 설치한 뒤 다시 확인을 누르세요.",
 		retry: "다시 확인",
 		voice: "목소리",
 		preset: "프리셋",
@@ -994,7 +995,7 @@ export const ko: Messages = {
 			{
 				title: "5. 대본 읽기 (TTS)",
 				items: [
-					"먼저 TTS 서버를 켜 두세요 (TTS 저장소의 tts-web.sh).",
+					"TTS 서버는 OPENCUT을 켤 때 같이 켜져요. 처음 한 번은 apps/tts/setup-mac.sh로 설치하세요.",
 					"대본을 붙여 넣고 목소리·말투를 고른 뒤 재생헤드 위치에 만들기를 누르세요. 문장마다 음성 클립과 자막이 하나씩 생겨요.",
 					"마음에 안 드는 문장은 그 클립을 고르고 속성의 대본 읽기 탭에서 다시 만들기를 누르세요.",
 				],

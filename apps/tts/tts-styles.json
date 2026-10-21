@@ -1,0 +1,38 @@
+[
+  {
+    "id": "neutral",
+    "name": "기본",
+    "params": {
+      "ref_audio_path": "sample_vox2_ref_slow.wav",
+      "prompt_text": "고기는 차게 식혀서 최대한 얇게 썰어주고요",
+      "aux_ref_audio_paths": [
+        "sample_vox2_aux1.wav", "sample_vox2_aux2.wav", "sample_vox2_aux3.wav",
+        "sample_vox2_aux4.wav", "sample_vox2_aux5.wav", "sample_vox2_aux6.wav"
+      ]
+    }
+  },
+  {
+    "id": "bright",
+    "name": "밝게",
+    "params": {
+      "ref_audio_path": "sample_vox2_ref_slow.wav",
+      "prompt_text": "고기는 차게 식혀서 최대한 얇게 썰어주고요"
+    },
+    "style_aux": [
+      "style_bright_aux1.wav", "style_bright_aux2.wav", "style_bright_aux3.wav",
+      "style_bright_aux4.wav", "style_bright_aux5.wav"
+    ]
+  },
+  {
+    "id": "soft",
+    "name": "부드럽게",
+    "params": {
+      "ref_audio_path": "sample_vox2_ref_slow.wav",
+      "prompt_text": "고기는 차게 식혀서 최대한 얇게 썰어주고요"
+    },
+    "style_aux": [
+      "style_soft_aux1.wav", "style_soft_aux2.wav", "style_soft_aux3.wav",
+      "style_soft_aux4.wav", "style_soft_aux5.wav"
+    ]
+  }
+]

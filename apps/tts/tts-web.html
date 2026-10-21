@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>TTS 테스트</title>
+<style>
+  :root {
+    --bg: oklch(0.985 0.003 90);
+    --fg: oklch(0.24 0.008 90);
+    --muted: oklch(0.52 0.008 90);
+    --line: oklch(0.89 0.005 90);
+    --field: oklch(0.995 0.002 90);
+    --accent: oklch(0.47 0.08 165);
+    --accent-fg: oklch(0.98 0.01 165);
+    --danger: oklch(0.5 0.15 30);
+    --track: oklch(0.86 0.005 90);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(0.2 0.005 90);
+      --fg: oklch(0.92 0.006 90);
+      --muted: oklch(0.68 0.006 90);
+      --line: oklch(0.32 0.006 90);
+      --field: oklch(0.23 0.005 90);
+      --accent: oklch(0.72 0.09 165);
+      --accent-fg: oklch(0.2 0.02 165);
+      --danger: oklch(0.72 0.13 30);
+      --track: oklch(0.38 0.006 90);
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui, sans-serif;
+    accent-color: var(--accent);
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 32px; }
+  h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 12px; }
+  label, .label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  textarea, select {
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  textarea { display: block; padding: 12px 14px; min-height: 150px; resize: vertical; }
+  select { padding: 7px 10px; }
+  textarea:focus-visible, select:focus-visible { outline-offset: 0; border-color: var(--accent); }
+  .count { text-align: right; font-size: 12px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .count.over { color: var(--danger); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; margin-top: 20px; }
+  .speed-head { display: flex; justify-content: space-between; }
+  .speed-head output { font-size: 13px; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; margin: 6px 0 0; }
+  input[type=range]:disabled { opacity: 0.4; }
+  .ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+  .note:empty { display: none; }
+
+  details { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 14px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--muted); width: fit-content; }
+  details .grid { margin-top: 14px; }
+
+  .actions { display: flex; align-items: center; gap: 16px; margin-top: 28px; }
+  .actions select { width: auto; }
+  .takes { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .takes label { margin: 0; }
+  .takes input { width: 56px; font: inherit; color: var(--fg); padding: 6px 8px; background: var(--field); border: 1px solid var(--line); border-radius: 6px; }
+  .primary {
+    font: inherit; font-weight: 600;
+    padding: 9px 22px;
+    border: 0; border-radius: 6px;
+    background: var(--accent); color: var(--accent-fg);
+    cursor: pointer;
+  }
+  .primary:disabled { opacity: 0.6; cursor: progress; }
+  .hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .error { color: var(--danger); font-size: 14px; margin: 16px 0 0; white-space: pre-wrap; }
+
+  .loading {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(3px);
+  }
+  .loading-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 190px;
+    padding: 16px 20px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--field);
+    box-shadow: 0 12px 36px rgb(0 0 0 / 14%);
+  }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border: 2px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+  .loading-text { font-size: 14px; font-weight: 600; }
+  .loading-estimate { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  section.result { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .player { display: flex; align-items: center; gap: 12px; }
+  .icon-btn {
+    display: inline-grid; place-items: center;
+    width: 32px; height: 32px; flex: none;
+    padding: 0; border: 0; border-radius: 6px;
+    background: none; color: var(--fg); cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--line); }
+  .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+  .seek { flex: 1; min-width: 0; margin: 0; }
+  .time { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  .volume { display: flex; align-items: center; gap: 2px; }
+  .volume input { width: 72px; margin: 0; }
+  .rate {
+    font: inherit; font-size: 12px; font-variant-numeric: tabular-nums;
+    min-width: 46px; padding: 3px 6px;
+    background: none; color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+  }
+  .now { font-size: 14px; margin: 14px 0 0; display: flex; gap: 16px; align-items: baseline; }
+  .now span { color: var(--muted); font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+
+  ol.history { list-style: none; margin: 0; padding: 0; }
+  ol.history li { display: flex; gap: 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--line); }
+  ol.history li:first-child { border-top: 0; }
+  .take { flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .take .t { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .take .m { display: block; font-size: 12px; color: var(--muted); }
+  li[aria-current] .take .t { color: var(--accent); font-weight: 600; }
+  ol.history a, .link-btn { font-size: 13px; }
+  .link-btn { font-family: inherit; background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .link-btn:hover { color: var(--danger); }
+  .seq { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 2ch; }
+  .list { margin-top: 32px; }
+  .list-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+  .list-head h2 { margin: 0; }
+  .list-head .primary { font-size: 13px; padding: 6px 14px; }
+
+  @media (max-width: 520px) {
+    main { padding: 32px 16px 64px; }
+    .grid { grid-template-columns: 1fr; }
+    .hint { display: none; }
+    .player { flex-wrap: wrap; }
+    .seek { flex-basis: calc(100% - 44px); }
+    .time { margin-right: auto; }
+  }
+</style>
+</head>
+<body>
+<div id="loading" class="loading" role="status" aria-live="polite" aria-busy="true" hidden>
+  <div class="loading-card">
+    <span class="spinner" aria-hidden="true"></span>
+    <div>
+      <div id="loadingText" class="loading-text">생성 중…</div>
+      <div id="loadingEstimate" class="loading-estimate">예상 시간 계산 중…</div>
+    </div>
+  </div>
+</div>
+<main>
+  <h1>TTS 테스트</h1>
+
+  <form id="form" novalidate>
+    <label for="text">문장</label>
+    <textarea id="text" name="text" required aria-describedby="count"></textarea>
+    <div id="count" class="count" aria-live="polite">0자</div>
+
+    <div class="grid">
+      <div>
+        <label for="voice">목소리</label>
+        <select id="voice" name="voice"></select>
+      </div>
+      <div>
+        <label for="preset">스타일 프리셋</label>
+        <select id="preset">
+          <option value="" hidden>사용자 설정</option>
+        </select>
+      </div>
+      <div>
+        <label for="style">말투</label>
+        <select id="style" name="style" data-preset></select>
+      </div>
+      <div>
+        <div class="speed-head">
+          <label for="strength">감정 강도</label>
+          <output id="strengthOut" for="strength"></output>
+        </div>
+        <input id="strength" type="range" min="0" max="100" step="1" data-preset aria-describedby="strengthNote">
+        <div class="ends"><span>절제</span><span>풍부</span></div>
+        <p class="note" id="strengthNote"></p>
+      </div>
+      <div>
+        <div class="speed-head">
+          <label for="speed">속도</label>
+          <output id="speedOut" for="speed"></output>
+        </div>
+        <input id="speed" name="speed" type="range" data-preset>
+        <div class="ends"><span>느리게</span><span>빠르게</span></div>
+      </div>
+    </div>
+
+    <details>
+      <summary>세부 설정</summary>
+      <div class="grid">
+        <div>
+          <div class="speed-head">
+            <label for="expressiveness">표현력</label>
+            <output id="exprOut" for="expressiveness"></output>
+          </div>
+          <input id="expressiveness" type="range" min="0" max="100" step="1" data-preset>
+          <div class="ends"><span>안정적</span><span>다채롭게</span></div>
+        </div>
+        <div>
+          <label for="question">질문 끝맺음</label>
+          <select id="question" name="question">
+            <option value=".">그대로</option>
+            <option value=",">살짝 올림</option>
+            <option value="…">자연스럽게 올림</option>
+            <option value="?">길게 올림</option>
+          </select>
+        </div>
+        <div>
+          <div class="speed-head">
+            <label for="pause">문장 사이 쉼</label>
+            <output id="pauseOut" for="pause"></output>
+          </div>
+          <input id="pause" name="pause" type="range" data-preset>
+        </div>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button id="go" class="primary" type="submit">생성</button>
+      <div class="takes">
+        <input id="takes" type="number" inputmode="numeric" min="1" value="1" aria-label="생성 개수">
+        <label for="takes">개</label>
+      </div>
+      <select id="format" aria-label="파일 형식">
+        <option value="mp3">MP3</option>
+        <option value="m4a">M4A</option>
+        <option value="wav">WAV</option>
+      </select>
+      <span class="hint" id="hint"></span>
+    </div>
+    <p id="error" class="error" role="alert" hidden></p>
+  </form>
+
+  <section class="result" id="result" aria-label="결과" hidden>
+    <audio id="audio" preload="metadata" hidden></audio>
+    <div class="player">
+      <button type="button" class="icon-btn" id="play" aria-label="재생">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIcon" d="M8 5v14l11-7z"/></svg>
+      </button>
+      <input type="range" class="seek" id="seek" min="0" max="0" step="0.01" value="0" aria-label="재생 위치">
+      <span class="time" id="time" aria-hidden="true">0:00.0 / 0:00.0</span>
+      <div class="volume">
+        <button type="button" class="icon-btn" id="mute" aria-label="음소거" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="volIcon" d=""/></svg>
+        </button>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="1" aria-label="음량">
+      </div>
+      <button type="button" class="rate" id="rate" aria-label="미리 듣기 재생 속도">1x</button>
+    </div>
+    <p class="now"><span id="nowText"></span></p>
+
+    <div class="list">
+      <div class="list-head">
+        <h2 id="listTitle">결과</h2>
+        <button type="button" class="primary" id="zip">전체 다운로드 (ZIP)</button>
+      </div>
+      <ol class="history" id="history"></ol>
+    </div>
+  </section>
+</main>
+
+<script>
+// 화면에서만 쓰는 값: 미리 듣기 배속, 재생 위치 키보드 이동 폭(초)
+// 결과는 이 페이지 메모리에만 있다. 서버·디스크에는 저장하지 않고, 다운로드할 때만 파일이 된다.
+const RATES = [0.75, 1, 1.25, 1.5];
+const NUDGE = 0.1, NUDGE_BIG = 1;
+const ICONS = {
+  play: "M8 5v14l11-7z",
+  pause: "M7 5h4v14H7zM13 5h4v14h-4z",
+  vol: "M4 9v6h4l5 4V5L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z",
+  muted: "M4 9v6h4l5 4V5L8 9H4zm12.6 3 2.2-2.2-1.1-1.1-2.2 2.2-2.2-2.2-1.1 1.1 2.2 2.2-2.2 2.2 1.1 1.1 2.2-2.2 2.2 2.2 1.1-1.1z",
+};
+
+const $ = (id) => document.getElementById(id);
+const form = $("form"), text = $("text"), count = $("count"), speed = $("speed"), speedOut = $("speedOut");
+const go = $("go"), errorBox = $("error"), audio = $("audio"), seek = $("seek"), time = $("time");
+const loading = $("loading"), loadingText = $("loadingText"), loadingEstimate = $("loadingEstimate");
+let maxChars = Infinity, busy = false, history = [], current = null, rateIndex = RATES.indexOf(1);
+
+$("hint").textContent = (/Mac|iP/.test(navigator.platform) ? "⌘" : "Ctrl") + " + Enter";
+
+function showError(msg) { errorBox.textContent = msg; errorBox.hidden = !msg; }
+
+// CPU 합성은 글자 수에 거의 비례한다 (실측 2026-10-08: 123자 5문장 33초 + 발음 검사 3초). 생성 전에 보여 주는 대략적인 예상치다.
+// 발음 검사에서 다시 만드는 문장이 있으면 더 걸린다.
+function estimateTakeSeconds(value) {
+  const cost = voices.find((x) => x.name === $("voice").value)?.cost || 1;
+  return Math.round((3 + [...value].length * 0.3) * cost);
+}
+// 서버가 답하지 않을 때 무한정 기다리지 않도록, 예상 시간의 몇 배가 지나면 요청을 끊는다.
+// 최소 대기 시간은 서버가 알려 준다 (합성 서버가 꺼져 있어 다시 켜는 시간 + 한 문장 제한 시간). 끊긴 요청은 서버도 알아채고 멈춘다.
+const TIMEOUT_FACTOR = 4;
+let timeoutMinSec = 480;
+function formatSeconds(sec) {
+  return sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분 ${sec % 60}초`;
+}
+
+function updateCount() {
+  const n = text.value.trim().length;
+  count.textContent = Number.isFinite(maxChars) ? `${n} / ${maxChars}자` : `${n}자`;
+  count.classList.toggle("over", n > maxChars);
+}
+text.addEventListener("input", () => { updateCount(); showError(""); });  // 고치기 시작하면 이전 오류 문구는 지운다
+speed.addEventListener("input", () => { speedOut.textContent = Number(speed.value).toFixed(2) + "배"; });
+const pause = $("pause");
+pause.addEventListener("input", () => { $("pauseOut").textContent = Number(pause.value).toFixed(2) + "초"; });
+const strength = $("strength"), expr = $("expressiveness"), style = $("style"), preset = $("preset");
+strength.addEventListener("input", () => { $("strengthOut").textContent = strength.value; });
+expr.addEventListener("input", () => { $("exprOut").textContent = expr.value; });
+
+// 감정 강도는 기본 말투에는 섞을 말투가 없어 쓰이지 않는다
+function syncStrength() {
+  const neutral = style.selectedIndex <= 0;
+  strength.disabled = neutral;
+  $("strengthNote").textContent = neutral ? "기본 말투에는 적용되지 않습니다" : "";
+}
+style.addEventListener("change", syncStrength);
+
+// 사용자가 프리셋 값을 직접 바꾸면 프리셋 표시를 "사용자 설정"으로 바꾼다. 코드가 바꾼 값(setValue)은 그대로 둔다.
+let applying = false;
+document.querySelectorAll("[data-preset]").forEach((el) =>
+  el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { if (!applying) preset.value = ""; }));
+
+let voices = [], presets = [];
+function setValue(el, v) {
+  applying = true;
+  el.value = v;
+  el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input"));
+  applying = false;
+}
+// 프리셋 적용. 지금 목소리에 그 말투가 없으면 기본(첫 항목) 말투로.
+function applyPreset() {
+  const p = presets[preset.selectedIndex - 1];
+  if (!p) return;
+  setValue(style, [...style.options].some((o) => o.value === p.style) ? p.style : style.options[0]?.value);
+  setValue(strength, p.strength);
+  setValue(expr, p.expressiveness);
+  setValue(speed, p.speed);
+  setValue(pause, p.pause);
+}
+preset.addEventListener("change", applyPreset);
+
+// 목소리를 바꾸면 그 목소리의 말투 목록으로 바꾼다. 프리셋 말투 → 이전 말투 → 기본 순으로, 그 목소리에 있는 것을 고른다.
+$("voice").addEventListener("change", () => {
+  const want = [presets[preset.selectedIndex - 1]?.style, style.value];
+  const v = voices.find((x) => x.name === $("voice").value);
+  style.replaceChildren(...(v ? v.styles : []).map((s) => new Option(s.name, s.id)));
+  const pick = want.find((id) => v?.styles.some((s) => s.id === id));
+  if (pick) style.value = pick;
+  syncStrength();
+});
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+async function init() {
+  try {
+    const [cfg, vs] = await Promise.all([getJSON("/config"), getJSON("/voices")]);
+    maxChars = cfg.max_chars;
+    if (cfg.timeout_sec) timeoutMinSec = cfg.timeout_sec;
+    $("takes").max = cfg.max_takes;
+    Object.assign(speed, { min: cfg.speed_min, max: cfg.speed_max, step: cfg.speed_step, value: cfg.speed });
+    speed.dispatchEvent(new Event("input"));
+    Object.assign(pause, { min: cfg.pause_min, max: cfg.pause_max, step: cfg.pause_step, value: cfg.pause });
+    pause.dispatchEvent(new Event("input"));
+    $("question").value = cfg.question;
+    voices = vs;
+    $("voice").replaceChildren(...vs.map((v) => new Option(v.name, v.name)));
+    $("voice").dispatchEvent(new Event("change"));
+    presets = cfg.presets;
+    preset.append(...presets.map((p) => new Option(p.name, p.name)));
+    preset.selectedIndex = 1;
+    applyPreset();
+    updateCount();
+  } catch (e) {
+    showError("설정을 불러오지 못했습니다: " + e.message);
+  }
+}
+
+// ---- 생성 ----
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (busy) return;
+  const t = text.value.trim();
+  if (!t) { showError("읽을 문장을 입력하세요."); text.focus(); return; }
+  if (t.length > maxChars) { showError(`문장이 너무 깁니다. ${maxChars}자 이내로 줄여 주세요.`); text.focus(); return; }
+  const n = Math.min(Math.max(1, Math.floor(Number($("takes").value)) || 1), Number($("takes").max) || 1);
+  $("takes").value = n;
+  const req = {
+    text: t, voice: $("voice").value, style: style.value, speed: Number(speed.value), pause: Number(pause.value),
+    question: $("question").value, format: $("format").value,
+    strength: Number(strength.value), expressiveness: Number(expr.value),
+  };
+  showError("");
+  busy = true;
+  go.disabled = true;
+  go.setAttribute("aria-busy", "true");
+  loading.hidden = false;
+  document.body.setAttribute("aria-busy", "true");
+  const perTake = estimateTakeSeconds(t);
+  const totalEstimate = perTake * n;
+  loadingEstimate.textContent = n > 1
+    ? `1개당 약 ${formatSeconds(perTake)} · 총 약 ${formatSeconds(totalEstimate)}`
+    : `예상 약 ${formatSeconds(perTake)}`;
+  const started = Date.now();
+  let k = 1;
+  const tick = () => {
+    const sec = Math.floor((Date.now() - started) / 1000);
+    const label = n > 1 ? `생성 중 ${k}/${n} · ${sec}초` : `생성 중… ${sec}초`;
+    go.textContent = label;
+    loadingText.textContent = label;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  const styleName = style.selectedOptions[0]?.text || req.style;
+  const meta = [req.voice, styleName, strength.disabled ? "" : `감정 ${req.strength}`, `표현력 ${req.expressiveness}`,
+                `${req.speed.toFixed(2)}배`, req.format.toUpperCase()].filter(Boolean).join(" · ");
+  try {
+    // 합성 서버는 한 번에 하나씩 처리하므로 차례로 요청한다. 매번 시드가 달라 결과가 조금씩 다르다.
+    for (; k <= n; k++) {
+      tick();
+      const ctl = new AbortController();
+      const timeout = setTimeout(() => ctl.abort(), Math.max(timeoutMinSec, perTake * TIMEOUT_FACTOR) * 1000);
+      let r;
+      try {
+        r = await fetch("/synth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req), signal: ctl.signal });
+      } catch (e) {
+        if (e.name === "AbortError") throw new Error("서버가 너무 오래 답하지 않아 중단했습니다. tts-web.log 와 합성 서버 로그를 확인하세요.");
+        throw e;
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!r.ok) {
+        let msg = r.statusText;
+        try { msg = (await r.json()).error || msg; } catch {}
+        throw new Error(msg);
+      }
+      const name = decodeURIComponent((r.headers.get("Content-Disposition") || "").split("UTF-8''")[1] || "tts." + req.format);
+      const blob = await r.blob();
+      // 발음 검사에서 다시 만든 횟수를 표시한다 (서버가 X-TTS-Retries 로 알려 준다)
+      const retries = Number(r.headers.get("X-TTS-Retries")) || 0;
+      const item = { blob, url: URL.createObjectURL(blob), name, text: t,
+                     meta: retries ? `${meta} · 다시 만들기 ${retries}회` : meta };
+      history.push(item);
+      if (k === 1) load(item, true); else renderHistory();
+    }
+  } catch (e) {
+    showError(e.message === "Failed to fetch" ? "웹 서버에 연결할 수 없습니다. ./tts-web.sh 가 켜져 있는지 확인하세요." : e.message);
+  } finally {
+    clearInterval(timer);
+    busy = false;
+    go.disabled = false;
+    go.removeAttribute("aria-busy");
+    loading.hidden = true;
+    document.body.removeAttribute("aria-busy");
+    go.textContent = "생성";
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); }
+});
+
+// ---- 결과와 이전 결과 ----
+function load(item, autoplay) {
+  current = item;
+  audio.src = item.url;
+  audio.defaultPlaybackRate = audio.playbackRate = RATES[rateIndex];
+  seek.value = 0;
+  $("nowText").textContent = item.text;
+  $("result").hidden = false;
+  renderHistory();
+  if (autoplay) audio.play().catch(() => {});
+}
+
+// 목록 순서대로 01_, 02_ … 번호를 붙인다. 삭제하면 번호가 다시 매겨진다.
+function seqName(i) {
+  return String(i + 1).padStart(Math.max(2, String(history.length).length), "0") + "_" + history[i].name;
+}
+
+function renderHistory() {
+  const list = $("history");
+  list.replaceChildren(...history.map((item, i) => {
+    const name = seqName(i);
+    const li = document.createElement("li");
+    if (item === current) li.setAttribute("aria-current", "true");
+    const seq = document.createElement("span");
+    seq.className = "seq";
+    seq.textContent = String(i + 1);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "take";
+    b.setAttribute("aria-label", `${i + 1}번 ${item.text} (${item.meta}) 불러오기`);
+    b.innerHTML = '<span class="t"></span><span class="m"></span>';
+    b.querySelector(".t").textContent = item.text;
+    b.querySelector(".m").textContent = item.meta;
+    b.addEventListener("click", () => load(item, true));
+    const a = document.createElement("a");
+    a.href = item.url;
+    a.download = name;
+    a.textContent = "다운로드";
+    a.setAttribute("aria-label", `${name} 다운로드`);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "link-btn";
+    del.textContent = "삭제";
+    del.setAttribute("aria-label", `${i + 1}번 삭제`);
+    del.addEventListener("click", () => removeItem(item));
+    li.append(seq, b, a, del);
+    return li;
+  }));
+  $("listTitle").textContent = `결과 ${history.length}개`;
+  $("zip").hidden = history.length < 2;
+  $("result").hidden = history.length === 0;
+}
+
+function removeItem(item) {
+  const i = history.indexOf(item);
+  history.splice(i, 1);
+  URL.revokeObjectURL(item.url);
+  if (item === current) {
+    audio.pause();
+    audio.removeAttribute("src");
+    current = null;
+    const next = history[Math.min(i, history.length - 1)];
+    if (next) return load(next, false);
+  }
+  renderHistory();
+}
+
+// ---- 일괄 다운로드: 압축 없는(store) ZIP 을 브라우저에서 만든다. 파일 이름은 UTF-8 ----
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1;
+  return n >>> 0;
+});
+function crc32(bytes) {
+  let c = -1;
+  for (const x of bytes) c = CRC_TABLE[(c ^ x) & 255] ^ (c >>> 8);
+  return (c ^ -1) >>> 0;
+}
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], dir = [];
+  let offset = 0;
+  for (const f of files) {
+    const data = new Uint8Array(await f.blob.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint16(6, 0x0800, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    parts.push(local, name, data);
+    const entry = new DataView(new ArrayBuffer(46));
+    entry.setUint32(0, 0x02014b50, true);
+    entry.setUint16(4, 20, true);
+    entry.setUint16(6, 20, true);
+    entry.setUint16(8, 0x0800, true);
+    entry.setUint32(16, crc, true);
+    entry.setUint32(20, data.length, true);
+    entry.setUint32(24, data.length, true);
+    entry.setUint16(28, name.length, true);
+    entry.setUint32(42, offset, true);
+    dir.push(entry, name);
+    offset += 30 + name.length + data.length;
+  }
+  const dirSize = dir.reduce((sum, p) => sum + p.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, dirSize, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...parts, ...dir, end], { type: "application/zip" });
+}
+
+$("zip").addEventListener("click", async () => {
+  const zip = await makeZip(history.map((item, i) => ({ name: seqName(i), blob: item.blob })));
+  const d = new Date(), p = (x) => String(x).padStart(2, "0");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(zip),
+    download: `tts_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.zip`,
+  });
+  a.click();  // ponytail: ZIP blob URL 은 해제하지 않는다 — 페이지를 닫으면 사라진다
+});
+
+// ---- 플레이어 ----
+const fmt = (s) => {
+  s = Math.max(0, s || 0);
+  const m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(1).padStart(4, "0")}`;
+};
+let dragging = false, raf = 0;
+
+function showTime(pos) {
+  const label = `${fmt(pos)} / ${fmt(audio.duration)}`;
+  time.textContent = label;
+  seek.setAttribute("aria-valuetext", label);
+}
+function followPlayback() {
+  if (!dragging) { seek.value = audio.currentTime; showTime(audio.currentTime); }
+  raf = audio.paused ? 0 : requestAnimationFrame(followPlayback);
+}
+function setPlayState() {
+  const playing = !audio.paused;
+  $("playIcon").setAttribute("d", playing ? ICONS.pause : ICONS.play);
+  $("play").setAttribute("aria-label", playing ? "일시 정지" : "재생");
+  if (playing && !raf) raf = requestAnimationFrame(followPlayback);
+}
+function seekTo(t) {
+  t = Math.min(Math.max(0, t), audio.duration || 0);
+  audio.currentTime = t;
+  seek.value = t;
+  showTime(t);
+}
+
+audio.addEventListener("loadedmetadata", () => { seek.max = audio.duration; showTime(0); });
+audio.addEventListener("play", setPlayState);
+audio.addEventListener("pause", setPlayState);
+audio.addEventListener("ended", setPlayState);
+audio.addEventListener("seeked", () => { if (audio.paused) showTime(audio.currentTime); });
+
+$("play").addEventListener("click", () => (audio.paused ? audio.play().catch(() => {}) : audio.pause()));
+
+seek.addEventListener("pointerdown", () => { dragging = true; });
+seek.addEventListener("pointerup", () => { dragging = false; });
+seek.addEventListener("input", () => seekTo(Number(seek.value)));
+seek.addEventListener("keydown", (e) => {
+  const dir = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+  if (!dir) return;
+  e.preventDefault();
+  seekTo(audio.currentTime + dir * (e.shiftKey ? NUDGE_BIG : NUDGE));
+});
+
+const volume = $("volume"), mute = $("mute");
+function setVolumeIcon() {
+  const silent = audio.muted || audio.volume === 0;
+  $("volIcon").setAttribute("d", silent ? ICONS.muted : ICONS.vol);
+  mute.setAttribute("aria-pressed", String(audio.muted));
+  volume.setAttribute("aria-valuetext", `${Math.round(audio.volume * 100)}%`);
+}
+volume.addEventListener("input", () => { audio.volume = Number(volume.value); audio.muted = false; setVolumeIcon(); });
+mute.addEventListener("click", () => { audio.muted = !audio.muted; setVolumeIcon(); });
+setVolumeIcon();
+
+// 배속은 미리 듣기에만 적용된다. 다운로드 파일은 그대로다.
+const rate = $("rate");
+function setRate() {
+  const r = RATES[rateIndex];
+  audio.defaultPlaybackRate = audio.playbackRate = r;
+  rate.textContent = r + "x";
+  rate.setAttribute("aria-label", `미리 듣기 재생 속도 ${r}배, 바꾸려면 누르세요`);
+}
+rate.addEventListener("click", () => { rateIndex = (rateIndex + 1) % RATES.length; setRate(); });
+setRate();
+
+init();
+</script>
+</body>
+</html>

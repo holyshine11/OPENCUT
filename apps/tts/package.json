@@ -1,0 +1,8 @@
+{
+	"name": "@opencut/tts",
+	"version": "0.1.0",
+	"private": true,
+	"scripts": {
+		"dev": "./tts-web.sh"
+	}
+}

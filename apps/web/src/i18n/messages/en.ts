@@ -718,7 +718,7 @@ export const en = {
 		connecting: "Connecting to the TTS server...",
 		offlineTitle: "The TTS server is not reachable",
 		offlineHint:
-			"Run tts-web.sh in the TTS repository (TTS/tts-web.sh), then check again.",
+			"Restart OpenCut (bun run dev:web) to start the TTS server too. First time? Install it with apps/tts/setup-mac.sh, then check again.",
 		retry: "Check again",
 		voice: "Voice",
 		preset: "Preset",
@@ -1051,7 +1051,7 @@ export const en = {
 			{
 				title: "5. Read a script (TTS)",
 				items: [
-					"Start the TTS server first (tts-web.sh in the TTS repo).",
+					"The TTS server starts with OpenCut. Install it once with apps/tts/setup-mac.sh.",
 					"Paste a script, pick a voice and tone, and press Create at playhead. Each sentence becomes one voice clip and one caption.",
 					"To redo a sentence, select its clip and press Regenerate in the Read script tab of properties.",
 				],

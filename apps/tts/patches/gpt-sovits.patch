@@ -1,0 +1,149 @@
+diff --git a/GPT_SoVITS/TTS_infer_pack/TTS.py b/GPT_SoVITS/TTS_infer_pack/TTS.py
+index 5d4c186..a07468a 100644
+--- a/GPT_SoVITS/TTS_infer_pack/TTS.py
++++ b/GPT_SoVITS/TTS_infer_pack/TTS.py
+@@ -448,6 +448,7 @@ class TTS:
+         self.text_preprocessor: TextPreprocessor = TextPreprocessor(
+             self.bert_model, self.bert_tokenizer, self.configs.device
+         )
++        self.text_preprocessor.load_bert = self.load_bert
+ 
+         self.prompt_cache: dict = {
+             "ref_audio_path": None,
+@@ -469,7 +470,7 @@ class TTS:
+     ):
+         self.init_t2s_weights(self.configs.t2s_weights_path)
+         self.init_vits_weights(self.configs.vits_weights_path)
+-        self.init_bert_weights(self.configs.bert_base_path)
++        # BERT(1.3GB)는 중국어 문장에만 쓰여 여기서 읽지 않는다 — 한국어·영어만 읽으면 끝까지 올라가지 않는다
+         self.init_cnhuhbert_weights(self.configs.cnhuhbert_base_path)
+         # self.enable_half_precision(self.configs.is_half)
+ 
+@@ -481,6 +482,10 @@ class TTS:
+         if self.configs.is_half and str(self.configs.device) != "cpu":
+             self.cnhuhbert_model = self.cnhuhbert_model.half()
+ 
++    def load_bert(self):
++        self.init_bert_weights(self.configs.bert_base_path)
++        return self.bert_model, self.bert_tokenizer
++
+     def init_bert_weights(self, base_path: str):
+         print(f"Loading BERT weights from {base_path}")
+         self.bert_tokenizer = AutoTokenizer.from_pretrained(base_path)
+diff --git a/GPT_SoVITS/TTS_infer_pack/TextPreprocessor.py b/GPT_SoVITS/TTS_infer_pack/TextPreprocessor.py
+index 283e91c..e73d082 100644
+--- a/GPT_SoVITS/TTS_infer_pack/TextPreprocessor.py
++++ b/GPT_SoVITS/TTS_infer_pack/TextPreprocessor.py
+@@ -189,6 +189,8 @@ class TextPreprocessor:
+             return phones, bert, norm_text
+ 
+     def get_bert_feature(self, text: str, word2ph: list) -> torch.Tensor:
++        if self.bert_model is None:  # 중국어(zh)에만 쓰여 처음 필요할 때 읽는다 (TTS.load_bert)
++            self.bert_model, self.tokenizer = self.load_bert()
+         with torch.no_grad():
+             inputs = self.tokenizer(text, return_tensors="pt")
+             for i in inputs:
+diff --git a/GPT_SoVITS/inference_webui.py b/GPT_SoVITS/inference_webui.py
+index 7e30057..478eea1 100644
+--- a/GPT_SoVITS/inference_webui.py
++++ b/GPT_SoVITS/inference_webui.py
+@@ -1424,7 +1424,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
+ 
+ if __name__ == "__main__":
+     app.queue().launch(  # concurrency_count=511, max_size=1022
+-        server_name="0.0.0.0",
++        server_name="127.0.0.1",
+         inbrowser=True,
+         share=is_share,
+         server_port=infer_ttswebui,
+diff --git a/GPT_SoVITS/inference_webui_fast.py b/GPT_SoVITS/inference_webui_fast.py
+index 92d145b..f61f671 100644
+--- a/GPT_SoVITS/inference_webui_fast.py
++++ b/GPT_SoVITS/inference_webui_fast.py
+@@ -515,7 +515,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
+ 
+ if __name__ == "__main__":
+     app.queue().launch(  # concurrency_count=511, max_size=1022
+-        server_name="0.0.0.0",
++        server_name="127.0.0.1",
+         inbrowser=True,
+         share=is_share,
+         server_port=infer_ttswebui,
+diff --git a/GPT_SoVITS/module/models.py b/GPT_SoVITS/module/models.py
+index 348ddb3..66d33b2 100644
+--- a/GPT_SoVITS/module/models.py
++++ b/GPT_SoVITS/module/models.py
+@@ -1022,7 +1022,11 @@ class SynthesizerTrn(nn.Module):
+ 
+         quantized = self.quantizer.decode(codes)
+         if self.semantic_frame_rate == "25hz":
+-            quantized = F.interpolate(quantized, size=int(quantized.shape[-1] * 2), mode="nearest")
++            # local patch: apply speed here by repeating the 25 Hz tokens (the x2 upsample already does
++            # this) instead of interpolating encoder outputs, which cost speaker similarity at speed != 1
++            quantized = F.interpolate(quantized, size=int(quantized.shape[-1] * 2 / speed), mode="nearest")
++            y_lengths = torch.LongTensor([quantized.shape[-1]]).to(codes.device)
++            speed = 1
+         x, m_p, logs_p, y_mask, _, _ = self.enc_p(
+             quantized,
+             y_lengths,
+diff --git a/GPT_SoVITS/s2_train.py b/GPT_SoVITS/s2_train.py
+index 333e6a0..83360e1 100644
+--- a/GPT_SoVITS/s2_train.py
++++ b/GPT_SoVITS/s2_train.py
+@@ -118,13 +118,14 @@ def run(rank, n_gpus, hps):
+     collate_fn = TextAudioSpeakerCollate(version=hps.model.version)
+     train_loader = DataLoader(
+         train_dataset,
+-        num_workers=5,
++        # local patch: 이 Mac 에서 작업 프로세스가 간헐적으로 교착 → s2_num_workers (train.sh 기본 0)
++        num_workers=int(os.environ.get("s2_num_workers", 5)),
+         shuffle=False,
+         pin_memory=True,
+         collate_fn=collate_fn,
+         batch_sampler=train_sampler,
+-        persistent_workers=True,
+-        prefetch_factor=3,
++        persistent_workers=int(os.environ.get("s2_num_workers", 5)) > 0,
++        prefetch_factor=3 if int(os.environ.get("s2_num_workers", 5)) > 0 else None,
+     )
+     # if rank == 0:
+     #     eval_dataset = TextAudioSpeakerLoader(hps.data.validation_files, hps.data, val=True)
+diff --git a/tools/subfix_webui.py b/tools/subfix_webui.py
+index 51a7dfa..75484be 100644
+--- a/tools/subfix_webui.py
++++ b/tools/subfix_webui.py
+@@ -417,7 +417,7 @@ if __name__ == "__main__":
+         )
+ 
+     demo.launch(
+-        server_name="0.0.0.0",
++        server_name="127.0.0.1",
+         inbrowser=True,
+         # quiet=True,
+         share=eval(args.is_share),
+diff --git a/tools/uvr5/webui.py b/tools/uvr5/webui.py
+index f5f8d3f..a490873 100644
+--- a/tools/uvr5/webui.py
++++ b/tools/uvr5/webui.py
+@@ -216,7 +216,7 @@ with gr.Blocks(title="UVR5 WebUI", analytics_enabled=False) as app:
+                     api_name="uvr_convert",
+                 )
+ app.queue().launch(  # concurrency_count=511, max_size=1022
+-    server_name="0.0.0.0",
++    server_name="127.0.0.1",
+     inbrowser=True,
+     share=is_share,
+     server_port=webui_port_uvr5,
+diff --git a/webui.py b/webui.py
+index 9c5ddd0..3f05b68 100644
+--- a/webui.py
++++ b/webui.py
+@@ -1973,7 +1973,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI", analytics_enabled=False, js=js, css=css
+             gr.Markdown(value=i18n("施工中，请静候佳音"))
+ 
+     app.queue().launch(  # concurrency_count=511, max_size=1022
+-        server_name="0.0.0.0",
++        server_name="127.0.0.1",
+         inbrowser=True,
+         share=is_share,
+         server_port=webui_port_main,

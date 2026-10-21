@@ -1,0 +1,13 @@
+# 합성 엔진 (setup-mac.sh 가 받는다, 자체 .git, 12GB). 학습한 가중치도 이 안에 있다
+GPT-SoVITS/
+# 목소리 참조 음성 (비공개 목소리 묶음 Release 로만 주고받는다 — voices-release.sh, setup-mac.sh)
+*.wav
+# 발음 검사 Whisper 모델 (setup-mac.sh 가 받는다)
+models/faster-whisper-small/
+# 합성 서버가 가중치를 바꿀 때마다 다시 쓰는 설정 (tts-server.sh 가 TTS_CONFIG 에서 복사)
+.tts-server.yaml
+# setup-mac.sh 가 받은 목소리 묶음 태그
+.voices-tag
+*.part
+*.log
+__pycache__/

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "neutral",
+    "name": "기본",
+    "params": {
+      "ref_audio_path": "songkang2_ref_slow.wav",
+      "prompt_text": "고기 육수에 다시마 육수까지 섞어서 맑고 깊은 육수를 만들어줍니다.",
+      "aux_ref_audio_paths": [
+        "songkang2_aux1.wav",
+        "songkang2_aux2.wav",
+        "songkang2_aux3.wav",
+        "songkang2_aux4.wav",
+        "songkang2_aux5.wav",
+        "songkang2_aux6.wav"
+      ]
+    }
+  }
+]

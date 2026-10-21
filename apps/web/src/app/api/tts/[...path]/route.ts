@@ -1,4 +1,4 @@
-// 대본 읽기 합성 서버(TTS 저장소 tts-web.py)로 요청을 넘긴다. 브라우저가 서버에 바로 보내면 CORS에 걸린다.
+// 대본 읽기 합성 서버(apps/tts/tts-web.py)로 요청을 넘긴다. 브라우저가 서버에 바로 보내면 CORS에 걸린다.
 // 주소는 요청마다 TTS_URL에서 읽는다. next.config의 rewrites는 빌드할 때 주소가 굳어서 쓰지 않는다
 import type { NextRequest } from "next/server";
 
@@ -10,7 +10,7 @@ const ALLOWED_PATHS = {
 type Method = keyof typeof ALLOWED_PATHS;
 
 const OFFLINE_MESSAGE =
-	"TTS 서버가 꺼져 있습니다. TTS 저장소에서 tts-web.sh를 실행하세요 (TTS/tts-web.sh).";
+	"TTS 서버가 꺼져 있습니다. bun run dev:web으로 다시 켜세요. 처음이면 apps/tts/setup-mac.sh로 먼저 설치하세요.";
 const UNCONFIGURED_MESSAGE =
 	"TTS 서버 주소(TTS_URL)가 설정되지 않았습니다. apps/web/.env.local에 TTS_URL을 넣으세요.";
 

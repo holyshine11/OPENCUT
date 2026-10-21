@@ -1,0 +1,7 @@
+[
+  { "name": "일반", "style": "neutral", "strength": 50, "expressiveness": 50, "speed": 1.0, "pause": 0.3 },
+  { "name": "나레이션", "style": "calm", "strength": 40, "expressiveness": 45, "speed": 0.95, "pause": 0.45 },
+  { "name": "뉴스", "style": "serious", "strength": 25, "expressiveness": 30, "speed": 1.0, "pause": 0.25 },
+  { "name": "광고", "style": "bright", "strength": 75, "expressiveness": 75, "speed": 1.05, "pause": 0.2 },
+  { "name": "친근한 대화", "style": "soft", "strength": 65, "expressiveness": 65, "speed": 1.0, "pause": 0.35 }
+]
