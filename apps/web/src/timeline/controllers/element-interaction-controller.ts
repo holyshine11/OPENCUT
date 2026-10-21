@@ -12,11 +12,16 @@ import {
 	type MediaTime,
 	mediaTime,
 	roundFrameTime,
+	roundMediaTime,
 	subMediaTime,
 	TICKS_PER_SECOND,
 	ZERO_MEDIA_TIME,
 } from "@/wasm";
-import { TIMELINE_DRAG_THRESHOLD_PX } from "@/timeline/components/interaction";
+import {
+	TIMELINE_DRAG_THRESHOLD_PX,
+	TIMELINE_FINE_DRAG_RATIO,
+	TIMELINE_TRACK_SWITCH_THRESHOLD_PX,
+} from "@/timeline/components/interaction";
 import type { FrameRate } from "opencut-wasm";
 import { computeDropTarget } from "@/timeline/components/drop-target";
 import { getMouseTimeFromClientX } from "@/timeline/drag-utils";
@@ -118,6 +123,10 @@ interface DragProgress {
 	currentTime: MediaTime;
 	currentMouseX: number;
 	currentMouseY: number;
+	/** 마우스 위치에서 클립 시작까지의 거리. Shift 천천히 끌기를 마치면 그 자리에 맞춰 다시 잡는다 */
+	clickOffsetTime: MediaTime;
+	/** Shift를 누른 순간의 마우스 x와 클립 시각. 누르는 동안만 있다 */
+	fine: { mouseX: number; time: MediaTime } | null;
 	groupMoveResult: GroupMoveResult | null;
 	dropTarget: DropTarget | null;
 }
@@ -155,6 +164,41 @@ function verticalDirection({
 	if (currentMouseY < startMouseY) return "up";
 	if (currentMouseY > startMouseY) return "down";
 	return null;
+}
+
+/** 위아래로 문턱만큼 움직이기 전에는 원래 트랙에 둔다 */
+export function keepsSourceTrack({
+	startMouseY,
+	currentMouseY,
+}: {
+	startMouseY: number;
+	currentMouseY: number;
+}): boolean {
+	return Math.abs(currentMouseY - startMouseY) < TIMELINE_TRACK_SWITCH_THRESHOLD_PX;
+}
+
+/** Shift 천천히 끌기. 누른 순간의 시각에서 마우스가 움직인 거리의 일부만큼만 옮긴다 */
+export function fineDragTime({
+	fine,
+	clientX,
+	zoomLevel,
+	fps,
+}: {
+	fine: { mouseX: number; time: MediaTime };
+	clientX: number;
+	zoomLevel: number;
+	fps: FrameRate;
+}): MediaTime {
+	const seconds =
+		((clientX - fine.mouseX) / (BASE_TIMELINE_PIXELS_PER_SECOND * zoomLevel)) *
+		TIMELINE_FINE_DRAG_RATIO;
+	return roundFrameTime({
+		time: maxMediaTime({
+			a: ZERO_MEDIA_TIME,
+			b: roundMediaTime({ time: fine.time + seconds * TICKS_PER_SECOND }),
+		}),
+		fps,
+	});
 }
 
 function orderedTracks(sceneTracks: SceneTracks): TimelineTrack[] {
@@ -305,6 +349,9 @@ export class ElementInteractionController {
 	// has already returned to idle, so the "was this a drag?" answer must
 	// outlive the session. Reset on the next mousedown.
 	private lastGestureWasDrag = false;
+	// Shift·⌘로 이미 고른 클립을 누르면 바로 빼지 않고, 끌지 않고 뗐을 때(클릭)만 뺀다.
+	// 그래야 여러 클립을 고른 채 Shift를 누르고 끌어도 선택이 풀리지 않는다
+	private pendingDeselect: ElementRef | null = null;
 
 	private readonly subscribers = new Set<() => void>();
 	private readonly depsRef: ElementInteractionDepsRef;
@@ -387,7 +434,10 @@ export class ElementInteractionController {
 
 		// ⌥+⌘로 이미 고른 클립을 잡으면 선택을 풀지 않는다. 고른 클립 전체를 끌어 복사한다
 		const isCopyGrab = event.altKey && this.deps.selection.isSelected(ref);
-		if ((event.metaKey || event.ctrlKey || event.shiftKey) && !isCopyGrab) {
+		const isMultiKey = event.metaKey || event.ctrlKey || event.shiftKey;
+		const wasSelected = this.deps.selection.isSelected(ref);
+		this.pendingDeselect = isMultiKey && wasSelected && !isCopyGrab ? ref : null;
+		if (isMultiKey && !wasSelected && !isCopyGrab) {
 			this.deps.selection.handleClick({ ...ref, isMultiKey: true });
 		}
 
@@ -431,9 +481,14 @@ export class ElementInteractionController {
 			return;
 		}
 
-		if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-
 		const ref = { trackId: track.id, elementId: element.id };
+		if (event.metaKey || event.ctrlKey || event.shiftKey) {
+			if (this.pendingDeselect?.elementId === ref.elementId) {
+				this.deps.selection.handleClick({ ...ref, isMultiKey: true });
+			}
+			this.pendingDeselect = null;
+			return;
+		}
 		if (
 			!this.deps.selection.isSelected(ref) ||
 			this.deps.selection.getSelected().length > 1
@@ -511,21 +566,34 @@ export class ElementInteractionController {
 		const tracks = scene.getTracks();
 		const zoomLevel = viewport.getZoomLevel();
 
-		const anchorDropTarget = resolveDropTarget({
-			clientX,
-			clientY,
-			elementId: mousedown.elementId,
-			trackId: mousedown.trackId,
-			tracks,
-			trackFolders: scene.getTrackFolders(),
-			viewport,
-			zoomLevel,
-			snappedTime,
-			verticalDragDirection: verticalDirection({
-				startMouseY: mousedown.origin.y,
-				currentMouseY: clientY,
-			}),
-		});
+		// 좌우로 끄는 동안 손이 조금 흔들려 트랙이 바뀌지 않게, 문턱 안에서는 원래 트랙을 겨눈다.
+		// 원래 트랙에서 겹치면 아래 resolveGroupMoveForDrop이 예전처럼 새 트랙으로 보낸다
+		const sourceTrackIndex = tracks.findIndex(({ id }) => id === mousedown.trackId);
+		const anchorDropTarget: DropTarget | null =
+			sourceTrackIndex >= 0 &&
+			keepsSourceTrack({ startMouseY: mousedown.origin.y, currentMouseY: clientY })
+				? {
+						trackIndex: sourceTrackIndex,
+						isNewTrack: false,
+						insertPosition: null,
+						xPosition: snappedTime,
+						targetElement: null,
+					}
+				: resolveDropTarget({
+						clientX,
+						clientY,
+						elementId: mousedown.elementId,
+						trackId: mousedown.trackId,
+						tracks,
+						trackFolders: scene.getTrackFolders(),
+						viewport,
+						zoomLevel,
+						snappedTime,
+						verticalDragDirection: verticalDirection({
+							startMouseY: mousedown.origin.y,
+							currentMouseY: clientY,
+						}),
+					});
 
 		const nextGroupMoveResult = anchorDropTarget
 			? resolveGroupMoveForDrop({
@@ -548,6 +616,7 @@ export class ElementInteractionController {
 		clientX,
 		clientY,
 		altKey,
+		shiftKey,
 	}: MouseEvent): void => {
 		const scrollContainer = this.deps.viewport.getTracksScrollEl();
 		if (!scrollContainer) return;
@@ -561,6 +630,7 @@ export class ElementInteractionController {
 				mousedown: this.session.mousedown,
 				clientX,
 				clientY,
+				shiftKey,
 				scrollContainer,
 			});
 			return;
@@ -572,6 +642,7 @@ export class ElementInteractionController {
 				drag: this.session.drag,
 				clientX,
 				clientY,
+				shiftKey,
 				scrollContainer,
 			});
 		}
@@ -581,11 +652,13 @@ export class ElementInteractionController {
 		mousedown,
 		clientX,
 		clientY,
+		shiftKey,
 		scrollContainer,
 	}: {
 		mousedown: MousedownSnapshot;
 		clientX: number;
 		clientY: number;
+		shiftKey: boolean;
 		scrollContainer: HTMLDivElement;
 	}): void {
 		if (
@@ -611,13 +684,19 @@ export class ElementInteractionController {
 		if (!moveGroup) return;
 
 		const zoomLevel = this.deps.viewport.getZoomLevel();
-		const frameSnappedTime = frameSnappedMouseTime({
-			clientX,
-			scrollContainer,
-			zoomLevel,
-			clickOffsetTime: mousedown.clickOffsetTime,
-			fps,
-		});
+		// Shift를 누른 채 잡았으면 처음부터 천천히 끈다
+		const fine = shiftKey
+			? { mouseX: mousedown.origin.x, time: mousedown.startElementTime }
+			: null;
+		const frameSnappedTime = fine
+			? fineDragTime({ fine, clientX, zoomLevel, fps })
+			: frameSnappedMouseTime({
+					clientX,
+					scrollContainer,
+					zoomLevel,
+					clickOffsetTime: mousedown.clickOffsetTime,
+					fps,
+				});
 		const { snappedTime, snapPoint } = this.snapResult({
 			frameSnappedTime,
 			group: moveGroup,
@@ -640,6 +719,8 @@ export class ElementInteractionController {
 			currentTime: snappedTime,
 			currentMouseX: clientX,
 			currentMouseY: clientY,
+			clickOffsetTime: mousedown.clickOffsetTime,
+			fine,
 			groupMoveResult: null,
 			dropTarget: null,
 		};
@@ -664,24 +745,45 @@ export class ElementInteractionController {
 		drag,
 		clientX,
 		clientY,
+		shiftKey,
 		scrollContainer,
 	}: {
 		mousedown: MousedownSnapshot;
 		drag: DragProgress;
 		clientX: number;
 		clientY: number;
+		shiftKey: boolean;
 		scrollContainer: HTMLDivElement;
 	}): void {
 		const fps = this.deps.scene.getActiveFps();
 		if (!fps) return;
+		const zoomLevel = this.deps.viewport.getZoomLevel();
 
-		const frameSnappedTime = frameSnappedMouseTime({
-			clientX,
-			scrollContainer,
-			zoomLevel: this.deps.viewport.getZoomLevel(),
-			clickOffsetTime: mousedown.clickOffsetTime,
-			fps,
-		});
+		// Shift를 누르는 동안은 마우스가 움직인 거리의 일부만 옮긴다(천천히 끌기).
+		// 떼면 클립이 마우스 밑으로 튀지 않도록 지금 자리에 맞춰 잡은 위치를 다시 잡는다
+		if (shiftKey && !drag.fine) {
+			drag.fine = { mouseX: clientX, time: drag.currentTime };
+		} else if (!shiftKey && drag.fine) {
+			drag.fine = null;
+			drag.clickOffsetTime = subMediaTime({
+				a: getMouseTimeFromClientX({
+					clientX,
+					containerRect: scrollContainer.getBoundingClientRect(),
+					zoomLevel,
+					scrollLeft: scrollContainer.scrollLeft,
+				}),
+				b: drag.currentTime,
+			});
+		}
+		const frameSnappedTime = drag.fine
+			? fineDragTime({ fine: drag.fine, clientX, zoomLevel, fps })
+			: frameSnappedMouseTime({
+					clientX,
+					scrollContainer,
+					zoomLevel,
+					clickOffsetTime: drag.clickOffsetTime,
+					fps,
+				});
 		const { snappedTime, snapPoint } = this.snapResult({
 			frameSnappedTime,
 			group: drag.moveGroup,

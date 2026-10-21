@@ -41,6 +41,7 @@ import {
 import { findSubtitleEntry, listSubtitleGroups } from "@/subtitles/groups";
 import { splitIndexAtTime } from "@/subtitles/edit";
 import { cueOf, mergeSubtitles, splitSubtitle } from "@/subtitles/list-actions";
+import { planNudge } from "@/timeline/group-move";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -187,9 +188,25 @@ export function useEditorActions() {
 		undefined,
 	);
 
+	// 클립을 골랐으면 Shift+←/→는 재생헤드 대신 고른 클립을 1프레임씩 옮긴다(미세 이동).
+	// 겹치거나 0초 앞이면 그대로 둔다. 고른 클립이 없을 때만 재생헤드를 5초 옮긴다
+	const nudgeSelected = ({ direction }: { direction: 1 | -1 }): boolean => {
+		const selected = editor.selection.getSelectedElements();
+		if (selected.length === 0) return false;
+		const fps = editor.project.getActive().settings.fps;
+		const moves = planNudge({
+			tracks: editor.scenes.getActiveScene().tracks,
+			selectedElements: selected,
+			delta: direction * Math.round((TICKS_PER_SECOND * fps.denominator) / fps.numerator),
+		});
+		if (moves) editor.timeline.moveElements({ moves });
+		return true;
+	};
+
 	useActionHandler(
 		"jump-forward",
 		(args) => {
+			if (nudgeSelected({ direction: 1 })) return;
 			const seconds = args?.seconds ?? 5;
 			const delta = mediaTimeFromSeconds({ seconds });
 			editor.playback.seek({
@@ -208,6 +225,7 @@ export function useEditorActions() {
 	useActionHandler(
 		"jump-backward",
 		(args) => {
+			if (nudgeSelected({ direction: -1 })) return;
 			const seconds = args?.seconds ?? 5;
 			const delta = mediaTimeFromSeconds({ seconds });
 			editor.playback.seek({

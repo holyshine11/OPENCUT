@@ -208,6 +208,15 @@ function resolveExistingTrackIdsByElementId({
 		return null;
 	}
 
+	const keptOffsets = resolveByTrackOffset({
+		group,
+		tracks,
+		anchorTargetDisplayIndex,
+	});
+	if (keptOffsets) {
+		return keptOffsets;
+	}
+
 	const targetTrackIdsByElementId = new Map<string, string>();
 	const usedTrackIds = new Set<string>();
 	const anchorPlacement = getTrackPlacementByDisplayIndex({
@@ -274,6 +283,37 @@ function resolveExistingTrackIdsByElementId({
 		lowerBoundaryIndex = targetPlacement.displayIndex;
 	}
 
+	return targetTrackIdsByElementId;
+}
+
+/**
+ * 모든 클립을 기준 클립과 같은 칸 수만큼 위아래로 옮긴다. 좌우로만 끌면 각자 제 트랙에 남는다.
+ * 옮겨 갈 트랙이 없거나 종류가 다르면 null이고, 그때는 가장 가까운 맞는 트랙을 찾는다
+ */
+function resolveByTrackOffset({
+	group,
+	tracks,
+	anchorTargetDisplayIndex,
+}: {
+	group: MoveGroup;
+	tracks: SceneTracks;
+	anchorTargetDisplayIndex: number;
+}): Map<string, string> | null {
+	const offset = anchorTargetDisplayIndex - group.anchor.displayIndex;
+	const targetTrackIdsByElementId = new Map<string, string>();
+	for (const member of group.members) {
+		const placement = getTrackPlacementByDisplayIndex({
+			tracks,
+			displayIndex: member.displayIndex + offset,
+		});
+		if (
+			placement?.trackType !==
+			getTrackTypeForElementType({ elementType: member.elementType })
+		) {
+			return null;
+		}
+		targetTrackIdsByElementId.set(member.elementId, placement.trackId);
+	}
 	return targetTrackIdsByElementId;
 }
 
