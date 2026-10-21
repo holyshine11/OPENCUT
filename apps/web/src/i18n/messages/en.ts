@@ -200,7 +200,12 @@ export const en = {
 		exportClips: "Export clips",
 		video: "Video",
 		audio: "Audio",
+		image: "Image",
 		unknown: "Unknown",
+		openFolder: "Show in Finder",
+		openingFolder: "Copying files to the folder...",
+		openedFolder: "Opened the folder in Finder",
+		openFolderFailed: "Could not open the folder",
 		switchToList: "Switch to list view",
 		switchToGrid: "Switch to grid view",
 		sortBy: {

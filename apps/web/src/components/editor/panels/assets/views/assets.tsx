@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { MediaDragOverlay } from "@/components/editor/panels/assets/drag-overlay";
 import { DraggableItem } from "@/components/editor/panels/assets/draggable-item";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
 	ContextMenu,
@@ -46,11 +47,13 @@ import {
 	useAssetsPanelStore,
 } from "@/components/editor/panels/assets/assets-panel-store";
 import { MASKABLE_ELEMENT_TYPES } from "@/timeline";
-import type { MediaAsset } from "@/media/types";
+import type { MediaAsset, MediaType } from "@/media/types";
+import { useSoundLibraryStore } from "@/sounds/sound-library";
 import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
 	Delete02Icon,
+	Folder03Icon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
 	SortingOneNineIcon,
@@ -67,7 +70,14 @@ export function MediaView() {
 	const mediaFiles = useEditor((e) => e.media.getAssets());
 	const activeProject = useEditor((e) => e.project.getActive());
 
+	const sounds = useSoundLibraryStore((state) => state.sounds);
+	useEffect(() => {
+		void useSoundLibraryStore.getState().load();
+	}, []);
+
 	const {
+		mediaTab,
+		setMediaTab,
 		mediaViewMode,
 		setMediaViewMode,
 		highlightMediaId,
@@ -151,8 +161,23 @@ export function MediaView() {
 		}
 	};
 
+	// 다른 탭의 미디어로 이동해 달라는 요청이 오면 그 종류의 탭을 연다
+	useEffect(() => {
+		const target = mediaFiles.find((item) => item.id === highlightMediaId);
+		if (target) setMediaTab(target.type);
+	}, [highlightMediaId, mediaFiles, setMediaTab]);
+
 	const filteredMediaItems = useMemo(() => {
-		const filtered = mediaFiles.filter((item) => !item.ephemeral);
+		// 효과음 탭에서 넣은 소리는 효과음 탭에서만 보인다 (importSoundAsMedia와 같은 이름·크기 기준)
+		const soundKeys = new Set(
+			sounds.map((sound) => `${sound.fileName}:${sound.size}`),
+		);
+		const filtered = mediaFiles.filter(
+			(item) =>
+				!item.ephemeral &&
+				item.type === mediaTab &&
+				!soundKeys.has(`${item.name}:${item.file.size}`),
+		);
 
 		filtered.sort((a, b) => {
 			let valueA: string | number;
@@ -185,10 +210,44 @@ export function MediaView() {
 		});
 
 		return filtered;
-	}, [mediaFiles, mediaSortBy, mediaSortOrder]);
+	}, [mediaFiles, mediaTab, sounds, mediaSortBy, mediaSortOrder]);
 	const orderedMediaIds = useMemo(() => {
 		return filteredMediaItems.map((item) => item.id);
 	}, [filteredMediaItems]);
+
+	const openFolder = () => {
+		if (!activeProject) return;
+		const folderUrl = (name?: string) =>
+			`/api/media-folder?${new URLSearchParams({
+				// 이름이 같은 프로젝트끼리 섞이지 않게 id 앞부분을 붙인다
+				project: `${activeProject.metadata.name} (${activeProject.metadata.id.slice(0, FOLDER_ID_LENGTH)})`,
+				kind: m.media[mediaTab],
+				...(name && { name }),
+			})}`;
+		const send = async ({ url, init }: { url: string; init: RequestInit }) => {
+			const response = await fetch(url, init);
+			if (!response.ok) {
+				const body = await response.json().catch(() => null);
+				throw new Error(body?.error ?? m.media.openFolderFailed);
+			}
+		};
+		toast.promise(
+			async () => {
+				for (const item of filteredMediaItems) {
+					await send({
+						url: folderUrl(item.name),
+						init: { method: "PUT", body: item.file },
+					});
+				}
+				await send({ url: folderUrl(), init: { method: "POST" } });
+			},
+			{
+				loading: m.media.openingFolder,
+				success: m.media.openedFolder,
+				error: (error: Error) => error.message,
+			},
+		);
+	};
 
 	return (
 		<>
@@ -198,6 +257,7 @@ export function MediaView() {
 				title={m.media.title}
 				actions={
 					<MediaActions
+						onOpenFolder={openFolder}
 						mediaViewMode={mediaViewMode}
 						setMediaViewMode={setMediaViewMode}
 						isProcessing={isProcessing}
@@ -211,6 +271,23 @@ export function MediaView() {
 				contentClassName="h-full"
 				{...dragProps}
 			>
+				<Tabs
+					value={mediaTab}
+					onValueChange={(value) => {
+						const tab = MEDIA_TABS.find((key) => key === value);
+						if (tab) setMediaTab(tab);
+					}}
+					variant="underline"
+					className="mb-2"
+				>
+					<TabsList aria-label={m.media.title}>
+						{MEDIA_TABS.map((tab) => (
+							<TabsTrigger key={tab} value={tab}>
+								{m.media[tab]}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
 				{isDragOver || filteredMediaItems.length === 0 ? (
 					<MediaDragOverlay
 						isVisible={true}
@@ -237,6 +314,9 @@ export function MediaView() {
 		</>
 	);
 }
+
+const MEDIA_TABS: MediaType[] = ["video", "audio", "image"];
+const FOLDER_ID_LENGTH = 8;
 
 function MediaScopeRegistrar() {
 	useSelectionScope();
@@ -551,7 +631,9 @@ function MediaActions({
 	sortOrder,
 	onSort,
 	onImport,
+	onOpenFolder,
 }: {
+	onOpenFolder: () => void;
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
 	isProcessing: boolean;
@@ -564,6 +646,23 @@ function MediaActions({
 	return (
 		<div className="flex gap-1.5">
 			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							size="icon"
+							variant="ghost"
+							onClick={onOpenFolder}
+							disabled={isProcessing}
+							aria-label={m.media.openFolder}
+							className="items-center justify-center"
+						>
+							<HugeiconsIcon icon={Folder03Icon} />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>
+						<p>{m.media.openFolder}</p>
+					</TooltipContent>
+				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button

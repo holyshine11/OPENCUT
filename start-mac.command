@@ -20,6 +20,10 @@ git pull --ff-only || echo "업데이트 실패, 기존 버전으로 실행합�
 
 # 대본 읽기(TTS) 서버 주소 등 기본 설정. 이미 있으면 건드리지 않는다
 [ -f apps/web/.env.local ] || cp apps/web/.env.example apps/web/.env.local
+# 나중에 생긴 설정(예: MEDIA_FOLDER)은 기존 .env.local에 없으니 빠진 것만 덧붙인다
+grep -E '^[A-Z_]+=' apps/web/.env.example | while IFS= read -r line; do
+	grep -q "^${line%%=*}=" apps/web/.env.local || echo "$line" >> apps/web/.env.local
+done
 
 head=$(git rev-parse HEAD)
 if [ "$(cat "$BUILT_MARK" 2>/dev/null)" != "$head" ]; then
@@ -42,4 +46,5 @@ fi
 
 (until curl -s -o /dev/null "http://localhost:$PORT"; do sleep 1; done; open "http://localhost:$PORT") &
 echo "OpenCut 실행 중: http://localhost:$PORT  (종료: 이 창에서 Ctrl+C)"
-PORT="$PORT" bun run --cwd apps/web start
+# 이 맥에서만 접속하게 한다 (미디어 폴더 API가 디스크에 파일을 쓴다)
+PORT="$PORT" bun run --cwd apps/web start -H 127.0.0.1

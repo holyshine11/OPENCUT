@@ -16,6 +16,7 @@ import {
 	AiVoiceIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import type { MediaType } from "@/media/types";
 
 export const TAB_KEYS = [
 	"media",
@@ -88,6 +89,8 @@ interface AssetsPanelStore {
 	clearHighlight: () => void;
 
 	/* Media */
+	mediaTab: MediaType;
+	setMediaTab: (tab: MediaType) => void;
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
 	mediaSortBy: MediaSortKey;
@@ -111,6 +114,8 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 			requestRevealMedia: (mediaId) =>
 				set({ activeTab: "media", highlightMediaId: mediaId }),
 			clearHighlight: () => set({ highlightMediaId: null }),
+			mediaTab: "video",
+			setMediaTab: (tab) => set({ mediaTab: tab }),
 			mediaViewMode: "grid",
 			setMediaViewMode: (mode) => set({ mediaViewMode: mode }),
 			mediaSortBy: "name",
@@ -127,6 +132,7 @@ export const useAssetsPanelStore = create<AssetsPanelStore>()(
 		{
 			name: "assets-panel",
 			partialize: (state) => ({
+				mediaTab: state.mediaTab,
 				mediaViewMode: state.mediaViewMode,
 				mediaSortBy: state.mediaSortBy,
 				mediaSortOrder: state.mediaSortOrder,

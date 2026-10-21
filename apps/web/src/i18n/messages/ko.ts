@@ -190,7 +190,12 @@ export const ko: Messages = {
 		exportClips: "클립 내보내기",
 		video: "동영상",
 		audio: "오디오",
+		image: "이미지",
 		unknown: "알 수 없음",
+		openFolder: "Finder에서 보기",
+		openingFolder: "폴더에 파일을 복사하는 중...",
+		openedFolder: "Finder에서 폴더를 열었어요",
+		openFolderFailed: "폴더를 열지 못했어요",
 		switchToList: "목록 보기로 전환",
 		switchToGrid: "격자 보기로 전환",
 		sortBy: {
