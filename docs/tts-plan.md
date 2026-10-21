@@ -76,6 +76,8 @@ OPENCUT이 TTS에 대해 아는 것은 주소 하나(환경 변수 `TTS_URL`)와
 
 지금은 mp3·m4a만 준다. 편집기 안에서 한 번 더 인코딩해 내보내므로 손실 압축을 두 번 거친다. `tts-web.py` `FORMATS`에 `"wav": ("pcm_s16le", ..., "wav", "audio/wav")` 한 줄을 더하고 OPENCUT은 WAV로 받는다. 문장 하나가 수백 KB라 용량 문제는 없다.
 
+2026-10-21: 실제로 써 보니 문장마다 WAV가 쌓여 프로젝트가 무거워져서 OPENCUT은 mp3(`TTS_MP3_BITRATE`, 128k)로 받는다. 말소리라 내보낼 때 한 번 더 인코딩해도 차이가 들리지 않고 용량은 5분의 1쯤이다. 형식은 `apps/web/src/tts/settings.json`의 `format` 한 곳에서 바꾼다.
+
 ### 3-5. 클립에 합성 정보를 남긴다
 
 다시 만들기와 "글자를 고쳐서 음성이 낡음" 표시를 하려면 음성 클립이 무엇으로 만들어졌는지 알아야 한다. `timeline/types.ts` `AudioElement`에 선택 필드 하나를 더한다.
@@ -119,7 +121,7 @@ tts?: {
 
 ```
 대본 → splitSentences → 문장 i마다 (순서대로, 한 번에 하나):
-  POST /api/tts/synth (format wav) → Blob → File("tts-송이-001.wav")
+  POST /api/tts/synth (format mp3) → Blob → File("tts-송이-001.mp3")
   → processMediaAssets → editor.media.addMediaAsset → 길이 d_i
   → 시작 t_i = t_(i-1) + d_(i-1) + pause
   → buildCaptionChunks({ segments: [{ text, start: t_i, end: t_i + d_i }], layout })
