@@ -107,6 +107,7 @@ export const en = {
 		degradedRenderer: "For the best experience, open OpenCut in Chrome.",
 		dismiss: "Dismiss",
 		shortcuts: "Shortcuts",
+		guide: "User guide",
 		mobileGate: {
 			goBack: "Go back",
 			title: "Desktop only (for now)",
@@ -1011,6 +1012,73 @@ export const en = {
 			notNow: "Not now",
 			allow: "Allow",
 		},
+	},
+	guide: {
+		title: "OpenCut user guide",
+		intro:
+			"Media on the left, preview in the middle, properties on the right, timeline at the bottom. Click a clip on the timeline and its settings appear on the right.",
+		sections: [
+			{
+				title: "1. Bring in media",
+				items: [
+					"Import from the Media tab, or drop video, photo and audio files onto it.",
+					"Drag a file onto the timeline, or press + to add it.",
+				],
+			},
+			{
+				title: "2. Cut and arrange",
+				items: [
+					"Put the playhead where you want and split. Right-click a clip to split, duplicate, extract audio or change its color.",
+					"Drag a clip's edges to trim it. Ripple editing closes the gap when you delete.",
+					"Undo with ⌘Z. Every key can be changed under Shortcuts.",
+				],
+			},
+			{
+				title: "3. Auto cut (find edit points)",
+				items: [
+					"Select a clip and open the Auto cut tab in properties, then press Find edit points.",
+					"It only splits where speech starts or ends and where the picture stops or moves. You decide what to delete or speed up.",
+				],
+			},
+			{
+				title: "4. Captions",
+				items: [
+					"In the Captions tab, pick a language and press Generate captions. It runs on this computer, offline.",
+					"Enter names and terms first and they come out spelled right.",
+					"Fix text and timing in the Subtitle list tab. It has find and replace and SRT export. Words you fix are learned for next time.",
+				],
+			},
+			{
+				title: "5. Read a script (TTS)",
+				items: [
+					"Start the TTS server first (tts-web.sh in the TTS repo).",
+					"Paste a script, pick a voice and tone, and press Create at playhead. Each sentence becomes one voice clip and one caption.",
+					"To redo a sentence, select its clip and press Regenerate in the Read script tab of properties.",
+				],
+			},
+			{
+				title: "6. Decorate",
+				items: [
+					"Text, Stickers, Effects, Transitions, Adjustment and Sounds tabs on the left.",
+					"Transitions: select a clip, then pick one. Color grading lives in the Adjustment tab.",
+				],
+			},
+			{
+				title: "7. Fine-tune and sound",
+				items: [
+					"Properties: transform, speed, fade, masks, audio. ⌘-click a slider to reset it.",
+					"On the timeline, drag the volume line or the fade handles of a clip. The audio mixer balances whole tracks.",
+					"Bookmarks mark spots to revisit. ⌘-drag on the ruler to loop a range.",
+				],
+			},
+			{
+				title: "8. Export",
+				items: [
+					"Press Export at the top right to save the video.",
+					"To keep the whole project, use Backup (.zip) in the project list.",
+				],
+			},
+		],
 	},
 	shortcuts: {
 		title: "Keyboard shortcuts",

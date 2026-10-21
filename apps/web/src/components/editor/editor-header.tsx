@@ -6,23 +6,24 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import Link from "next/link";
 import { RenameProjectDialog } from "@/project/components/rename-project-dialog";
 import { DeleteProjectDialog } from "@/project/components/delete-project-dialog";
 import { useRouter } from "next/navigation";
-import { FaDiscord } from "react-icons/fa6";
 import { ExportButton } from "./export-button";
 import { ThemeToggle } from "../theme-toggle";
 import { DEFAULT_LOGO_URL } from "@/site/brand";
-import { SOCIAL_LINKS } from "@/site/social";
 import { toast } from "sonner";
 import { useEditor } from "@/editor/use-editor";
-import { CommandIcon, Logout05Icon } from "@hugeicons/core-free-icons";
+import {
+	BookOpen01Icon,
+	CommandIcon,
+	Logout05Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "@/actions/components/shortcuts-dialog";
+import { GuideDialog } from "./guide-dialog";
 import Image from "next/image";
 import { cn } from "@/utils/ui";
 import { useMessages } from "@/i18n";
@@ -44,7 +45,7 @@ export function EditorHeader() {
 
 function ProjectDropdown() {
 	const [openDialog, setOpenDialog] = useState<
-		"delete" | "rename" | "shortcuts" | null
+		"delete" | "rename" | "shortcuts" | "guide" | null
 	>(null);
 	const [isExiting, setIsExiting] = useState(false);
 	const router = useRouter();
@@ -137,16 +138,11 @@ function ProjectDropdown() {
 						{m.editor.shortcuts}
 					</DropdownMenuItem>
 
-					<DropdownMenuSeparator />
-
-					<DropdownMenuItem asChild icon={<FaDiscord className="size-4!" />}>
-						<Link
-							href={SOCIAL_LINKS.discord}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Discord
-						</Link>
+					<DropdownMenuItem
+						onClick={() => setOpenDialog("guide")}
+						icon={<HugeiconsIcon icon={BookOpen01Icon} />}
+					>
+						{m.editor.guide}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -165,6 +161,10 @@ function ProjectDropdown() {
 			<ShortcutsDialog
 				isOpen={openDialog === "shortcuts"}
 				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "shortcuts" : null)}
+			/>
+			<GuideDialog
+				isOpen={openDialog === "guide"}
+				onOpenChange={(isOpen) => setOpenDialog(isOpen ? "guide" : null)}
 			/>
 		</>
 	);

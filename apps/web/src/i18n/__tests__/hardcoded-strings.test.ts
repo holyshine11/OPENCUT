@@ -7,7 +7,6 @@ import { en } from "../messages/en";
 // aria-label·title·placeholder·alt 값)를 찾는다. 번역하지 않는 게 맞는 문구만 아래에 사유와 함께 둔다.
 const ALLOWED = new Set([
 	// 브랜드·서비스 이름
-	"components/editor/editor-header.tsx: Discord",
 	"components/icons/brand.tsx: Vercel",
 	"components/icons/brand.tsx: Marble",
 	"components/icons/brand.tsx: Data Buddy",
