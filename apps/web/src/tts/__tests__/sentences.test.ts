@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { splitSentences } from "../sentences";
+import { nextTtsFileNumber, splitSentences } from "../sentences";
 import { buildLineCaptions, placeLines } from "../placement";
 
 const LONG_LIMIT = 1000;
@@ -127,5 +127,20 @@ describe("buildLineCaptions", () => {
 		expect(captions.map((caption) => caption.text)).toEqual(["네"]);
 		expect(captions[0].startTime).toBe(2);
 		expect(captions[0].duration).toBeCloseTo(0.3);
+	});
+});
+
+describe("nextTtsFileNumber", () => {
+	test("같은 목소리 파일 중 가장 큰 번호 다음", () => {
+		expect(
+			nextTtsFileNumber({
+				names: ["tts-송이-001.mp3", "tts-송이-012.mp3", "tts-송강-030.mp3", "intro.mp4"],
+				voice: "송이",
+			}),
+		).toBe(13);
+	});
+
+	test("없으면 1", () => {
+		expect(nextTtsFileNumber({ names: ["tts-송강-004.mp3"], voice: "송이" })).toBe(1);
 	});
 });

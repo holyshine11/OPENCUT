@@ -44,3 +44,15 @@ function splitAtCommas({
 	}
 	return pieces.filter((piece) => HAS_WORD.test(piece));
 }
+
+/** 다음 음성 파일 번호. 프로젝트에 이미 있는 `tts-<목소리>-<번호>.*` 중 가장 큰 번호 다음부터 잇는다 */
+export function nextTtsFileNumber({ names, voice }: { names: string[]; voice: string }): number {
+	const prefix = `tts-${voice}-`;
+	let max = 0;
+	for (const name of names) {
+		if (!name.startsWith(prefix)) continue;
+		const number = Number.parseInt(name.slice(prefix.length), 10);
+		if (number > max) max = number;
+	}
+	return max + 1;
+}

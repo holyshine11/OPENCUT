@@ -19,6 +19,7 @@ import {
 import settings from "@/tts/settings.json";
 import { synthesize, type TtsSynthRequest } from "./client";
 import { buildLineCaptions, placeLines } from "./placement";
+import { nextTtsFileNumber } from "./sentences";
 import { fitTtsTargets, pickTtsTargets } from "./targets";
 
 export type TtsVoiceSettings = Omit<TtsSynthRequest, "text">;
@@ -153,12 +154,17 @@ export async function synthesizeAssets({
 }): Promise<MediaAsset[]> {
 	const project = editor.project.getActive();
 	const processed: ProcessedMediaAsset[] = [];
+	// 미디어 패널에서 문장을 구분할 수 있게 실행할 때마다 001부터 다시 매기지 않고 이어 매긴다
+	const firstNumber = nextTtsFileNumber({
+		names: editor.media.getAssets().map((asset) => asset.name),
+		voice: voiceSettings.voice,
+	});
 
 	try {
 		for (const [index, text] of sentences.entries()) {
 			onProgress({ current: index + 1, total: sentences.length });
 			const blob = await synthesize({ request: { ...voiceSettings, text }, signal });
-			const number = String(index + 1).padStart(settings.fileNumberDigits, "0");
+			const number = String(firstNumber + index).padStart(settings.fileNumberDigits, "0");
 			const file = new File(
 				[blob],
 				`tts-${voiceSettings.voice}-${number}.${settings.format}`,
