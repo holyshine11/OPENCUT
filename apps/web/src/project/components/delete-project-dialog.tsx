@@ -11,6 +11,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useMessages } from "@/i18n";
+import { useState } from "react";
+
+const CONFIRM_WORD = "DELETE";
 
 export function DeleteProjectDialog({
 	isOpen,
@@ -27,6 +30,13 @@ export function DeleteProjectDialog({
 	const count = projectNames.length;
 	const isSingle = count === 1;
 	const singleName = isSingle ? projectNames[0] : null;
+	// 다이얼로그가 열릴 때마다 비운다. 지난번에 입력한 DELETE가 남아 있으면 확인 절차가 무의미해진다
+	const [typed, setTyped] = useState("");
+	const [wasOpen, setWasOpen] = useState(isOpen);
+	if (isOpen !== wasOpen) {
+		setWasOpen(isOpen);
+		if (isOpen) setTyped("");
+	}
 
 	return (
 		<Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -66,9 +76,11 @@ export function DeleteProjectDialog({
 						</Label>
 						<Input
 							type="text"
-							placeholder="DELETE"
+							placeholder={CONFIRM_WORD}
 							size="lg"
 							variant="destructive"
+							value={typed}
+							onChange={(event) => setTyped(event.target.value)}
 						/>
 					</div>
 				</DialogBody>
@@ -76,7 +88,11 @@ export function DeleteProjectDialog({
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
 						{m.dialogs.cancel}
 					</Button>
-					<Button variant="destructive" onClick={onConfirm}>
+					<Button
+						variant="destructive"
+						disabled={typed !== CONFIRM_WORD}
+						onClick={onConfirm}
+					>
 						{m.dialogs.deleteProject.confirm}
 					</Button>
 				</DialogFooter>
