@@ -249,7 +249,8 @@ async function transcribe({
 			inputs: input_features,
 			decoder_input_ids: initTokens,
 			return_token_timestamps: true,
-			num_frames: Math.floor(slice.length / featureConfig.hop_length),
+			// 교차 어텐션은 인코더 위치(멜 프레임의 절반) 단위다. 멜 프레임 수를 그대로 주면 30초 패딩까지 정렬해 단어 시간이 무음 끝으로 몰린다
+			num_frames: Math.floor(slice.length / featureConfig.hop_length / 2),
 			max_new_tokens: modelConfig.max_target_positions - initTokens.length,
 		} as never)) as unknown as { sequences: Tensor; token_timestamps: Tensor };
 
