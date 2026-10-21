@@ -235,6 +235,11 @@ export function MediaView() {
 		toast.promise(
 			async () => {
 				for (const item of filteredMediaItems) {
+					const exists = await fetch(
+						`${folderUrl(item.name)}&size=${item.file.size}`,
+						{ method: "HEAD" },
+					);
+					if (exists.status === 204) continue;
 					await send({
 						url: folderUrl(item.name),
 						init: { method: "PUT", body: item.file },

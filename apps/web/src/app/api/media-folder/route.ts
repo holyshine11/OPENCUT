@@ -40,6 +40,38 @@ function resolveFolder(request: NextRequest): string | Response {
 	return join(root, project, kind);
 }
 
+/** 이미 복사한 파일(같은 이름·크기)이 있으면 null, 없으면 쓸 경로. 이름만 같은 다른 파일은 "이름 (2)"로 둔다 */
+async function findTarget({
+	folder,
+	name,
+	size,
+}: {
+	folder: string;
+	name: string;
+	size: number;
+}): Promise<string | null> {
+	const { name: base, ext } = parse(name);
+	let target = join(folder, name);
+	for (let copy = 2; ; copy++) {
+		const existing = await stat(target).catch(() => null);
+		if (!existing) return target;
+		if (existing.size === size) return null;
+		target = join(folder, `${base} (${copy})${ext}`);
+	}
+}
+
+// 올리기 전에 이미 있는지 묻는다. PUT이 본문을 다 받기 전에 204로 답하면 브라우저는 연결이 끊긴 것으로 본다
+export async function HEAD(request: NextRequest) {
+	const folder = resolveFolder(request);
+	if (folder instanceof Response) return new Response(null, { status: folder.status });
+	const params = request.nextUrl.searchParams;
+	const name = safeSegment(params.get("name"));
+	const size = Number(params.get("size"));
+	if (!name || !Number.isFinite(size)) return new Response(null, { status: 400 });
+	const target = await findTarget({ folder, name, size });
+	return new Response(null, { status: target ? 404 : 204 });
+}
+
 export async function PUT(request: NextRequest) {
 	const folder = resolveFolder(request);
 	if (folder instanceof Response) return folder;
@@ -48,16 +80,9 @@ export async function PUT(request: NextRequest) {
 		return Response.json({ error: "잘못된 파일입니다." }, { status: 400 });
 	}
 
-	// 이미 복사한 파일(같은 이름·크기)은 건너뛰고, 이름만 같은 다른 파일은 "이름 (2)"로 둔다
 	const size = Number(request.headers.get("content-length"));
-	const { name: base, ext } = parse(name);
-	let target = join(folder, name);
-	for (let copy = 2; ; copy++) {
-		const existing = await stat(target).catch(() => null);
-		if (!existing) break;
-		if (existing.size === size) return new Response(null, { status: 204 });
-		target = join(folder, `${base} (${copy})${ext}`);
-	}
+	const target = await findTarget({ folder, name, size });
+	if (!target) return new Response(null, { status: 204 });
 
 	await mkdir(folder, { recursive: true });
 	// 끝까지 받은 뒤에 이름을 바꿔서 반쯤 쓴 파일이 남지 않게 한다
