@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
 	detectSpeechRegions,
 	filterHallucinations,
+	findMissedRegions,
 	groupSpeechRegions,
+	joinRegions,
+	toOriginalRange,
 } from "../speech-regions";
 
 const WORD_SECONDS = 0.4;
@@ -39,7 +42,7 @@ describe("detectSpeechRegions", () => {
 });
 
 describe("groupSpeechRegions", () => {
-	test("최대 길이 안에서 묶고, 넘는 구간은 자른다", () => {
+	test("무음을 줄여 이은 길이로 묶고, 넘는 구간은 자른다", () => {
 		const groups = groupSpeechRegions({
 			regions: [
 				{ start: 0, end: 5 },
@@ -47,13 +50,72 @@ describe("groupSpeechRegions", () => {
 				{ start: 20, end: 45 },
 			],
 			maxGroupSeconds: 10,
+			joinSeconds: 0.5,
 		});
 		expect(groups).toEqual([
-			{ start: 0, end: 9 },
-			{ start: 20, end: 30 },
-			{ start: 30, end: 40 },
-			{ start: 40, end: 45 },
+			[
+				{ start: 0, end: 5 },
+				{ start: 6, end: 9 },
+			],
+			[{ start: 20, end: 30 }],
+			[{ start: 30, end: 40 }],
+			[{ start: 40, end: 45 }],
 		]);
+	});
+
+	test("긴 무음을 사이에 둔 짧은 말들도 한 묶음이 된다", () => {
+		const groups = groupSpeechRegions({
+			regions: [
+				{ start: 0, end: 4 },
+				{ start: 20, end: 24 },
+			],
+			maxGroupSeconds: 10,
+			joinSeconds: 0.5,
+		});
+		expect(groups).toEqual([
+			[
+				{ start: 0, end: 4 },
+				{ start: 20, end: 24 },
+			],
+		]);
+	});
+});
+
+describe("toOriginalRange", () => {
+	// 이은 오디오: 0~2초는 원래 10~12초, 0.5초 줄인 무음, 2.5~3.5초는 원래 30~31초
+	const joined = joinRegions({
+		regions: [
+			{ start: 10, end: 12 },
+			{ start: 30, end: 31 },
+		],
+		joinSeconds: 0.5,
+	});
+	const expectRange = ({ start, end, expected }: { start: number; end: number; expected: [number, number] }) => {
+		const range = toOriginalRange({ joined, start, end });
+		expect(range.start).toBeCloseTo(expected[0]);
+		expect(range.end).toBeCloseTo(expected[1]);
+	};
+
+	test("구간 안의 단어는 원래 시각으로 되돌린다", () => {
+		expectRange({ start: 0.5, end: 1, expected: [10.5, 11] });
+		expectRange({ start: 2.7, end: 3, expected: [30.2, 30.5] });
+	});
+
+	test("경계에 걸친 단어는 긴 무음을 차지하지 않고 더 많이 겹치는 구간에 들어간다", () => {
+		expectRange({ start: 1.2, end: 2.6, expected: [11.2, 12] });
+		expectRange({ start: 1.9, end: 3.2, expected: [30, 30.7] });
+	});
+});
+
+describe("findMissedRegions", () => {
+	test("단어가 하나도 없는 긴 구간만 돌려준다", () => {
+		const regions = [
+			{ start: 0, end: 4 },
+			{ start: 5, end: 9 },
+			{ start: 10, end: 10.5 },
+		];
+		const words = [{ start: 6, end: 6.4 }];
+		expect(findMissedRegions({ regions, words, minSeconds: 1.5 })).toEqual([{ start: 0, end: 4 }]);
 	});
 });
 

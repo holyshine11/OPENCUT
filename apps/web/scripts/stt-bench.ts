@@ -99,7 +99,12 @@ for (const video of videos) {
 		const hyp = normalize(result.text);
 		cer = `${((editDistance({ a: ref, b: hyp }) / ref.length) * 100).toFixed(1)}%`;
 	}
+	// 단어 시간이 무너진 정도. 길이 0인 단어와 앞 단어보다 먼저 시작하는 단어를 센다
+	const words = result.segments.flatMap((segment) => segment.words ?? []);
+	const badTiming = words.filter(
+		(word, i) => word.end <= word.start || word.start < (words[i - 1]?.start ?? word.start),
+	).length;
 	console.log(
-		`${name}\taudio ${audioSeconds.toFixed(0)}s\ttook ${elapsed.toFixed(0)}s\tCER ${cer}`,
+		`${name}\taudio ${audioSeconds.toFixed(0)}s\ttook ${elapsed.toFixed(0)}s\tCER ${cer}\tbad timing ${badTiming}/${words.length}`,
 	);
 }

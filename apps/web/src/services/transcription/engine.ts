@@ -14,7 +14,12 @@ import settings from "@/transcription/settings.json";
 import {
 	detectSpeechRegions,
 	filterHallucinations,
+	findMissedRegions,
 	groupSpeechRegions,
+	joinedLength,
+	joinRegions,
+	toOriginalRange,
+	type JoinedRegion,
 	type TimeRange,
 } from "@/transcription/speech-regions";
 import type {
@@ -23,7 +28,7 @@ import type {
 } from "@/transcription/types";
 
 // 브라우저 worker와 측정 스크립트(bun)가 함께 쓰는 음성 인식 본체.
-// VAD로 말하는 구간만 골라 30초 이내로 묶고, 묶음마다 Whisper를 돌려 단어 시간 정보를 받는다.
+// VAD로 말하는 구간만 골라 무음을 줄여 이어 붙이고 30초 이내로 묶어, 묶음마다 Whisper를 돌려 단어 시간 정보를 받는다.
 
 // 모델은 앱 폴더(public/)에서만 읽는다. 인터넷 없이 돌아가야 하므로 Hugging Face는 쓰지 않고,
 // 파일은 `bun run models`(scripts/fetch-models.ts)로 미리 받아 둔다.
@@ -37,6 +42,8 @@ type ProgressInfo = { status?: string; file?: string; loaded?: number; total?: n
 
 // VAD는 전체 진행률에서 이만큼을 차지한다. 나머지는 Whisper.
 const VAD_PROGRESS_SHARE = 0.1;
+// 빠진 말을 다시 듣는 단계의 몫
+const REFILL_PROGRESS_SHARE = 0.1;
 
 interface AsrChunk {
 	text: string;
@@ -171,6 +178,25 @@ async function detectSpeech({
 	});
 }
 
+/** 묶음의 구간들만 `joined` 배치대로 이어 붙인다. 줄인 무음 자리는 0으로 둔다 */
+function joinAudio({
+	audio,
+	joined,
+}: {
+	audio: Float32Array;
+	joined: readonly JoinedRegion[];
+}): Float32Array {
+	const sampleRate = DEFAULT_TRANSCRIPTION_SAMPLE_RATE;
+	const result = new Float32Array(Math.ceil(joinedLength({ joined }) * sampleRate));
+	for (const region of joined) {
+		const offset = Math.floor(region.at * sampleRate);
+		const from = Math.floor(region.start * sampleRate);
+		const length = Math.min(Math.round((region.end - region.start) * sampleRate), result.length - offset);
+		result.set(audio.subarray(from, from + length), offset);
+	}
+	return result;
+}
+
 function buildPromptTokens({
 	tokenizer,
 	config,
@@ -216,6 +242,7 @@ async function transcribe({
 	const groups = groupSpeechRegions({
 		regions: speechRegions,
 		maxGroupSeconds: settings.vad.maxGroupSeconds,
+		joinSeconds: settings.vad.joinSeconds,
 	});
 
 	const config = model.generation_config as unknown as WhisperGenerationConfig;
@@ -238,12 +265,9 @@ async function transcribe({
 		config.no_timestamps_token_id,
 	];
 
-	const groupWords: TranscriptionWord[][] = [];
-	for (const [index, group] of groups.entries()) {
-		const slice = audio.subarray(
-			Math.floor(group.start * sampleRate),
-			Math.ceil(group.end * sampleRate),
-		);
+	const transcribeGroup = async (group: TimeRange[]): Promise<TranscriptionWord[]> => {
+		const joined = joinRegions({ regions: group, joinSeconds: settings.vad.joinSeconds });
+		const slice = joinAudio({ audio, joined });
 		const { input_features } = await processor(slice);
 		const output = (await model.generate({
 			inputs: input_features,
@@ -271,35 +295,58 @@ async function transcribe({
 			[{ tokens, token_timestamps: tokenTimestamps, stride: [slice.length / sampleRate, 0, 0] }],
 			{ return_timestamps: "word", time_precision: timePrecision, force_full_sequences: false },
 		);
-		groupWords.push(
-			chunks.map((chunk) => ({
+		return filterHallucinations({
+			words: chunks.map((chunk) => ({
 				text: chunk.text,
-				start: group.start + chunk.timestamp[0],
-				end: group.start + (chunk.timestamp[1] ?? chunk.timestamp[0]),
+				...toOriginalRange({
+					joined,
+					start: chunk.timestamp[0],
+					end: chunk.timestamp[1] ?? chunk.timestamp[0],
+				}),
 			})),
-		);
-		onProgress?.(VAD_PROGRESS_SHARE + ((index + 1) / groups.length) * (1 - VAD_PROGRESS_SHARE));
-	}
-
-	const segments: TranscriptionSegment[] = [];
-	for (const [index, words] of groupWords.entries()) {
-		const kept = filterHallucinations({
-			words,
 			speechRegions,
 			maxRepeats: settings.filter.maxRepeats,
 			maxRepeatNgram: settings.filter.maxRepeatNgram,
 			minSpeechOverlap: settings.filter.minSpeechOverlap,
 			phrases: settings.filter.hallucinationPhrases,
 		});
-		const text = kept.map((word) => word.text).join("").trim();
-		if (!text) continue;
+	};
+
+	const groupWords: TranscriptionWord[][] = [];
+	for (const [index, group] of groups.entries()) {
+		groupWords.push(await transcribeGroup(group));
+		onProgress?.(VAD_PROGRESS_SHARE + ((index + 1) / groups.length) * (1 - VAD_PROGRESS_SHARE - REFILL_PROGRESS_SHARE));
+	}
+
+	// Whisper는 묶음 앞뒤나 반복에 빠진 뒤의 말을 통째로 빼먹곤 한다. 단어가 하나도 없는 긴 말소리만 모아 한 번 더 듣는다
+	const refillGroups = groupSpeechRegions({
+		regions: findMissedRegions({
+			regions: speechRegions,
+			words: groupWords.flat(),
+			minSeconds: settings.vad.refillMinSeconds,
+		}),
+		maxGroupSeconds: settings.vad.maxGroupSeconds,
+		joinSeconds: settings.vad.joinSeconds,
+	});
+	for (const [index, group] of refillGroups.entries()) {
+		groupWords.push(await transcribeGroup(group));
+		onProgress?.(1 - REFILL_PROGRESS_SHARE + ((index + 1) / refillGroups.length) * REFILL_PROGRESS_SHARE);
+	}
+
+	const segments: TranscriptionSegment[] = [];
+	for (const words of groupWords) {
+		const text = words.map((word) => word.text).join("").trim();
+		const first = words[0];
+		const last = words.at(-1);
+		if (!text || !first || !last) continue;
 		segments.push({
 			text,
-			start: kept[0]?.start ?? groups[index].start,
-			end: kept.at(-1)?.end ?? groups[index].end,
-			words: kept.map((word) => ({ ...word, text: word.text.trim() })),
+			start: first.start,
+			end: last.end,
+			words: words.map((word) => ({ ...word, text: word.text.trim() })),
 		});
 	}
+	segments.sort((a, b) => a.start - b.start);
 	onProgress?.(1);
 
 	return { text: segments.map((segment) => segment.text).join(" "), segments };

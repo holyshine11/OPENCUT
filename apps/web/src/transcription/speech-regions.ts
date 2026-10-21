@@ -63,24 +63,98 @@ export function detectSpeechRegions({
 	return padded;
 }
 
-/** 말하는 구간을 Whisper 한 번에 넣을 수 있는 길이로 묶는다 */
+/** 이어 붙인 오디오 안의 구간. `at`은 이어 붙인 오디오에서 이 구간이 시작하는 시각 */
+export interface JoinedRegion extends TimeRange {
+	at: number;
+}
+
+/**
+ * 말하는 구간만 이어 붙인 배치를 만든다. 구간 사이 무음은 `joinSeconds`까지만 남긴다.
+ * 긴 무음이 끼어 있으면 Whisper가 그 사이 말을 빼먹고 단어 시간도 무음 너머로 밀려서다
+ */
+export function joinRegions({
+	regions,
+	joinSeconds,
+}: {
+	regions: readonly TimeRange[];
+	joinSeconds: number;
+}): JoinedRegion[] {
+	const joined: JoinedRegion[] = [];
+	for (const region of regions) {
+		const previous = joined.at(-1);
+		const at = previous
+			? previous.at + previous.end - previous.start + Math.min(joinSeconds, region.start - previous.end)
+			: 0;
+		joined.push({ ...region, at });
+	}
+	return joined;
+}
+
+export function joinedLength({ joined }: { joined: readonly JoinedRegion[] }): number {
+	const last = joined.at(-1);
+	return last ? last.at + last.end - last.start : 0;
+}
+
+/**
+ * 이어 붙인 오디오의 단어 구간을 원래 시각으로 되돌린다. 단어는 가장 많이 겹치는 구간 하나 안에 둔다.
+ * 그대로 되돌리면 구간 경계에 걸친 단어가 그 사이의 긴 무음을 통째로 차지한다
+ */
+export function toOriginalRange({
+	joined,
+	start,
+	end,
+}: {
+	joined: readonly JoinedRegion[];
+	start: number;
+	end: number;
+}): TimeRange {
+	const overlap = (region: JoinedRegion) =>
+		Math.min(end, region.at + region.end - region.start) - Math.max(start, region.at);
+	const region = joined.reduce((best, candidate) => (overlap(candidate) > overlap(best) ? candidate : best));
+	const clamp = (time: number) => Math.min(region.end, Math.max(region.start, region.start + time - region.at));
+	return { start: clamp(start), end: clamp(end) };
+}
+
+/** 어떤 단어와도 겹치지 않은 말하는 구간 가운데 `minSeconds` 이상인 것. 더 짧은 소리는 군말일 때가 많아 다시 듣지 않는다 */
+export function findMissedRegions({
+	regions,
+	words,
+	minSeconds,
+}: {
+	regions: readonly TimeRange[];
+	words: readonly TimeRange[];
+	minSeconds: number;
+}): TimeRange[] {
+	return regions.filter(
+		(region) =>
+			region.end - region.start >= minSeconds &&
+			!words.some((word) => word.start <= region.end && region.start <= word.end),
+	);
+}
+
+/**
+ * 말하는 구간을 Whisper 한 번에 넣을 묶음으로 나눈다. 길이는 무음을 줄여 이어 붙인 길이로 잰다
+ * (`joinRegions`). 최대 길이보다 긴 구간은 잘라서 넣는다
+ */
 export function groupSpeechRegions({
 	regions,
 	maxGroupSeconds,
+	joinSeconds,
 }: {
 	regions: TimeRange[];
 	maxGroupSeconds: number;
-}): TimeRange[] {
-	const groups: TimeRange[] = [];
+	joinSeconds: number;
+}): TimeRange[][] {
+	const groups: TimeRange[][] = [];
 	for (const region of regions) {
 		// ponytail: 한 구간이 최대 길이보다 길면 그냥 자른다. 단어가 잘리면 침묵이 가장 긴 지점에서 자르도록 바꾼다
 		for (let start = region.start; start < region.end; start += maxGroupSeconds) {
 			const piece = { start, end: Math.min(region.end, start + maxGroupSeconds) };
 			const last = groups.at(-1);
-			if (last && piece.end - last.start <= maxGroupSeconds) {
-				last.end = piece.end;
+			if (last && joinedLength({ joined: joinRegions({ regions: [...last, piece], joinSeconds }) }) <= maxGroupSeconds) {
+				last.push(piece);
 			} else {
-				groups.push(piece);
+				groups.push([piece]);
 			}
 		}
 	}

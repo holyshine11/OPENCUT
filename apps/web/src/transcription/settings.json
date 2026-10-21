@@ -16,6 +16,8 @@
 		"minSpeechSeconds": 0.25,
 		"speechPadSeconds": 0.2,
 		"maxGroupSeconds": 28,
+		"joinSeconds": 0.5,
+		"refillMinSeconds": 1.5,
 		"stateSize": 128
 	},
 	"local": {
