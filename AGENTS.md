@@ -8,6 +8,8 @@ An ongoing migration is moving all business logic into `rust/`. Each app under `
 
 The single source of truth for all non-UI code. Everything platform-agnostic belongs here: no components, no hooks, no framework imports.
 
+The web app uses the local build in `rust/wasm/pkg` (`"opencut-wasm": "file:…"`), not the npm package, and the build is committed so a fresh clone needs no Rust toolchain. After changing anything under `rust/`, run `bun run build:wasm` (rebuilds and reinstalls) and commit `rust/wasm/pkg` with the change. A stale build shows up as `Invalid frame descriptor: missing field …` at runtime.
+
 ### `apps/`
 
 Each app is a frontend that calls into Rust. Logic is never duplicated between apps — only UI is, because each platform may use an entirely different framework and language to build it.
