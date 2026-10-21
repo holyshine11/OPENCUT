@@ -6,6 +6,7 @@ import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { MediaDragOverlay } from "@/components/editor/panels/assets/drag-overlay";
 import { DraggableItem } from "@/components/editor/panels/assets/draggable-item";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -303,6 +304,7 @@ export function MediaView() {
 						onRevealComplete={clearHighlight}
 					>
 						<MediaScopeRegistrar />
+						<MediaBulkBar ids={orderedMediaIds} onRemove={handleRemove} />
 						<MediaItemList
 							items={filteredMediaItems}
 							mode={mediaViewMode}
@@ -321,6 +323,65 @@ const FOLDER_ID_LENGTH = 8;
 function MediaScopeRegistrar() {
 	useSelectionScope();
 	return null;
+}
+
+// 체크박스를 눌러도 목록 바탕 클릭(선택 해제)·박스 선택·드래그가 시작되지 않게 막는다
+function stopSurfaceEvents(event: React.SyntheticEvent) {
+	event.stopPropagation();
+}
+
+function MediaBulkBar({
+	ids,
+	onRemove,
+}: {
+	ids: string[];
+	onRemove: ({
+		event,
+		ids,
+	}: {
+		event: React.MouseEvent;
+		ids: string[];
+	}) => void;
+}) {
+	const m = useMessages();
+	const { selectedIds, setSelection } = useSelection();
+	const allChecked =
+		selectedIds.length === 0
+			? false
+			: selectedIds.length === ids.length
+				? true
+				: "indeterminate";
+
+	return (
+		<div
+			role="toolbar"
+			className="mb-2 flex items-center justify-between gap-2"
+			onClick={stopSurfaceEvents}
+			onKeyDown={stopSurfaceEvents}
+			onMouseDown={stopSurfaceEvents}
+			onPointerDown={stopSurfaceEvents}
+		>
+			<label className="flex items-center gap-2 text-xs">
+				<Checkbox
+					checked={allChecked}
+					onCheckedChange={(checked) => setSelection(checked ? ids : [])}
+				/>
+				{m.media.selectAll}
+			</label>
+			<Button
+				size="sm"
+				variant="ghost"
+				className="text-muted-foreground hover:text-destructive h-7 gap-1 px-2 text-xs"
+				disabled={selectedIds.length === 0}
+				onClick={(event) => onRemove({ event, ids: selectedIds })}
+			>
+				<HugeiconsIcon icon={Delete02Icon} className="size-3.5" />
+				{selectedIds.length > 0
+					? m.media.deleteItems({ count: selectedIds.length })
+					: m.media.delete}
+			</Button>
+		</div>
+	);
 }
 
 function MediaAssetDraggable({
@@ -401,7 +462,7 @@ function MediaItemWithContextMenu({
 	}) => void;
 }) {
 	const m = useMessages();
-	const { isSelected, selectedIds } = useSelection();
+	const { isSelected, selectedIds, setSelection } = useSelection();
 	const idsToDelete = isSelected(item.id) ? selectedIds : [item.id];
 	const deleteLabel =
 		idsToDelete.length > 1
@@ -411,7 +472,27 @@ function MediaItemWithContextMenu({
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
-				<div className={cn("group/media relative", !isGrid && "w-full")}>
+				<div
+					className={cn(
+						"group/media relative",
+						!isGrid && "flex w-full items-center gap-2",
+					)}
+				>
+					<Checkbox
+						aria-label={item.name}
+						checked={isSelected(item.id)}
+						onCheckedChange={(checked) =>
+							setSelection(
+								checked
+									? [...selectedIds, item.id]
+									: selectedIds.filter((id) => id !== item.id),
+							)
+						}
+						onClick={stopSurfaceEvents}
+						onMouseDown={stopSurfaceEvents}
+						onPointerDown={stopSurfaceEvents}
+						className={cn(isGrid && "absolute top-1 left-1 z-10")}
+					/>
 					{children}
 					<Button
 						size="icon"

@@ -9,6 +9,7 @@ interface SelectionContextValue {
 	isBoxSelecting: boolean;
 	isSelected: (id: string) => boolean;
 	clearSelection: () => void;
+	setSelection: (ids: string[]) => void;
 	handleItemClick: ({
 		event,
 		id,
@@ -39,8 +40,14 @@ export function useSelectionContext() {
 }
 
 export function useSelection() {
-	const { selectedIds, anchorId, highlightedId, isSelected, clearSelection } =
-		useSelectionContext();
+	const {
+		selectedIds,
+		anchorId,
+		highlightedId,
+		isSelected,
+		clearSelection,
+		setSelection,
+	} = useSelectionContext();
 
 	return {
 		selectedIds,
@@ -48,5 +55,6 @@ export function useSelection() {
 		highlightedId,
 		isSelected,
 		clearSelection,
+		setSelection,
 	};
 }

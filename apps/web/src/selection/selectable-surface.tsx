@@ -85,6 +85,10 @@ export function SelectableSurface({
 		setSelectionState(clearSelection());
 	}, []);
 
+	const setSelection = useCallback((ids: string[]) => {
+		setSelectionState(replaceSelection({ ids }));
+	}, []);
+
 	const selectedIdSet = useMemo(
 		() => new Set(selectionState.selectedIds),
 		[selectionState.selectedIds],
@@ -251,6 +255,7 @@ export function SelectableSurface({
 			isBoxSelecting,
 			isSelected,
 			clearSelection: clearSelectionState,
+			setSelection,
 			handleItemClick,
 			handleItemMouseDown,
 			registerItem,
@@ -263,6 +268,7 @@ export function SelectableSurface({
 		isBoxSelecting,
 		isSelected,
 		registerItem,
+		setSelection,
 		selectionState.anchorId,
 		selectionState.selectedIds,
 	]);

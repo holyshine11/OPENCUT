@@ -187,6 +187,7 @@ export const ko: Messages = {
 		title: "미디어",
 		delete: "삭제",
 		deleteItems: ({ count }) => `${count}개 삭제`,
+		selectAll: "모두 선택",
 		exportClips: "클립 내보내기",
 		video: "동영상",
 		audio: "오디오",

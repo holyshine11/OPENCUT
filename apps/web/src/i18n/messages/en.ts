@@ -197,6 +197,7 @@ export const en = {
 		title: "Assets",
 		delete: "Delete",
 		deleteItems: ({ count }: { count: number }) => `Delete ${count} items`,
+		selectAll: "Select all",
 		exportClips: "Export clips",
 		video: "Video",
 		audio: "Audio",
