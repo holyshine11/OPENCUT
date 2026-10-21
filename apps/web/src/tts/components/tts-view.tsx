@@ -1,20 +1,13 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { PanelView } from "@/components/editor/panels/assets/views/base-panel";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Spinner } from "@/components/ui/spinner";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import {
 	Section,
 	SectionContent,
@@ -28,44 +21,36 @@ import {
 } from "@/transcription/caption-layout-store";
 import { useEditor } from "@/editor/use-editor";
 import { EditorCore } from "@/core";
-import { getMessages, useMessages } from "@/i18n";
+import { getMessages, translateLabel, useMessages } from "@/i18n";
+import type { Messages } from "@/i18n/messages/en";
+import type { SceneTracks } from "@/timeline";
 import settings from "@/tts/settings.json";
-import {
-	fetchTtsServer,
-	TtsError,
-	type TtsConfig,
-	type TtsPreset,
-	type TtsVoice,
-} from "@/tts/client";
+import { TtsError } from "@/tts/client";
 import { generateScriptAudio } from "@/tts/insert";
 import { splitSentences } from "@/tts/sentences";
-
-type ServerState =
-	| { status: "loading" }
-	| { status: "ready"; voices: TtsVoice[]; config: TtsConfig }
-	| { status: "offline"; error: string };
+import { pickTtsTargets } from "@/tts/targets";
+import {
+	applyPreset,
+	defaultLevels,
+	loadTtsServer,
+	type ReadyTtsServer,
+	toVoiceSettings,
+	TtsServerNotice,
+	TtsVoiceFields,
+	type TtsVoiceForm,
+	useTtsServer,
+} from "./voice-fields";
 
 type Job =
 	| { status: "idle"; error: string | null }
 	| { status: "running"; current: number; total: number };
 
-interface TtsForm {
-	voice: string;
-	style: string;
-	/** 고른 프리셋 이름. 값을 손으로 바꾸면 비운다 */
-	preset: string | null;
-	strength: number;
-	expressiveness: number;
-	speed: number;
-	pause: number;
+interface TtsForm extends TtsVoiceForm {
 	makeCaptions: boolean;
 	script: string;
 }
 
-type LevelKey = "strength" | "expressiveness" | "speed" | "pause";
-
 interface TtsStore {
-	server: ServerState;
 	form: TtsForm | null;
 	job: Job;
 	abort: AbortController | null;
@@ -73,88 +58,50 @@ interface TtsStore {
 
 // 탭을 옮겨도 대본과 진행 중인 작업이 남도록 패널 밖에 둔다
 const useTtsStore = create<TtsStore>()(() => ({
-	server: { status: "loading" },
 	form: null,
 	job: { status: "idle", error: null },
 	abort: null,
 }));
 
-/** 목소리에 없는 말투면 그 목소리의 첫 말투(기본)로 바꾼다 */
-function styleFor({ voice, style }: { voice: TtsVoice | undefined; style: string }): string {
-	if (!voice) return style;
-	return voice.styles.some((item) => item.id === style)
-		? style
-		: (voice.styles[0]?.id ?? style);
-}
-
-function defaultLevels({ config }: { config: TtsConfig }): Record<LevelKey, number> {
-	const first = config.presets[0];
-	return {
-		strength: first?.strength ?? settings.fallbackLevels.strength,
-		expressiveness: first?.expressiveness ?? settings.fallbackLevels.expressiveness,
-		speed: config.speed,
-		pause: config.pause,
+/** 처음 연결되면 첫 목소리·첫 프리셋으로 채운다 */
+function initialForm({ server }: { server: ReadyTtsServer }): TtsForm {
+	const firstVoice = server.voices[0];
+	const form: TtsForm = {
+		voice: firstVoice?.name ?? "",
+		style: firstVoice?.styles[0]?.id ?? "",
+		preset: null,
+		...defaultLevels({ config: server.config }),
+		makeCaptions: true,
+		script: "",
 	};
-}
-
-function applyPreset({
-	form,
-	preset,
-	voices,
-}: {
-	form: TtsForm;
-	preset: TtsPreset;
-	voices: TtsVoice[];
-}): TtsForm {
-	return {
-		...form,
-		preset: preset.name,
-		style: styleFor({
-			voice: voices.find((voice) => voice.name === form.voice),
-			style: preset.style,
-		}),
-		strength: preset.strength,
-		expressiveness: preset.expressiveness,
-		speed: preset.speed,
-		pause: preset.pause,
-	};
-}
-
-async function loadServer() {
-	useTtsStore.setState({ server: { status: "loading" } });
-	try {
-		const { voices, config } = await fetchTtsServer();
-		const { form } = useTtsStore.getState();
-		const firstVoice = voices[0];
-		const initial: TtsForm = form ?? {
-			voice: firstVoice?.name ?? "",
-			style: firstVoice?.styles[0]?.id ?? "",
-			preset: null,
-			...defaultLevels({ config }),
-			makeCaptions: true,
-			script: "",
-		};
-		const firstPreset = config.presets[0];
-		useTtsStore.setState({
-			server: { status: "ready", voices, config },
-			form:
-				form || !firstPreset
-					? initial
-					: applyPreset({ form: initial, preset: firstPreset, voices }),
-		});
-	} catch (error) {
-		useTtsStore.setState({
-			server: {
-				status: "offline",
-				error: error instanceof Error ? error.message : String(error),
-			},
-		});
-	}
+	const firstPreset = server.config.presets[0];
+	return firstPreset
+		? applyPreset({ form, preset: firstPreset, voices: server.voices })
+		: form;
 }
 
 function updateForm(patch: Partial<TtsForm>) {
 	const { form } = useTtsStore.getState();
 	if (form) useTtsStore.setState({ form: { ...form, ...patch } });
+}
+
+/** 트랙 이름. 같은 이름의 같은 종류 트랙이 여럿이면 위에서부터 번호를 붙인다 */
+function trackLabel({
+	tracks,
+	trackId,
+	m,
+}: {
+	tracks: SceneTracks;
+	trackId: string;
+	m: Messages;
+}): string {
+	const track = tracks.find((item) => item.id === trackId);
+	if (!track) return "";
+	const sameName = tracks.filter(
+		(item) => item.type === track.type && item.name === track.name,
+	);
+	const name = translateLabel({ messages: m, label: track.name });
+	return sameName.length > 1 ? `${name} ${sameName.indexOf(track) + 1}` : name;
 }
 
 async function generate({
@@ -164,7 +111,7 @@ async function generate({
 }: {
 	sentences: string[];
 	form: TtsForm;
-	server: Extract<ServerState, { status: "ready" }>;
+	server: ReadyTtsServer;
 }) {
 	const m = getMessages();
 	const editor = EditorCore.getInstance();
@@ -175,19 +122,10 @@ async function generate({
 	});
 	const canvasSize = editor.project.getActive().settings.canvasSize;
 	try {
-		await generateScriptAudio({
+		const { audioMoved, captionsMoved } = await generateScriptAudio({
 			editor,
 			sentences,
-			voiceSettings: {
-				voice: form.voice,
-				style: form.style,
-				speed: form.speed,
-				pause: form.pause,
-				question: server.config.question,
-				strength: form.strength,
-				expressiveness: form.expressiveness,
-			},
-			model: server.voices.find((voice) => voice.name === form.voice)?.model ?? "",
+			...toVoiceSettings({ form, server }),
 			captionLayout: form.makeCaptions
 				? useCaptionLayouts.getState().layouts[captionFormOf({ canvasSize })]
 				: null,
@@ -196,6 +134,9 @@ async function generate({
 				useTtsStore.setState({ job: { status: "running", current, total } }),
 		});
 		useTtsStore.setState({ job: { status: "idle", error: null } });
+		if (audioMoved || captionsMoved) {
+			toast.info(m.tts.movedToNewTrack({ audio: audioMoved, captions: captionsMoved }));
+		}
 	} catch (error) {
 		if (abort.signal.aborted) {
 			useTtsStore.setState({ job: { status: "idle", error: null } });
@@ -209,7 +150,7 @@ async function generate({
 			job: { status: "idle", error: m.tts.failed({ sentence, reason }) },
 		});
 		// 서버가 꺼졌으면 안내를 띄운다
-		if (error instanceof TtsError && error.status === 503) void loadServer();
+		if (error instanceof TtsError && error.status === 503) void loadTtsServer();
 	} finally {
 		useTtsStore.setState({ abort: null });
 	}
@@ -217,17 +158,37 @@ async function generate({
 
 export function TtsView() {
 	const m = useMessages();
-	const server = useTtsStore((state) => state.server);
+	const server = useTtsServer((state) => state.server);
 	const form = useTtsStore((state) => state.form);
 	const job = useTtsStore((state) => state.job);
 	const abort = useTtsStore((state) => state.abort);
 	const captionForm = useEditor((e) =>
 		captionFormOf({ canvasSize: e.project.getActive().settings.canvasSize }),
 	);
+	// 넣을 곳은 선택이 바뀔 때마다 다시 고른다. 겹침은 합성한 뒤 길이를 알아야 볼 수 있다
+	const [audioTarget, captionTarget] = useEditor((e) => {
+		const tracks = e.scenes.getActiveSceneOrNull()?.tracks ?? [];
+		const { audioTrackId, captionTrackId } = pickTtsTargets({
+			tracks,
+			selectedTrackIds: e.selection.getSelectedTrackIds(),
+			selectedElements: e.selection.getSelectedElements(),
+		});
+		return [
+			audioTrackId ? trackLabel({ tracks, trackId: audioTrackId, m }) : m.tts.newAudioTrack,
+			captionTrackId
+				? trackLabel({ tracks, trackId: captionTrackId, m })
+				: m.tts.newCaptionTrack,
+		];
+	});
 
 	useEffect(() => {
-		if (useTtsStore.getState().server.status !== "ready") void loadServer();
+		if (useTtsServer.getState().server.status !== "ready") void loadTtsServer();
 	}, []);
+	useEffect(() => {
+		if (server.status === "ready" && !useTtsStore.getState().form) {
+			useTtsStore.setState({ form: initialForm({ server }) });
+		}
+	}, [server]);
 
 	const sentences = useMemo(
 		() =>
@@ -240,148 +201,21 @@ export function TtsView() {
 
 	const isRunning = job.status === "running";
 	const ready = server.status === "ready" ? server : null;
-	const voice = ready?.voices.find((item) => item.name === form?.voice);
 	const disabled = !ready || !form || isRunning;
 
 	return (
 		<PanelView title={m.assets.tabs.tts} contentClassName="px-0 flex flex-col h-full">
 			<Section showTopBorder={false} showBottomBorder={false} className="flex-1">
 				<SectionContent className="flex flex-col gap-4 h-full pt-1">
-					{server.status === "loading" && (
-						<div className="text-muted-foreground flex items-center gap-2 text-sm">
-							<Spinner />
-							{m.tts.connecting}
-						</div>
-					)}
-					{server.status === "offline" && (
-						<div className="bg-destructive/10 border-destructive/20 flex flex-col gap-2 rounded-md border p-3">
-							<p className="text-destructive text-sm font-medium">{m.tts.offlineTitle}</p>
-							<p className="text-destructive text-xs">{server.error}</p>
-							<p className="text-muted-foreground text-xs">{m.tts.offlineHint}</p>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => void loadServer()}
-							>
-								{m.tts.retry}
-							</Button>
-						</div>
-					)}
+					<TtsServerNotice server={server} />
 					{ready && form && (
 						<SectionFields>
-							<SectionField label={m.tts.voice}>
-								<Select
-									value={form.voice}
-									disabled={isRunning}
-									onValueChange={(value) =>
-										updateForm({
-											voice: value,
-											style: styleFor({
-												voice: ready.voices.find((item) => item.name === value),
-												style: form.style,
-											}),
-										})
-									}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{ready.voices.map((item) => (
-											<SelectItem key={item.name} value={item.name}>
-												{item.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</SectionField>
-							<SectionField label={m.tts.preset}>
-								<Select
-									value={form.preset ?? ""}
-									disabled={isRunning}
-									onValueChange={(value) => {
-										const preset = ready.config.presets.find(
-											(item) => item.name === value,
-										);
-										if (preset) {
-											useTtsStore.setState({
-												form: applyPreset({ form, preset, voices: ready.voices }),
-											});
-										}
-									}}
-								>
-									<SelectTrigger>
-										<SelectValue placeholder={m.tts.customPreset} />
-									</SelectTrigger>
-									<SelectContent>
-										{ready.config.presets.map((item) => (
-											<SelectItem key={item.name} value={item.name}>
-												{item.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</SectionField>
-							<SectionField label={m.tts.style}>
-								<Select
-									value={form.style}
-									disabled={isRunning}
-									onValueChange={(value) => updateForm({ style: value, preset: null })}
-								>
-									<SelectTrigger>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{(voice?.styles ?? []).map((item) => (
-											<SelectItem key={item.id} value={item.id}>
-												{item.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</SectionField>
-							<LevelSlider
-								label={m.tts.strength}
-								field="strength"
-								value={form.strength}
-								min={settings.level.min}
-								max={settings.level.max}
-								step={settings.level.step}
-								config={ready.config}
+							<TtsVoiceFields
+								form={form}
+								onChange={(next) => useTtsStore.setState({ form: next })}
+								server={ready}
 								disabled={isRunning}
-							/>
-							<LevelSlider
-								label={m.tts.expressiveness}
-								field="expressiveness"
-								value={form.expressiveness}
-								min={settings.level.min}
-								max={settings.level.max}
-								step={settings.level.step}
-								config={ready.config}
-								disabled={isRunning}
-							/>
-							<LevelSlider
-								label={m.tts.speed}
-								field="speed"
-								value={form.speed}
-								min={ready.config.speed_min}
-								max={ready.config.speed_max}
-								step={ready.config.speed_step}
-								format={(value) => `${value.toFixed(2)}×`}
-								config={ready.config}
-								disabled={isRunning}
-							/>
-							<LevelSlider
-								label={m.tts.pause}
-								field="pause"
-								value={form.pause}
-								min={ready.config.pause_min}
-								max={ready.config.pause_max}
-								step={ready.config.pause_step}
-								format={(value) => m.tts.seconds({ value: value.toFixed(2) })}
-								config={ready.config}
-								disabled={isRunning}
+								showPause
 							/>
 							<div className="flex items-center justify-between text-xs">
 								<label htmlFor="tts-make-captions">{m.tts.makeCaptions}</label>
@@ -410,9 +244,14 @@ export function TtsView() {
 						</SectionFields>
 					)}
 
+					<p className="text-muted-foreground mt-auto text-xs">
+						{form?.makeCaptions === false
+							? m.tts.target({ audio: audioTarget })
+							: m.tts.targetWithCaptions({ audio: audioTarget, captions: captionTarget })}
+					</p>
 					<Button
 						type="button"
-						className="mt-auto w-full"
+						className="w-full"
 						disabled={disabled || sentences.length === 0}
 						onClick={() => {
 							if (ready && form) void generate({ sentences, form, server: ready });
@@ -441,50 +280,5 @@ export function TtsView() {
 				</SectionContent>
 			</Section>
 		</PanelView>
-	);
-}
-
-/** ⌘-click하면 서버 /config 기본값(감정 강도·표현력은 첫 프리셋 값)으로 돌아간다 */
-function LevelSlider({
-	label,
-	field,
-	value,
-	min,
-	max,
-	step,
-	format = String,
-	config,
-	disabled,
-}: {
-	label: string;
-	field: LevelKey;
-	value: number;
-	min: number;
-	max: number;
-	step: number;
-	format?: (value: number) => string;
-	config: TtsConfig;
-	disabled: boolean;
-}) {
-	return (
-		<SectionField label={label}>
-			<div className="flex items-center gap-3">
-				<Slider
-					aria-label={label}
-					min={min}
-					max={max}
-					step={step}
-					value={[value]}
-					disabled={disabled}
-					onValueChange={([next]) => updateForm({ [field]: next, preset: null })}
-					onReset={() =>
-						updateForm({ [field]: defaultLevels({ config })[field], preset: null })
-					}
-				/>
-				<span className="text-muted-foreground w-14 shrink-0 text-right text-xs tabular-nums">
-					{format(value)}
-				</span>
-			</div>
-		</SectionField>
 	);
 }

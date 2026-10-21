@@ -24,6 +24,7 @@ import {
 	ChartIncreaseIcon,
 	AudioWave01Icon,
 	ScissorIcon,
+	VoiceIcon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
@@ -33,6 +34,7 @@ import { FadeTab } from "./components/fade-tab";
 import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
 import { AutocutTab } from "@/autocut/components/autocut-tab";
+import { TtsLineTab } from "@/tts/components/tts-line-tab";
 
 const TRANSFORM_PARAM_KEYS = [
 	"transform.positionX",
@@ -100,7 +102,8 @@ export type PropertiesTabId =
 	| "effects"
 	| "text"
 	| "graphic"
-	| "autocut";
+	| "autocut"
+	| "tts";
 
 export type PropertiesTabDef = {
 	id: PropertiesTabId;
@@ -225,6 +228,19 @@ function buildAutocutTab({
 	};
 }
 
+/** 대본 읽기로 만든 음성이나 그 자막. 문장을 고쳐 다시 만든다 */
+function buildTtsTab({
+	element,
+}: {
+	element: AudioElement | TextElement;
+}): PropertiesTabDef {
+	return {
+		id: "tts",
+		icon: <HugeiconsIcon icon={VoiceIcon} size={16} />,
+		content: () => <TtsLineTab element={element} />,
+	};
+}
+
 function buildMasksTab({
 	element,
 }: {
@@ -303,6 +319,7 @@ function getTextConfig({
 			buildTextTab({ element }),
 			buildTransformTab({ element }),
 			buildBlendingTab({ element }),
+			...(element.ttsLineId ? [buildTtsTab({ element })] : []),
 		],
 	};
 }
@@ -393,6 +410,7 @@ function getAudioConfig({
 			buildAudioEffectsTab({ element }),
 			buildSpeedTab({ element }),
 			buildFadeTab({ element }),
+			...(element.tts ? [buildTtsTab({ element })] : []),
 		],
 	};
 }

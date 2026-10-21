@@ -250,6 +250,7 @@ export const ko: Messages = {
 			text: "텍스트",
 			graphic: "도형",
 			autocut: "자동 컷",
+			tts: "대본 읽기",
 		},
 		emptyTitle: "선택한 항목이 없어요",
 		emptyHint: "타임라인에서 요소를 클릭하면 속성을 편집할 수 있어요",
@@ -697,6 +698,20 @@ export const ko: Messages = {
 		processFailed: "음성 파일을 처리하지 못했어요",
 		failed: ({ sentence, reason }) =>
 			`${sentence}번째 문장을 만들지 못했어요: ${reason} 아무것도 넣지 않았어요.`,
+		newAudioTrack: "새 오디오 트랙",
+		newCaptionTrack: "새 자막 트랙",
+		target: ({ audio }) => `넣을 곳: ${audio}`,
+		targetWithCaptions: ({ audio, captions }) => `넣을 곳: ${audio} / ${captions}`,
+		movedToNewTrack: ({ audio, captions }) =>
+			`재생헤드 자리에 이미 클립이 있어서 ${audio && captions ? "음성과 자막을" : audio ? "음성을" : "자막을"} 새 트랙에 넣었어요.`,
+		sentence: "문장",
+		staleNotice: "자막 글자가 바뀌었어요. 아래 문장은 자막에서 가져왔어요.",
+		regenerate: "다시 만들기",
+		regenerateHint:
+			"이 설정으로 문장을 다시 합성해요. 글자가 같아도 새 테이크가 나오고, ⌘Z를 누르면 이전 테이크로 돌아가요.",
+		regenerating: "다시 만드는 중...",
+		noLinkedAudio: "이 자막과 이어진 음성 클립이 없어요.",
+		regenerateFailed: ({ reason }) => `다시 만들지 못했어요: ${reason} 바뀐 것은 없어요.`,
 	},
 	subtitleList: {
 		exportSrt: "SRT 내보내기",

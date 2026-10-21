@@ -267,6 +267,7 @@ export const en = {
 			text: "Text",
 			graphic: "Graphic",
 			autocut: "Auto cut",
+			tts: "Read script",
 		},
 		emptyTitle: "It's empty here",
 		emptyHint: "Click an element on the timeline to edit its properties",
@@ -733,6 +734,22 @@ export const en = {
 		processFailed: "Could not process the audio file",
 		failed: ({ sentence, reason }: { sentence: number; reason: string }) =>
 			`Sentence ${sentence} failed: ${reason}. Nothing was added.`,
+		newAudioTrack: "new audio track",
+		newCaptionTrack: "new caption track",
+		target: ({ audio }: { audio: string }) => `Goes to: ${audio}`,
+		targetWithCaptions: ({ audio, captions }: { audio: string; captions: string }) =>
+			`Goes to: ${audio} / ${captions}`,
+		movedToNewTrack: ({ audio, captions }: { audio: boolean; captions: boolean }) =>
+			`Clips were already at the playhead, so the ${audio && captions ? "voice and captions" : audio ? "voice" : "captions"} went to a new track.`,
+		sentence: "Sentence",
+		staleNotice: "The caption text changed. The sentence below is taken from the captions.",
+		regenerate: "Regenerate",
+		regenerateHint:
+			"Synthesizes this sentence again with these settings. Even with the same text you get a new take; ⌘Z returns to the previous one.",
+		regenerating: "Regenerating...",
+		noLinkedAudio: "The voice clip for this caption is gone.",
+		regenerateFailed: ({ reason }: { reason: string }) =>
+			`Could not regenerate: ${reason}. Nothing changed.`,
 	},
 	subtitleList: {
 		exportSrt: "Export SRT",

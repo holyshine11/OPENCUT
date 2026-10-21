@@ -6,6 +6,7 @@ import {
 	InsertElementCommand,
 } from "@/commands";
 import type { TextElement } from "@/timeline";
+import type { ParamValues } from "@/params";
 import { buildSubtitleTextElement } from "./build-subtitle-text-element";
 import type { SubtitleCue } from "./types";
 import { generateUUID } from "@/utils/id";
@@ -31,35 +32,60 @@ export function insertCaptionChunksAsTextTrack({
 
 /**
  * 자막 트랙 하나를 맨 위에 만들고 자막을 넣는 명령들. 실행은 부르는 쪽이 한다.
- * 대본 읽기는 음성 트랙과 함께 BatchCommand 하나로 묶어 ⌘Z 한 번에 지운다
+ * 대본 읽기는 음성 트랙과 함께 BatchCommand 하나로 묶어 ⌘Z 한 번에 지운다.
+ * trackId를 주면 그 트랙에 넣고 트랙의 자막 묶음(insertCaptionAt처럼)이나 subtitleGroupId 묶음에 넣는다.
+ * params를 주면 글자(content)만 빼고 그 스타일을 덮어쓴다. 다시 만든 자막이 사용자가 고친 모양을 잇는다
  */
 export function buildCaptionTrackCommands({
 	editor,
 	captions,
+	trackId: existingTrackId,
+	subtitleGroupId: existingGroupId,
+	params,
 }: {
 	editor: EditorCore;
 	captions: (SubtitleCue & Pick<TextElement, "ttsLineId">)[];
+	trackId?: string;
+	subtitleGroupId?: string;
+	params?: ParamValues;
 }): { trackId: string; commands: Command[] } {
+	const existingTrack = existingTrackId
+		? editor.timeline.getTrackById({ trackId: existingTrackId })
+		: null;
+	const textTrack = existingTrack?.type === "text" ? existingTrack : null;
 	const addTrackCommand = new AddTrackCommand({ type: "text", index: 0 });
-	const trackId = addTrackCommand.getTrackId();
+	const trackId = textTrack?.id ?? addTrackCommand.getTrackId();
+	const existingElements = textTrack?.elements ?? [];
 	const canvasSize = editor.project.getActive().settings.canvasSize;
-	const subtitleGroupId = generateUUID();
-	const insertCommands = captions.map(
-		(caption, index) =>
-			new InsertElementCommand({
-				placement: { mode: "explicit", trackId },
-				element: {
-					...buildSubtitleTextElement({ index, caption, canvasSize }),
-					subtitleGroupId,
-					subtitleWordOffsets: caption.wordStarts?.map(
-						(start) => start - caption.startTime,
-					),
-					...(caption.ttsLineId ? { ttsLineId: caption.ttsLineId } : {}),
-				},
-			}),
-	);
+	const subtitleGroupId =
+		existingGroupId ??
+		existingElements.find((element) => element.subtitleGroupId)?.subtitleGroupId ??
+		generateUUID();
+	const { content: _content, ...style } = params ?? {};
+	const insertCommands = captions.map((caption, index) => {
+		const element = buildSubtitleTextElement({
+			index: existingElements.length + index,
+			caption,
+			canvasSize,
+		});
+		return new InsertElementCommand({
+			placement: { mode: "explicit", trackId },
+			element: {
+				...element,
+				params: { ...element.params, ...style },
+				subtitleGroupId,
+				subtitleWordOffsets: caption.wordStarts?.map(
+					(start) => start - caption.startTime,
+				),
+				...(caption.ttsLineId ? { ttsLineId: caption.ttsLineId } : {}),
+			},
+		});
+	});
 
-	return { trackId, commands: [addTrackCommand, ...insertCommands] };
+	return {
+		trackId,
+		commands: textTrack ? insertCommands : [addTrackCommand, ...insertCommands],
+	};
 }
 
 /**

@@ -19,12 +19,14 @@ import {
 import settings from "@/tts/settings.json";
 import { synthesize, type TtsSynthRequest } from "./client";
 import { buildLineCaptions, placeLines } from "./placement";
+import { fitTtsTargets, pickTtsTargets } from "./targets";
 
 export type TtsVoiceSettings = Omit<TtsSynthRequest, "text">;
 
 /**
  * 문장마다 순서대로 하나씩 합성한 뒤(합성 서버는 동시에 보내도 빨라지지 않는다) 재생헤드 위치부터
- * 음성 트랙과 자막 트랙을 BatchCommand 하나로 넣는다. ⌘Z 한 번에 둘 다 사라진다.
+ * 음성과 자막을 BatchCommand 하나로 넣는다. ⌘Z 한 번에 둘 다 사라진다.
+ * 넣을 트랙은 pickTtsTargets가 고르고, 거기서 기존 클립과 겹치면 그 종류만 새 트랙에 넣는다(돌려주는 값으로 알린다).
  * 미디어 파일은 효과음처럼 되돌리기 대상이 아니라 남는다. 취소하거나 실패하면 아무것도 넣지 않는다
  */
 export async function generateScriptAudio({
@@ -44,9 +46,112 @@ export async function generateScriptAudio({
 	captionLayout: CaptionLayout | null;
 	signal: AbortSignal;
 	onProgress: (progress: { current: number; total: number }) => void;
-}): Promise<void> {
-	const project = editor.project.getActive();
+}): Promise<{ audioMoved: boolean; captionsMoved: boolean }> {
 	const start = mediaTimeToSeconds({ time: editor.playback.getCurrentTime() });
+	// 화면에 보여 준 넣을 곳은 누른 때의 선택으로 정한다
+	const preferred = pickTtsTargets({
+		tracks: editor.scenes.getActiveScene().tracks,
+		selectedTrackIds: editor.selection.getSelectedTrackIds(),
+		selectedElements: editor.selection.getSelectedElements(),
+	});
+	const assets = await synthesizeAssets({ editor, sentences, voiceSettings, signal, onProgress });
+
+	const segments = placeLines({
+		lines: assets.map((asset, index) => ({
+			text: sentences[index],
+			duration: asset.duration ?? 0,
+		})),
+		start,
+		pause: voiceSettings.pause,
+	});
+	const lineIds = segments.map(() => generateUUID());
+	const clips = segments.map((segment, index) => ({
+		startTime: mediaTimeFromSeconds({ seconds: segment.start }),
+		duration: toElementDurationTicks({ seconds: assets[index].duration }),
+	}));
+	const captions = captionLayout
+		? clips.flatMap((clip, index) =>
+				buildClipCaptions({
+					text: sentences[index],
+					clip,
+					layout: captionLayout,
+					lineId: lineIds[index],
+				}),
+			)
+		: [];
+
+	const targets = fitTtsTargets({
+		tracks: editor.scenes.getActiveScene().tracks,
+		targets: preferred,
+		audioSpans: clips,
+		captionSpans: captions.map((caption) => ({
+			startTime: mediaTimeFromSeconds({ seconds: caption.startTime }),
+			duration: mediaTimeFromSeconds({ seconds: caption.duration }),
+		})),
+	});
+
+	const audioTrack = new AddTrackCommand({ type: "audio" });
+	const audioTrackId = targets.audioTrackId ?? audioTrack.getTrackId();
+	const audioCommands = assets.map((asset, index) => {
+		const tts: AudioElement["tts"] = {
+			text: sentences[index],
+			voice: voiceSettings.voice,
+			style: voiceSettings.style,
+			speed: voiceSettings.speed,
+			strength: voiceSettings.strength,
+			expressiveness: voiceSettings.expressiveness,
+			model,
+			lineId: lineIds[index],
+		};
+		const element = buildElementFromMedia({
+			mediaId: asset.id,
+			mediaType: asset.type,
+			name: asset.name,
+			duration: clips[index].duration,
+			startTime: clips[index].startTime,
+		});
+		return new InsertElementCommand({
+			placement: { mode: "explicit", trackId: audioTrackId },
+			element: element.type === "audio" ? { ...element, tts } : element,
+		});
+	});
+
+	const captionCommands =
+		captions.length > 0
+			? buildCaptionTrackCommands({
+					editor,
+					captions,
+					trackId: targets.captionTrackId ?? undefined,
+				}).commands
+			: [];
+
+	editor.command.execute({
+		command: new BatchCommand([
+			...(targets.audioTrackId ? [] : [audioTrack]),
+			...audioCommands,
+			...captionCommands,
+		]),
+	});
+	return { audioMoved: targets.audioMoved, captionsMoved: targets.captionsMoved };
+}
+
+/**
+ * 문장을 하나씩 합성해 미디어 패널에 넣는다. 다 만들기 전에 실패하거나 취소하면 아무것도 넣지 않는다
+ */
+export async function synthesizeAssets({
+	editor,
+	sentences,
+	voiceSettings,
+	signal,
+	onProgress,
+}: {
+	editor: EditorCore;
+	sentences: string[];
+	voiceSettings: TtsVoiceSettings;
+	signal: AbortSignal;
+	onProgress: (progress: { current: number; total: number }) => void;
+}): Promise<MediaAsset[]> {
+	const project = editor.project.getActive();
 	const processed: ProcessedMediaAsset[] = [];
 
 	try {
@@ -78,62 +183,27 @@ export async function generateScriptAudio({
 		if (!added) throw new Error(asset.name);
 		assets.push(added);
 	}
+	return assets;
+}
 
-	const segments = placeLines({
-		lines: assets.map((asset, index) => ({
-			text: sentences[index],
-			duration: asset.duration ?? 0,
-		})),
-		start,
-		pause: voiceSettings.pause,
-	});
-	const lineIds = segments.map(() => generateUUID());
-	const clips = segments.map((segment, index) => {
-		const startTime = mediaTimeFromSeconds({ seconds: segment.start });
-		const duration = toElementDurationTicks({ seconds: assets[index].duration });
-		return { startTime, duration, end: addMediaTime({ a: startTime, b: duration }) };
-	});
-
-	const audioTrack = new AddTrackCommand({ type: "audio" });
-	const audioCommands = assets.map((asset, index) => {
-		const tts: AudioElement["tts"] = {
-			text: sentences[index],
-			voice: voiceSettings.voice,
-			style: voiceSettings.style,
-			speed: voiceSettings.speed,
-			strength: voiceSettings.strength,
-			expressiveness: voiceSettings.expressiveness,
-			model,
-			lineId: lineIds[index],
-		};
-		const element = buildElementFromMedia({
-			mediaId: asset.id,
-			mediaType: asset.type,
-			name: asset.name,
-			duration: clips[index].duration,
-			startTime: clips[index].startTime,
-		});
-		return new InsertElementCommand({
-			placement: { mode: "explicit", trackId: audioTrack.getTrackId() },
-			element: element.type === "audio" ? { ...element, tts } : element,
-		});
-	});
-
-	const captionCommands = captionLayout
-		? buildCaptionTrackCommands({
-				editor,
-				captions: segments.flatMap((segment, index) =>
-					buildLineCaptions({ segment, layout: captionLayout }).map((caption) => ({
-						...snapToClip({ caption, clipEnd: clips[index].end }),
-						ttsLineId: lineIds[index],
-					})),
-				),
-			}).commands
-		: [];
-
-	editor.command.execute({
-		command: new BatchCommand([audioTrack, ...audioCommands, ...captionCommands]),
-	});
+/** 음성 클립 하나에 붙일 자막. 시각은 틱에 맞추고 모두 클립 안에 든다 */
+export function buildClipCaptions({
+	text,
+	clip,
+	layout,
+	lineId,
+}: {
+	text: string;
+	clip: { startTime: MediaTime; duration: MediaTime };
+	layout: CaptionLayout;
+	lineId: string;
+}): (CaptionChunk & { ttsLineId: string })[] {
+	const start = mediaTimeToSeconds({ time: clip.startTime });
+	const clipEnd = addMediaTime({ a: clip.startTime, b: clip.duration });
+	return buildLineCaptions({
+		segment: { text, start, end: start + mediaTimeToSeconds({ time: clip.duration }) },
+		layout,
+	}).map((caption) => ({ ...snapToClip({ caption, clipEnd }), ttsLineId: lineId }));
 }
 
 /**
