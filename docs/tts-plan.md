@@ -10,15 +10,17 @@
 
 | 구성 | 내용 |
 |---|---|
-| 합성 엔진 | GPT-SoVITS v2ProPlus (`GPT-SoVITS/`, upstream 48b1a01 + 로컬 수정 7파일, 12GB) |
-| 합성 서버 | 목소리마다 `api_v2.py` 하나씩. 송이 9880, 송강 9881 (`tts-server.sh`, `tts-voices.json`) |
+| 합성 엔진 | GPT-SoVITS v2ProPlus (`GPT-SoVITS/`, upstream 48b1a01 + 로컬 수정 `patches/gpt-sovits.patch`, 12GB) |
+| 합성 서버 | `api_v2.py` 하나(9880). 목소리를 바꾸면 가중치만 갈아 끼운다 (`tts-server.sh`, `tts-voices.json`) |
 | 웹 서버 | `tts-web.py` 7860. `GET /voices`, `GET /config`, `POST /synth` |
 | 목소리 데이터 | 참조 음성 `*_ref*.wav`, 보조 참조 `*_aux*.wav`, 말투 클립 `style_*`, 가중치 `GPT_weights_v2ProPlus/*.ckpt`(155MB), `SoVITS_weights_v2ProPlus/*.pth`(173MB) |
 | 학습 | `train.sh` + `train-*.env` (slice → asr → format → sovits → gpt) |
 
 `POST /synth`는 이미 쓸 만한 계약이다. text, voice, style, speed(0.8~1.2), pause(0~1.5초), question(물음표 끝음), strength(감정 강도), expressiveness(표현력), format(mp3·m4a)을 받아 후처리(잡음 제거, -16 LUFS, 송강은 울림 제거)까지 끝난 오디오를 돌려준다. 프리셋 5개(일반, 나레이션, 뉴스, 광고, 친근한 대화)는 `/config`로 받는다.
 
-실측(2026-10-21, 개발 맥 M5 32GB, CPU 합성): 7.2초짜리 두 문장을 송이 5.1초, 송강 7.6초에 만들었다. 메모리는 송이 서버 2.7GB, 송강 서버 3.0GB, `tts-web.py` 4.4GB로 합계 약 10GB다. `tts-web.py`가 큰 이유는 송강 울림 제거용 UVR5 모델을 프로세스 안에 올려 두기 때문으로 보인다(추정, 3단계에서 잰다).
+실측(2026-10-21, 개발 맥 M5 32GB, CPU 합성): 7.2초짜리 두 문장을 송이 5.1초, 송강 7.6초에 만들었다. 메모리는 송이 서버 2.7GB, 송강 서버 3.0GB, `tts-web.py` 4.4GB로 합계 약 10GB다. `tts-web.py`가 컸던 이유는 UVR5가 한 번 돌 때 6GB를 잡고 놓지 않아서였다(3단계에서 확인).
+
+3단계 뒤(같은 날, footprint): 쉴 때 2.7GB, 두 목소리를 번갈아 쓴 뒤 3.3GB다. 송강 문장을 만드는 몇 초 동안은 울림 제거 프로세스 때문에 최대 6.6GB까지 오른다. 목소리 전환은 약 0.5초 걸린다.
 
 ### OPENCUT
 
@@ -172,6 +174,13 @@ GitHub 저장소 하나에 다 담을 수 없다. 가중치 파일 하나가 155
 
 `start-mac.command`는 옆 폴더 `../TTS`가 있으면 `tts-web.sh`를 먼저 켜고 `TTS_URL`을 넘긴 뒤 Next를 띄운다. TTS 폴더가 없으면 대본 읽기 탭만 "서버 없음"으로 뜨고 나머지는 그대로 동작한다.
 
+아내 맥에서 처음 설치하는 순서(터미널, 인터넷 연결 상태):
+
+1. Homebrew를 설치한다(https://brew.sh 첫 화면의 명령 한 줄).
+2. `brew install gh && gh auth login`. `TTS_TEST`가 비공개라 GitHub 로그인이 필요하다.
+3. OPENCUT을 받은 폴더 옆에서 `gh repo clone holyshine11/TTS_TEST TTS`를 실행하고, 이어서 `TTS/setup-mac.sh`를 실행한다. 패키지 2GB 남짓과 모델·목소리 약 1GB를 받는다.
+4. 그 뒤로는 `start-mac.command`를 더블클릭하면 TTS도 함께 켜진다. 목소리를 업데이트할 때는 `TTS/setup-mac.sh`를 다시 실행한다.
+
 설치가 끝나면 Wi-Fi를 끈 상태로 대본 → 음성·자막 생성이 되는지 확인한다(기존 오프라인 테스트 방식).
 
 ## 9. 단계
@@ -185,7 +194,16 @@ GitHub 저장소 하나에 다 담을 수 없다. 가중치 파일 하나가 155
 | 5 | TTS | `setup-mac.sh`, 패치 추출, 목소리 묶음 Release | 빈 계정에서 스크립트 하나로 설치되고 Wi-Fi 없이 합성된다 |
 | 6 | 둘 다 | 아내 M1에서 실측, 필요하면 Whisper 단어 시간 정밀화 | 3분 대본 생성 시간과 메모리를 이 문서에 기록 |
 
-진행 상황(2026-10-21): 1·2단계 완료, 커밋 전. 2단계에서 계획과 다르게 간 점은 둘이다. 한 문장이라도 합성에 실패하면 아무것도 넣지 않고 몇 번째 문장인지 알려 준다. 서버에 보내는 `pause`(문장 안 쉼표 쉼)는 문장 사이 쉼 슬라이더 값과 같다. `start-mac.command`가 처음 실행할 때 `.env.example`을 `.env.local`로 복사해 `TTS_URL`을 잡는다.
+진행 상황(2026-10-21): 1~5단계 완료, 6단계(아내 M1 실측)만 남았다.
+
+3단계에서 한 일:
+- 서버를 하나로 합쳤다. 지금 올라간 가중치는 서버가 바꿀 때마다 다시 쓰는 `.tts-server.yaml`에서 읽는다. 그래서 `tts.sh`나 `measure/eval.py`가 가중치를 바꿔도 어긋나지 않는다.
+- UVR5는 `dereverb.py`로 문장마다 따로 띄운다. 프로세스가 끝나야 메모리를 돌려받기 때문이다. 띄우는 데 약 0.7초가 든다. 창 크기를 512에서 256으로 줄여 순간 메모리를 6.2GB에서 3.4GB로 낮췄다. 512로 만든 결과와의 차이는 SNR 30.5dB다(`tts.env` `TTS_DEREVERB_WINDOW`).
+- 엔진이 BERT(1.3GB)를 처음 쓸 때 읽게 고쳤다. BERT는 중국어에만 쓰여 한국어만 읽으면 끝까지 올라가지 않는다.
+
+5단계: `setup-mac.sh`가 도구, 엔진 고정 커밋과 패치, 파이썬 패키지(`requirements-mac.txt`), 사전학습 모델 280MB, UVR5 모델, 목소리 묶음(Release `voices-20261021`, 634MB)을 받는다. 끝나면 목소리마다 한 문장씩 합성해 확인한다. 다시 돌리면 업데이트가 된다. 목소리를 새로 학습하면 개발 맥에서 `./voices-release.sh`를 돌린다. `start-mac.command`는 옆 폴더 `../TTS`가 있으면 TTS를 함께 켜고, 창을 닫으면 같이 끈다.
+
+1·2단계 메모: 2단계에서 계획과 다르게 간 점은 둘이다. 한 문장이라도 합성에 실패하면 아무것도 넣지 않고 몇 번째 문장인지 알려 준다. 서버에 보내는 `pause`(문장 안 쉼표 쉼)는 문장 사이 쉼 슬라이더 값과 같다. `start-mac.command`가 처음 실행할 때 `.env.example`을 `.env.local`로 복사해 `TTS_URL`을 잡는다.
 
 ## 10. 작업 방식
 
