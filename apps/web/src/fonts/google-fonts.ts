@@ -1,6 +1,7 @@
 import type { FontAtlas } from "@/fonts/types";
 import { SYSTEM_FONTS } from "@/fonts/system-fonts";
 import { isBundledFont, loadBundledFonts } from "@/fonts/bundled-fonts";
+import { loadLocalFont } from "@/fonts/local-fonts";
 
 const GOOGLE_FONTS_CSS = "https://fonts.googleapis.com/css2";
 const FONT_ATLAS_PATH = "/fonts/font-atlas.json";
@@ -62,6 +63,11 @@ export async function loadFullFont({
 }): Promise<void> {
 	if (isBundledFont(family)) return loadBundledFonts();
 	if (fullLoaded.has(family)) return;
+	// 맥에 설치된 글꼴이 먼저다. 오프라인에서도 되고 프로젝트를 다시 열 때도 같은 길로 불러온다
+	if (await loadLocalFont({ family })) {
+		fullLoaded.add(family);
+		return;
+	}
 
 	const url = `${GOOGLE_FONTS_CSS}?family=${encodeGoogleFontsFamily(family)}:wght@${weights.join(";")}&display=swap`;
 	const link = document.createElement("link");

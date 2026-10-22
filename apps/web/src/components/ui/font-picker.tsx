@@ -19,10 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { loadFullFont } from "@/fonts/google-fonts";
 import { SYSTEM_FONTS } from "@/fonts/system-fonts";
-import {
-	isLocalFontAccessSupported,
-	queryLocalFontFamilies,
-} from "@/fonts/local-fonts";
+import { queryLocalFontFamilies } from "@/fonts/local-fonts";
 import type { FontAtlas, FontAtlasEntry } from "@/fonts/types";
 import { useFontAtlas } from "@/fonts/use-font-atlas";
 import { isBundledFont } from "@/fonts/bundled-fonts";
@@ -92,18 +89,13 @@ export function FontPicker({
 		return tabFonts.filter((name) => name.toLowerCase().includes(query));
 	}, [tabFonts, search]);
 
-	// Runs inside the tab click so the browser can show its permission prompt
 	const handleTabClick = (tab: FontTab) => {
 		setActiveTab(tab);
 		if (tab !== "my-fonts" || localFonts) return;
-		if (!isLocalFontAccessSupported()) {
-			setLocalFontsError(m.ui.localFontsUnsupported);
-			return;
-		}
 		setLocalFontsError(null);
 		queryLocalFontFamilies()
 			.then(setLocalFonts)
-			.catch(() => setLocalFontsError(m.ui.localFontsBlocked));
+			.catch(() => setLocalFontsError(m.ui.localFontsFailed));
 	};
 
 	const listHeight = Math.min(
@@ -113,12 +105,8 @@ export function FontPicker({
 
 	const handleSelect = useCallback(
 		async ({ family }: { family: string }) => {
-			const isLocal =
-				localFonts?.includes(family) ||
-				favorites.some(
-					(favorite) => favorite.family === family && favorite.isLocal,
-				);
-			if (!SYSTEM_FONTS.has(family) && !isLocal) {
+			// Installed fonts load through loadFullFont too (Safari can't use them by name)
+			if (!SYSTEM_FONTS.has(family)) {
 				try {
 					await loadFullFont({ family });
 				} catch {
@@ -128,7 +116,7 @@ export function FontPicker({
 			onValueChange?.(family);
 			setOpen(false);
 		},
-		[onValueChange, localFonts, favorites],
+		[onValueChange],
 	);
 
 	// 내 글꼴 탭에서 누른 하트만 설치된 글꼴로 기억한다
