@@ -106,6 +106,9 @@ export class ScenesManager {
 			this.editor.project.setActiveProject({ project: updatedProject });
 		}
 
+		// 실행 취소는 지금 장면에 트랙 스냅숏을 쓴다. 다른 장면의 기록이 남으면 ⌘Z가 그 장면 트랙을 여기 덮어쓴다
+		// ponytail: 장면을 오가면 실행 취소 기록이 사라진다. 장면별로 기록을 따로 두면 되돌아와서도 되돌릴 수 있다
+		if (this.active?.id !== targetScene.id) this.editor.command.clear();
 		this.active = targetScene;
 		this.notify();
 	}

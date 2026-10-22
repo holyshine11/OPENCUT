@@ -147,6 +147,8 @@ export class ProjectManager {
 		await this.ensureStorageMigrations();
 		this.editor.media.clearAllAssets();
 		this.editor.scenes.clearScenes();
+		// 실행 취소 기록은 트랙 전체 스냅숏이다. 남겨 두면 ⌘Z가 예전 세션의 트랙(옛 글꼴 등)을 덮어쓴다
+		this.editor.command.clear();
 
 		try {
 			const result = await storageService.loadProject({ id });
@@ -358,6 +360,7 @@ export class ProjectManager {
 
 		this.editor.media.clearAllAssets();
 		this.editor.scenes.clearScenes();
+		this.editor.command.clear();
 	}
 
 	async renameProject({
