@@ -33,7 +33,8 @@ export function getClipFrameThumbnail({
 	file: File;
 	time: number;
 }): Promise<string | null> {
-	const key = `${mediaId}:${time.toFixed(1)}`;
+	// 시각을 반올림해 묶으면 장면이 바뀌는 자리에서 한두 프레임 옮겨 다시 자른 클립이 이전 장면을 받는다
+	const key = `${mediaId}:${time}`;
 	let frame = frames.get(key);
 	if (frame) {
 		frames.delete(key);
