@@ -109,7 +109,6 @@ function measureTextMask({
 		ctx: getTextMeasurementContext(),
 	});
 	const visualRect = getTextVisualRect({
-		textAlign: layout.textAlign,
 		block: layout.block,
 		background: { enabled: false, color: "transparent" },
 		fontSizeRatio: layout.fontSizeRatio,

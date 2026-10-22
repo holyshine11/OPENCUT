@@ -4,6 +4,7 @@ import { clamp } from "@/utils/math";
 import { CORNER_RADIUS_MAX, CORNER_RADIUS_MIN } from "./background";
 import {
 	drawTextDecoration,
+	getLineX,
 	getTextBackgroundRect,
 	measureTextBlock,
 	setCanvasLetterSpacing,
@@ -198,7 +199,6 @@ export function drawMeasuredTextLayout({
 		layout.lines.length > 0
 	) {
 		const backgroundRect = getTextBackgroundRect({
-			textAlign: layout.textAlign,
 			block: layout.block,
 			background: {
 				...background,
@@ -229,6 +229,7 @@ export function drawMeasuredTextLayout({
 		}
 	}
 
+	const lineX = getLineX({ textAlign: layout.textAlign, block: layout.block });
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
 		// cast the shadow once per line, from the outline when there is one so it is not doubled
@@ -238,15 +239,16 @@ export function drawMeasuredTextLayout({
 			ctx.strokeStyle = stroke.color;
 			ctx.lineWidth = ((layout.scaledFontSize * stroke.width) / 100) * 2;
 			ctx.lineJoin = "round";
-			ctx.strokeText(layout.lines[index], 0, lineY);
+			ctx.strokeText(layout.lines[index], lineX, lineY);
 			clearTextShadow({ ctx });
 		}
-		ctx.fillText(layout.lines[index], 0, lineY);
+		ctx.fillText(layout.lines[index], lineX, lineY);
 		clearTextShadow({ ctx });
 		drawTextDecoration({
 			ctx,
 			textDecoration: layout.textDecoration,
 			lineWidth: layout.lineMetrics[index].width,
+			lineX,
 			lineY,
 			metrics: layout.lineMetrics[index],
 			scaledFontSize: layout.scaledFontSize,
@@ -277,8 +279,9 @@ export function strokeMeasuredTextLayout({
 	ctx.lineCap = "round";
 	setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
 
+	const lineX = getLineX({ textAlign: layout.textAlign, block: layout.block });
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
-		ctx.strokeText(layout.lines[index], 0, lineY);
+		ctx.strokeText(layout.lines[index], lineX, lineY);
 	}
 }

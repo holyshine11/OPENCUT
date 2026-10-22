@@ -116,7 +116,6 @@ export function measureTextElement({
 	};
 
 	const visualRect = getTextVisualRect({
-		textAlign: text.textAlign,
 		block: measuredLayout.block,
 		background: resolvedBackground,
 		fontSizeRatio: measuredLayout.fontSizeRatio,

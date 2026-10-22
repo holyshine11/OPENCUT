@@ -124,7 +124,6 @@ function measureWrappedTextBlock({
 		lineHeightPx,
 	});
 	const visualRect = getTextVisualRect({
-		textAlign,
 		block,
 		background,
 		fontSizeRatio: fontSize / 15,

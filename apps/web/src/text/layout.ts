@@ -75,22 +75,22 @@ export function measureTextBlock({
 	return { visualCenterOffset, height, maxWidth };
 }
 
-function getTextRect({
+/** 글 덩어리는 정렬과 상관없이 요소 위치를 가운데에 둔다. 정렬은 덩어리 안에서 줄을 붙이는 쪽이다 */
+export function getLineX({
 	textAlign,
 	block,
 }: {
 	textAlign: TextAlign;
 	block: TextBlockMeasurement;
-}): TextRect {
-	const textAlignToLeft: Record<typeof textAlign, number> = {
-		left: 0,
-		right: -block.maxWidth,
-		center: -block.maxWidth / 2,
-	};
-	const left = textAlignToLeft[textAlign];
+}): number {
+	if (textAlign === "left") return -block.maxWidth / 2;
+	if (textAlign === "right") return block.maxWidth / 2;
+	return 0;
+}
 
+function getTextRect({ block }: { block: TextBlockMeasurement }): TextRect {
 	return {
-		left,
+		left: -block.maxWidth / 2,
 		top: -block.height / 2,
 		width: block.maxWidth,
 		height: block.height,
@@ -110,12 +110,10 @@ function isTextBackgroundVisible({
 }
 
 export function getTextBackgroundRect({
-	textAlign,
 	block,
 	background,
 	fontSizeRatio = 1,
 }: {
-	textAlign: TextAlign;
 	block: TextBlockMeasurement;
 	background: TextBackground;
 	fontSizeRatio?: number;
@@ -124,7 +122,7 @@ export function getTextBackgroundRect({
 		return null;
 	}
 
-	const textRect = getTextRect({ textAlign, block });
+	const textRect = getTextRect({ block });
 	const paddingX =
 		(background.paddingX ?? DEFAULTS.text.background.paddingX) * fontSizeRatio;
 	const paddingY =
@@ -141,19 +139,16 @@ export function getTextBackgroundRect({
 }
 
 export function getTextVisualRect({
-	textAlign,
 	block,
 	background,
 	fontSizeRatio = 1,
 }: {
-	textAlign: TextAlign;
 	block: TextBlockMeasurement;
 	background: TextBackground;
 	fontSizeRatio?: number;
 }): TextRect {
-	const textRect = getTextRect({ textAlign, block });
+	const textRect = getTextRect({ block });
 	const backgroundRect = getTextBackgroundRect({
-		textAlign,
 		block,
 		background,
 		fontSizeRatio,
@@ -186,6 +181,7 @@ export function drawTextDecoration({
 	ctx,
 	textDecoration,
 	lineWidth,
+	lineX,
 	lineY,
 	metrics,
 	scaledFontSize,
@@ -194,6 +190,7 @@ export function drawTextDecoration({
 	ctx: TextCanvasContext;
 	textDecoration: string;
 	lineWidth: number;
+	lineX: number;
 	lineY: number;
 	metrics: TextMetrics;
 	scaledFontSize: number;
@@ -211,9 +208,9 @@ export function drawTextDecoration({
 		fallbackFontSize: scaledFontSize,
 	});
 
-	let xStart = -lineWidth / 2;
-	if (textAlign === "left") xStart = 0;
-	if (textAlign === "right") xStart = -lineWidth;
+	let xStart = lineX - lineWidth / 2;
+	if (textAlign === "left") xStart = lineX;
+	if (textAlign === "right") xStart = lineX - lineWidth;
 
 	if (textDecoration === "underline") {
 		const underlineY = lineY + descent + thickness;
