@@ -629,10 +629,9 @@ function ElementInner({
 						isExpanded && "bg-background",
 					)}
 				>
-					<button
-						type="button"
-						tabIndex={-1}
-						className="absolute inset-0 size-full flex flex-col"
+					{/* 안에 효과·키프레임 버튼이 들어가므로 button이 아닌 div로 둔다 */}
+					<div
+						className="absolute inset-0 size-full flex flex-col cursor-default text-center"
 						onClick={(event) => onElementClick({ event, element })}
 						onMouseDown={(event) => onElementMouseDown({ event, element })}
 					>
@@ -661,7 +660,7 @@ function ElementInner({
 							/>
 						)}
 						{expandedContent}
-					</button>
+					</div>
 					{pixelsPerSecond !== null && (
 						<AutocutReviewOverlay element={visibleElement} pixelsPerSecond={pixelsPerSecond} />
 					)}
