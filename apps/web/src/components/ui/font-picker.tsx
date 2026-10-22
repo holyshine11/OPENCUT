@@ -65,7 +65,10 @@ export function FontPicker({
 		fontNames,
 		retry: handleRetry,
 	} = useFontAtlas({ open });
-	const [localFonts, setLocalFonts] = useState<string[] | null>(null);
+	const [localFonts, setLocalFonts] = useState<Array<{
+		family: string;
+		name: string;
+	}> | null>(null);
 	const [localFontsError, setLocalFontsError] = useState<string | null>(null);
 
 	const favorites = useFontFavorites((state) => state.favorites);
@@ -74,9 +77,17 @@ export function FontPicker({
 	const isMyFonts = activeTab === "my-fonts";
 	const isFavorites = activeTab === "favorites";
 	const isAllFonts = activeTab === "all";
+	// 설치된 글꼴은 Font Book 이름(배달의민족 연성)으로 보여 주고 찾는다. 실제 가족 이름은 영문(BM Yeonsung)이다
+	const localNames = useMemo(
+		() => new Map(localFonts?.map(({ family, name }) => [family, name])),
+		[localFonts],
+	);
 	const tabFonts = useMemo(() => {
 		if (isFavorites) return favorites.map((favorite) => favorite.family);
-		return isMyFonts ? (localFonts ?? []) : fontNames;
+		const localFamilies = localFonts?.map(({ family }) => family) ?? [];
+		return isMyFonts
+			? localFamilies
+			: [...new Set([...fontNames, ...localFamilies])];
 	}, [isFavorites, favorites, isMyFonts, localFonts, fontNames]);
 	const favoriteFamilies = useMemo(
 		() => new Set(favorites.map((favorite) => favorite.family)),
@@ -86,16 +97,26 @@ export function FontPicker({
 	const filteredFonts = useMemo(() => {
 		if (!search) return tabFonts;
 		const query = search.toLowerCase();
-		return tabFonts.filter((name) => name.toLowerCase().includes(query));
-	}, [tabFonts, search]);
+		return tabFonts.filter((family) =>
+			[family, localNames.get(family) ?? ""].some((name) =>
+				name.toLowerCase().includes(query),
+			),
+		);
+	}, [tabFonts, search, localNames]);
 
-	const handleTabClick = (tab: FontTab) => {
-		setActiveTab(tab);
-		if (tab !== "my-fonts" || localFonts) return;
+	const loadLocalFonts = useCallback(() => {
 		setLocalFontsError(null);
 		queryLocalFontFamilies()
 			.then(setLocalFonts)
 			.catch(() => setLocalFontsError(m.ui.localFontsFailed));
+	}, [m]);
+
+	// 모든 글꼴 탭에도 섞이고 선택된 글꼴 이름도 보여야 하므로 처음부터 불러온다
+	useEffect(loadLocalFonts, [loadLocalFonts]);
+
+	const handleTabClick = (tab: FontTab) => {
+		setActiveTab(tab);
+		if (tab === "my-fonts" && !localFonts && localFontsError) loadLocalFonts();
 	};
 
 	const listHeight = Math.min(
@@ -149,7 +170,9 @@ export function FontPicker({
 						<HugeiconsIcon icon={TextIcon} />
 					</span>
 					<span className="truncate" style={{ fontFamily: defaultValue }}>
-						{defaultValue ?? "Select a font"}
+						{(defaultValue && localNames.get(defaultValue)) ??
+							defaultValue ??
+							"Select a font"}
 					</span>
 				</div>
 				<ChevronDown className="size-3 shrink-0 opacity-50" />
@@ -244,6 +267,7 @@ export function FontPicker({
 								onFontSelect: handleSelect,
 								favoriteFamilies,
 								onToggleFavorite: handleToggleFavorite,
+								localNames,
 							}}
 							style={{ height: listHeight, width: LIST_WIDTH }}
 						/>
@@ -281,6 +305,7 @@ type FontRowProps = {
 	onFontSelect: (params: { family: string }) => void;
 	favoriteFamilies: Set<string>;
 	onToggleFavorite: (params: { family: string }) => void;
+	localNames: Map<string, string>;
 };
 
 function FontRow({
@@ -292,6 +317,7 @@ function FontRow({
 	onFontSelect,
 	favoriteFamilies,
 	onToggleFavorite,
+	localNames,
 }: RowComponentProps<FontRowProps>) {
 	const m = useMessages();
 	const fontName = filteredFonts[index];
@@ -300,6 +326,7 @@ function FontRow({
 	const entry = isBundled ? undefined : atlas?.fonts[fontName];
 	const isSelected = fontName === selectedFont;
 	const isFavorite = favoriteFamilies.has(fontName);
+	const label = localNames.get(fontName) ?? fontName;
 
 	return (
 		<div
@@ -319,7 +346,7 @@ function FontRow({
 						onFontSelect({ family: fontName });
 					}
 				}}
-				aria-label={fontName}
+				aria-label={label}
 			>
 				<div className="min-w-0 overflow-hidden">
 					{entry ? (
@@ -329,7 +356,7 @@ function FontRow({
 							className="text-xl text-foreground/85"
 							style={{ fontFamily: fontName }}
 						>
-							{isBundled ? `${fontName} 가나다` : fontName}
+							{isBundled ? `${fontName} 가나다` : label}
 						</span>
 					)}
 				</div>

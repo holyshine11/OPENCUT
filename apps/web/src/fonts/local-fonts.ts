@@ -8,7 +8,10 @@ interface LocalFontFace {
 	italic: boolean;
 }
 
-type LocalFontCatalog = Record<string, LocalFontFace[]>;
+type LocalFontCatalog = Record<
+	string,
+	{ name: string; faces: LocalFontFace[] }
+>;
 
 let catalogPromise: Promise<LocalFontCatalog> | null = null;
 const loaded = new Map<string, Promise<void>>();
@@ -26,8 +29,13 @@ function loadCatalog(): Promise<LocalFontCatalog> {
 	return catalogPromise;
 }
 
-export async function queryLocalFontFamilies(): Promise<string[]> {
-	return Object.keys(await loadCatalog()).sort((a, b) => a.localeCompare(b));
+/** 설치된 글꼴의 가족 이름과 Font Book에 보이는 이름(한글 이름 등) */
+export async function queryLocalFontFamilies(): Promise<
+	Array<{ family: string; name: string }>
+> {
+	return Object.entries(await loadCatalog())
+		.map(([family, { name }]) => ({ family, name }))
+		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** 설치된 글꼴이면 등록하고 true, 아니면 false */
@@ -36,7 +44,7 @@ export async function loadLocalFont({
 }: {
 	family: string;
 }): Promise<boolean> {
-	const faces = (await loadCatalog().catch(() => null))?.[family];
+	const faces = (await loadCatalog().catch(() => null))?.[family]?.faces;
 	if (!faces) return false;
 	if (!loaded.has(family)) {
 		loaded.set(

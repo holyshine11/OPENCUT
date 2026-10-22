@@ -6,18 +6,19 @@ import { extname } from "node:path";
 import { promisify } from "node:util";
 import type { NextRequest } from "next/server";
 
-// 가족 이름, 스타일 이름, 파일 경로를 한 줄씩 [family, style, path]로 뽑는다
+// 가족 이름, 스타일 이름, 파일 경로, 한글 등 현지화된 가족 이름을 한 줄씩 [family, style, path, name]로 뽑는다
 const LIST_FONTS_SCRIPT = `
 ObjC.import("AppKit");
 var manager = $.NSFontManager.sharedFontManager, rows = [];
 manager.availableFontFamilies.js.forEach(function (family) {
 	var members = manager.availableMembersOfFontFamily(family.js);
 	if (members.isNil()) return;
+	var name = manager.localizedNameForFamilyFace(family.js, $()).js;
 	members.js.forEach(function (member) {
 		var info = member.js;
 		var font = $.NSFont.fontWithNameSize(info[0].js, 12);
 		var url = font.isNil() ? null : font.fontDescriptor.objectForKey("NSCTFontFileURLAttribute");
-		rows.push([family.js, info[1].js, !url || url.isNil() ? null : url.path.js]);
+		rows.push([family.js, info[1].js, !url || url.isNil() ? null : url.path.js, name]);
 	});
 });
 JSON.stringify(rows);
@@ -36,6 +37,9 @@ const STYLE_WEIGHTS: Array<[RegExp, number]> = [
 ];
 const REGULAR_WEIGHT = 400;
 
+// 이 폴더의 기본 글꼴만 브라우저가 이름으로 쓴다. macOS가 내려받은 글꼴(/System/Library/AssetsV2, 배민·나눔 등)은 파일로 내려야 한다
+const SYSTEM_FONTS_DIR = "/System/Library/Fonts/";
+
 const FONT_TYPES: Record<string, string> = {
 	".ttf": "font/ttf",
 	".otf": "font/otf",
@@ -47,6 +51,12 @@ interface LocalFontFace {
 	italic: boolean;
 }
 
+interface LocalFontFamily {
+	/** Font Book에 보이는 이름(예: BM Yeonsung → 배달의민족 연성) */
+	name: string;
+	faces: LocalFontFace[];
+}
+
 let servableFiles = new Set<string>();
 
 function weightOf(style: string): number {
@@ -56,21 +66,22 @@ function weightOf(style: string): number {
 	);
 }
 
-/** 가족 이름 → 내려줄 수 있는 글꼴 파일. 시스템 글꼴과 .ttc 묶음은 브라우저가 이름으로 바로 쓰므로 파일 없이 둔다 */
-async function scanFonts(): Promise<Record<string, LocalFontFace[]>> {
+/** 가족 이름 → 보여 줄 이름과 내려줄 수 있는 글꼴 파일. 기본 시스템 글꼴과 .ttc 묶음은 파일 없이 이름으로 쓴다 */
+async function scanFonts(): Promise<Record<string, LocalFontFamily>> {
 	const { stdout } = await promisify(execFile)(
 		"osascript",
 		["-l", "JavaScript", "-e", LIST_FONTS_SCRIPT],
 		{ maxBuffer: 64 * 1024 * 1024 },
 	);
-	const rows: Array<[string, string, string | null]> = JSON.parse(stdout);
-	const catalog: Record<string, LocalFontFace[]> = {};
+	const rows: Array<[string, string, string | null, string]> =
+		JSON.parse(stdout);
+	const catalog: Record<string, LocalFontFamily> = {};
 	const files = new Set<string>();
-	for (const [family, style, file] of rows) {
-		const faces = (catalog[family] ??= []);
+	for (const [family, style, file, name] of rows) {
+		const { faces } = (catalog[family] ??= { name: name || family, faces: [] });
 		if (
 			!file ||
-			file.startsWith("/System/") ||
+			file.startsWith(SYSTEM_FONTS_DIR) ||
 			!FONT_TYPES[extname(file).toLowerCase()]
 		)
 			continue;
