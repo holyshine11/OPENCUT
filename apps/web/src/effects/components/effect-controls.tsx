@@ -185,6 +185,33 @@ export function EffectControls({
 	);
 }
 
+/** The clip's effect slot before anything is picked: only the choices, with "None" selected. */
+export function EffectPicker({
+	onPick,
+}: {
+	onPick: (change: { effectType: string; params: ParamValues }) => void;
+}) {
+	return (
+		<div className="flex flex-col gap-3 px-4 pt-1 pb-4">
+			<EffectStrip
+				activeType={null}
+				onSelectNone={() => {}}
+				onSelect={(next) =>
+					onPick({
+						effectType: next.type,
+						params: buildDefaultParamValues(next.params),
+					})
+				}
+			/>
+			<UserPresetStrip
+				activeType=""
+				params={{}}
+				onSelect={({ effectType, params }) => onPick({ effectType, params })}
+			/>
+		</div>
+	);
+}
+
 export const effectFavoriteId = (effectType: string) => `effect:${effectType}`;
 
 /** Every effect as a thumbnail row, favorites first, like the adjustment presets. */

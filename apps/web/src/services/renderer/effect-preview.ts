@@ -2,15 +2,18 @@ import { createCanvasSurface } from "./canvas-utils";
 import { effectsRegistry, resolveEffectPasses } from "@/effects";
 import { buildDefaultParamValues } from "@/params/registry";
 import type { ParamValues } from "@/params";
-import { gpuRenderer } from "./gpu-renderer";
+import { gpuRenderer, isGpuAvailable } from "./gpu-renderer";
 
 const PREVIEW_SIZE = 160;
 const PREVIEW_IMAGE_PATH = "/effects/preview.jpg";
+/** Thumbnails kept after their GPU render; a strip or grid redraws from here. */
+const MAX_CACHED_PREVIEWS = 300;
 
 class EffectPreviewService {
 	private testSourceCanvas: OffscreenCanvas | null = null;
 	private previewImageElement: HTMLImageElement | null = null;
 	private onReadyCallbacks = new Set<() => void>();
+	private renderedPreviews = new Map<string, OffscreenCanvas>();
 
 	readonly PREVIEW_SIZE = PREVIEW_SIZE;
 
@@ -42,12 +45,20 @@ class EffectPreviewService {
 			return;
 		}
 
-		targetCanvas.width = size;
-		targetCanvas.height = size;
+		if (targetCanvas.width !== size) targetCanvas.width = size;
+		if (targetCanvas.height !== size) targetCanvas.height = size;
 
 		const source = this.getTestSource({ width: size, height: size });
 		if (!source) {
 			targetCtx.clearRect(0, 0, size, size);
+			return;
+		}
+
+		const cacheKey = `${effectType}:${JSON.stringify(params)}:${uniformDimensions?.width ?? size}x${uniformDimensions?.height ?? size}`;
+		const cached = this.renderedPreviews.get(cacheKey);
+		if (cached) {
+			targetCtx.clearRect(0, 0, size, size);
+			targetCtx.drawImage(cached, 0, 0, size, size);
 			return;
 		}
 
@@ -71,11 +82,36 @@ class EffectPreviewService {
 				passes,
 			});
 
+			targetCtx.clearRect(0, 0, size, size);
 			targetCtx.drawImage(result, 0, 0, size, size);
+			// before the GPU is up the effect is skipped, which must not stick
+			if (passes.length === 0 || isGpuAvailable()) {
+				this.remember({ cacheKey, canvas: targetCanvas });
+			}
 		} catch (error) {
 			console.warn("Failed to render effect preview", { effectType, error });
 			targetCtx.clearRect(0, 0, size, size);
 			targetCtx.drawImage(source, 0, 0, size, size);
+		}
+	}
+
+	private remember({
+		cacheKey,
+		canvas,
+	}: {
+		cacheKey: string;
+		canvas: HTMLCanvasElement;
+	}): void {
+		// the GPU result is a shared surface, so keep a copy of what was drawn
+		const { canvas: copy, context } = createCanvasSurface({
+			width: canvas.width,
+			height: canvas.height,
+		});
+		context.drawImage(canvas, 0, 0);
+		this.renderedPreviews.set(cacheKey, copy);
+		if (this.renderedPreviews.size > MAX_CACHED_PREVIEWS) {
+			const oldest = this.renderedPreviews.keys().next().value;
+			if (oldest !== undefined) this.renderedPreviews.delete(oldest);
 		}
 	}
 
@@ -84,6 +120,7 @@ class EffectPreviewService {
 		const image = new Image();
 		image.onload = () => {
 			this.testSourceCanvas = null;
+			this.renderedPreviews.clear();
 			for (const callback of this.onReadyCallbacks) {
 				callback();
 			}

@@ -11,6 +11,7 @@ import { EffectPreviewCanvas } from "./effect-preview-canvas";
 import {
 	ADJUST_PRESETS,
 	buildAdjustPresetParams,
+	getAdjustPresetParams,
 	type AdjustPreset,
 } from "@/effects/definitions/adjust-presets";
 import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
@@ -177,7 +178,7 @@ export function AdjustmentView() {
 			itemId={`${ADJUST_EFFECT_TYPE}:${preset.id}`}
 			effect={definition}
 			name={translateLabel({ messages: m, label: preset.name })}
-			params={buildAdjustPresetParams(preset)}
+			params={getAdjustPresetParams(preset)}
 			overlay={<AdjustFavoriteButton presetId={preset.id} />}
 		/>
 	);

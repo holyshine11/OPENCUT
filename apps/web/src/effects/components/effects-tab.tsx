@@ -4,7 +4,13 @@ import { useState } from "react";
 import type { ParamValues } from "@/params";
 import type { Effect } from "@/effects/types";
 import type { EffectElement, VisualElement } from "@/timeline";
-import { effectsRegistry } from "@/effects";
+import {
+	buildDefaultEffectInstance,
+	effectsRegistry,
+	getEffectSlot,
+	type EffectSlot,
+} from "@/effects";
+import { generateUUID } from "@/utils/id";
 import { useEditor } from "@/editor/use-editor";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
 import {
@@ -19,14 +25,12 @@ import {
 	Delete02Icon,
 	ViewIcon,
 	ViewOffSlashIcon,
-	MagicWand05Icon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/utils/ui";
-import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
 import { translateLabel, useMessages } from "@/i18n";
 import { ADJUST_EFFECT_TYPE } from "@/effects/definitions/adjust";
 import { AdjustControls } from "./adjust-controls";
-import { EffectControls } from "./effect-controls";
+import { EffectControls, EffectPicker } from "./effect-controls";
 
 export function StandaloneEffectTab({
 	element,
@@ -94,8 +98,6 @@ export function ClipEffectsTab({
 	element: VisualElement;
 	trackId: string;
 }) {
-	const [dragIndex, setDragIndex] = useState<number | null>(null);
-	const [dropIndex, setDropIndex] = useState<number | null>(null);
 	const editor = useEditor();
 	const m = useMessages();
 	const { renderElement, previewUpdates, commit } = useElementPreview({
@@ -103,160 +105,131 @@ export function ClipEffectsTab({
 		elementId: element.id,
 		fallback: element,
 	});
+	// 조정은 항상 보여 주고, 처음 값을 바꿀 때 이 id로 클립에 붙인다 (클립마다 새 id)
+	const [draftAdjust, setDraftAdjust] = useState(() => ({
+		elementId: element.id,
+		id: generateUUID(),
+	}));
+	if (draftAdjust.elementId !== element.id) {
+		setDraftAdjust({ elementId: element.id, id: generateUUID() });
+	}
 
 	const effects: Effect[] = element.effects ?? [];
+	const renderEffects: Effect[] = (renderElement as VisualElement).effects ?? [];
+	const findSlot = (slot: EffectSlot) =>
+		effects.find((effect) => getEffectSlot({ effectType: effect.type }) === slot);
+	const look = findSlot("effect");
+	const adjust = findSlot("adjust");
+	const adjustEffect: Effect = adjust ?? {
+		...buildDefaultEffectInstance({ effectType: ADJUST_EFFECT_TYPE }),
+		id: draftAdjust.id,
+	};
+	// 슬롯이 생기기 전에 여러 개 쌓아 둔 효과: 숨기지 않고 지울 수 있게 아래에 둔다
+	const stacked = effects.filter(
+		(effect) => effect !== look && effect !== adjust,
+	);
 
-	const getRenderParams = ({ effectId }: { effectId: string }): ParamValues => {
-		return (
-			(renderElement as VisualElement).effects?.find((ef) => ef.id === effectId)
-				?.params ??
-			effects.find((ef) => ef.id === effectId)?.params ??
-			{}
-		);
+	const getRenderParams = (effect: Effect): ParamValues =>
+		renderEffects.find((existing) => existing.id === effect.id)?.params ??
+		effect.params;
+
+	const buildPreviewParams = (effect: Effect) => (updates: ParamValues) => {
+		const exists = renderEffects.some((existing) => existing.id === effect.id);
+		previewUpdates({
+			effects: exists
+				? renderEffects.map((existing) =>
+						existing.id !== effect.id
+							? existing
+							: { ...existing, params: { ...existing.params, ...updates } },
+					)
+				: [
+						...renderEffects,
+						{ ...effect, params: { ...effect.params, ...updates } },
+					],
+		});
 	};
 
-	const buildPreviewParams = (effectId: string) => (updates: ParamValues) => {
-		const updatedEffects = ((renderElement as VisualElement).effects ?? []).map(
-			(existing) =>
-				existing.id !== effectId
-					? existing
-					: { ...existing, params: { ...existing.params, ...updates } },
-		);
-		previewUpdates({ effects: updatedEffects });
-	};
-
-	const handleDragStart = ({ index }: { index: number }) => setDragIndex(index);
-
-	const handleDragOver = ({
-		event,
-		index,
-	}: {
-		event: React.DragEvent;
-		index: number;
-	}) => {
-		event.preventDefault();
-		if (index !== dropIndex) setDropIndex(index);
-	};
-
-	const handleDrop = ({ toIndex }: { toIndex: number }) => {
-		if (dragIndex !== null && dragIndex !== toIndex) {
-			editor.timeline.reorderClipEffects({
-				trackId,
-				elementId: element.id,
-				fromIndex: dragIndex,
-				toIndex,
+	const changeEffect =
+		(effect: Effect) =>
+		({ effectType, params }: { effectType: string; params: ParamValues }) => {
+			previewUpdates({
+				effects: renderEffects.map((existing) =>
+					existing.id === effect.id
+						? { ...existing, type: effectType, params }
+						: existing,
+				),
 			});
-		}
-		setDragIndex(null);
-		setDropIndex(null);
-	};
+			commit();
+		};
 
-	const handleDragEnd = () => {
-		setDragIndex(null);
-		setDropIndex(null);
-	};
+	const renderSection = ({
+		effect,
+		isAttached = true,
+	}: {
+		effect: Effect;
+		isAttached?: boolean;
+	}) => (
+		<EffectSection
+			key={effect.id}
+			effect={effect}
+			renderParams={getRenderParams(effect)}
+			previewParams={buildPreviewParams(effect)}
+			onCommit={commit}
+			onChangeEffect={changeEffect(effect)}
+			onToggle={
+				isAttached
+					? () =>
+							editor.timeline.toggleClipEffect({
+								trackId,
+								elementId: element.id,
+								effectId: effect.id,
+							})
+					: undefined
+			}
+			onRemove={
+				isAttached
+					? () =>
+							editor.timeline.removeClipEffect({
+								trackId,
+								elementId: element.id,
+								effectId: effect.id,
+							})
+					: undefined
+			}
+		/>
+	);
 
 	return (
 		<div className="flex flex-col h-full">
 			<div className="border-b px-3.5 h-11 shrink-0 flex items-center">
 				<SectionTitle>{m.properties.effects}</SectionTitle>
 			</div>
-			{effects.length === 0 ? (
-				<EmptyView />
+			{look ? (
+				renderSection({ effect: look })
 			) : (
-				<ul className="flex flex-col">
-					{effects.map((effect, index) => {
-						const resolvedDragIndex = dragIndex ?? -1;
-						const isDragging = dragIndex === index;
-						const isDropTarget =
-							dropIndex === index && dragIndex !== null && dragIndex !== index;
-						const showTopDropIndicator =
-							isDropTarget && index < resolvedDragIndex;
-						const showBottomDropIndicator =
-							isDropTarget && index > resolvedDragIndex;
-
-						return (
-							<li
-								key={effect.id}
-								draggable
-								onDragStart={() => handleDragStart({ index })}
-								onDragOver={(event) => handleDragOver({ event, index })}
-								onDrop={() => handleDrop({ toIndex: index })}
-								onDragEnd={handleDragEnd}
-								className={cn(
-									"group list-none",
-									isDragging && "opacity-40",
-									showTopDropIndicator && "border-t-2 border-primary",
-									showBottomDropIndicator && "border-b-2 border-primary",
-								)}
-							>
-								<EffectSection
-									effect={effect}
-									renderParams={getRenderParams({ effectId: effect.id })}
-									previewParams={buildPreviewParams(effect.id)}
-									onCommit={commit}
-									onChangeEffect={({ effectType, params }) => {
-										previewUpdates({
-											effects: (
-												(renderElement as VisualElement).effects ?? []
-											).map((existing) =>
-												existing.id === effect.id
-													? { ...existing, type: effectType, params }
-													: existing,
-											),
-										});
-										commit();
-									}}
-									onToggle={() =>
-										editor.timeline.toggleClipEffect({
-											trackId,
-											elementId: element.id,
-											effectId: effect.id,
-										})
-									}
-									onRemove={() =>
-										editor.timeline.removeClipEffect({
-											trackId,
-											elementId: element.id,
-											effectId: effect.id,
-										})
-									}
-								/>
-							</li>
-						);
-					})}
-				</ul>
+				<Section showTopBorder={false}>
+					<SectionHeader>
+						<SectionTitle>{m.properties.effect}</SectionTitle>
+					</SectionHeader>
+					<SectionContent className="p-0">
+						<EffectPicker
+							onPick={({ effectType, params }) =>
+								editor.timeline.addClipEffect({
+									trackId,
+									elementId: element.id,
+									effectType,
+									params,
+								})
+							}
+						/>
+					</SectionContent>
+				</Section>
 			)}
-		</div>
-	);
-}
-
-function EmptyView() {
-	const m = useMessages();
-	const setActiveTab = useAssetsPanelStore((s) => s.setActiveTab);
-
-	return (
-		<div className="flex flex-col h-full items-center justify-center gap-4 text-center">
-			<HugeiconsIcon
-				icon={MagicWand05Icon}
-				className="size-10 text-muted-foreground"
-				strokeWidth={1}
-			/>
-			<div className="flex flex-col gap-2">
-				<h3 className="font-medium text-foreground">
-					{m.properties.noEffects}
-				</h3>
-				<p className="text-muted-foreground text-sm text-balance max-w-44">
-					{m.properties.noEffectsHint}
-				</p>
-			</div>
-			<Button
-				variant="default"
-				size="sm"
-				onClick={() => setActiveTab("effects")}
-			>
-				{m.properties.openEffects}
-			</Button>
+			{renderSection({
+				effect: adjustEffect,
+				isAttached: adjust !== undefined,
+			})}
+			{stacked.map((effect) => renderSection({ effect }))}
 		</div>
 	);
 }
@@ -289,7 +262,6 @@ function EffectSection({
 			showTopBorder={false}
 		>
 			<SectionHeader
-				className={cn(onToggle && "cursor-move")}
 				trailing={
 					onToggle && (
 						<div className="flex items-center gap-1">

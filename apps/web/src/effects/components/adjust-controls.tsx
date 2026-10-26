@@ -19,6 +19,7 @@ import {
 	ADJUST_PRESETS,
 	buildAdjustPresetParams,
 	findMatchingAdjustPreset,
+	getAdjustPresetParams,
 } from "@/effects/definitions/adjust-presets";
 import { EffectPreviewCanvas } from "./effect-preview-canvas";
 import {
@@ -195,7 +196,7 @@ function PresetStrip({
 								>
 									<EffectPreviewCanvas
 										effectType={ADJUST_EFFECT_TYPE}
-										params={buildAdjustPresetParams(preset)}
+										params={getAdjustPresetParams(preset)}
 									/>
 								</span>
 								<span

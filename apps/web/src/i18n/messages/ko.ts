@@ -264,9 +264,6 @@ export const ko: Messages = {
 		stroke: "선",
 		effect: "효과",
 		effects: "효과",
-		noEffects: "효과 없음",
-		noEffectsHint: "효과 패널에서 이 레이어에 효과를 추가하세요.",
-		openEffects: "효과 열기",
 		toggleEffect: ({ name }) => `${name} 켜기/끄기`,
 		removeEffect: ({ name }) => `${name} 삭제`,
 		adjust: {

@@ -2,7 +2,8 @@ import { Command, type CommandResult } from "@/commands/base-command";
 import { EditorCore } from "@/core";
 import { isVisualElement, updateElementInSceneTracks } from "@/timeline";
 import type { SceneTracks, VisualElement } from "@/timeline";
-import { buildDefaultEffectInstance } from "@/effects";
+import { placeEffectInSlot } from "@/effects";
+import type { Effect } from "@/effects/types";
 import type { ParamValues } from "@/params";
 
 function addEffectToElement({
@@ -13,10 +14,13 @@ function addEffectToElement({
 	element: VisualElement;
 	effectType: string;
 	params?: ParamValues;
-}): VisualElement {
-	const instance = buildDefaultEffectInstance({ effectType, params });
-	const currentEffects = element.effects ?? [];
-	return { ...element, effects: [...currentEffects, instance] };
+}): { element: VisualElement; effect: Effect } {
+	const { effects, effect } = placeEffectInSlot({
+		effects: element.effects ?? [],
+		effectType,
+		params,
+	});
+	return { element: { ...element, effects }, effect };
 }
 
 export class AddClipEffectCommand extends Command {
@@ -61,9 +65,8 @@ export class AddClipEffectCommand extends Command {
 					effectType: this.effectType,
 					params: this.params,
 				});
-				const effects = updated.effects ?? [];
-				this.effectId = effects[effects.length - 1]?.id ?? null;
-				return updated;
+				this.effectId = updated.effect.id;
+				return updated.element;
 			},
 		});
 

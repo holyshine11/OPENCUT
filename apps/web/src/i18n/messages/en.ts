@@ -283,9 +283,6 @@ export const en = {
 		stroke: "Stroke",
 		effect: "Effect",
 		effects: "Effects",
-		noEffects: "No effects",
-		noEffectsHint: "Add effects to this layer from the Assets panel.",
-		openEffects: "Open effects",
 		toggleEffect: ({ name }: { name: string }) => `Toggle ${name}`,
 		removeEffect: ({ name }: { name: string }) => `Remove ${name}`,
 		adjust: {

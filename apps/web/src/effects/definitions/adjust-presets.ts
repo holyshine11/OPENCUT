@@ -160,12 +160,24 @@ export function buildAdjustPresetParams(
 	return { ...buildDefaultAdjustParams(), ...preset?.params };
 }
 
+const presetParamsCache = new Map<string, ParamValues>();
+
+/** Same as buildAdjustPresetParams but one shared object per preset, for read-only use such as thumbnails. */
+export function getAdjustPresetParams(preset: AdjustPreset): ParamValues {
+	let params = presetParamsCache.get(preset.id);
+	if (!params) {
+		params = buildAdjustPresetParams(preset);
+		presetParamsCache.set(preset.id, params);
+	}
+	return params;
+}
+
 export function findMatchingAdjustPreset(
 	params: ParamValues,
 ): AdjustPreset | null {
 	return (
 		ADJUST_PRESETS.find((preset) => {
-			const expected = buildAdjustPresetParams(preset);
+			const expected = getAdjustPresetParams(preset);
 			return Object.entries(expected).every(
 				([key, value]) => key === "amount" || params[key] === value,
 			);
