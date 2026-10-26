@@ -43,6 +43,7 @@ import {
 	Undo02Icon,
 	Redo02Icon,
 	Add01Icon,
+	KeyframeIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { OcRippleIcon } from "@/components/icons";
@@ -53,6 +54,7 @@ import { useGraphEditorController } from "./graph-editor/use-controller";
 import { translateLabel, useMessages } from "@/i18n";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AddTrackMenuContent } from "./add-track-menu";
+import { getTransformKeyframeToggleState } from "@/timeline/transform-keyframes";
 
 export function TimelineToolbar({
 	zoomLevel,
@@ -117,6 +119,15 @@ function ToolbarLeftSection() {
 					elements: selectedElements,
 				})[0] ?? null)
 			: null;
+	const keyframeStatus = useEditor(
+		(e) =>
+			getTransformKeyframeToggleState({
+				elements: e.timeline
+					.getElementsWithTracks({ elements: selectedElements })
+					.map(({ element }) => element),
+				playheadTime: e.playback.getCurrentTime(),
+			}).status,
+	);
 	const selectedMediaAsset = (() => {
 		if (!selectedElement) {
 			return null;
@@ -239,6 +250,27 @@ function ToolbarLeftSection() {
 						}
 					/>
 				</Tooltip>
+
+				<ToolbarButton
+					icon={
+						<HugeiconsIcon
+							icon={KeyframeIcon}
+							className={cn(
+								keyframeStatus === "keyed" && "text-primary fill-primary",
+							)}
+						/>
+					}
+					tooltip={
+						keyframeStatus === "keyed"
+							? m.timeline.removeKeyframe
+							: m.timeline.addKeyframe
+					}
+					action="toggle-transform-keyframe"
+					disabled={keyframeStatus === "disabled"}
+					onClick={({ event }) =>
+						handleAction({ action: "toggle-transform-keyframe", event })
+					}
+				/>
 
 				<GraphEditorPopover
 					open={graphEditor.open}

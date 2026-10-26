@@ -162,6 +162,10 @@ export const ACTIONS = {
 		description: "Toggle bookmark at playhead",
 		category: "timeline",
 	},
+	"toggle-transform-keyframe": {
+		description: "Add/remove keyframe at playhead",
+		category: "editing",
+	},
 	"timeline-zoom-in": {
 		description: "Zoom in timeline",
 		category: "timeline",

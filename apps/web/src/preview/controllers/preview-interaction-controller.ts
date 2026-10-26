@@ -18,8 +18,9 @@ import {
 	type SnapLine,
 } from "@/preview/preview-snap";
 import type { TCanvasSize } from "@/project/types";
-import type { ParamValues } from "@/params";
+import { getElementLocalTime } from "@/animation";
 import { buildTransformFromParams, type Transform } from "@/rendering";
+import { resolveTransformAtTime } from "@/rendering/animation-values";
 import { isVisualElement } from "@/timeline/element-utils";
 import type {
 	ElementRef,
@@ -29,6 +30,8 @@ import type {
 	TimelineTrack,
 	VisualElement,
 } from "@/timeline";
+import { buildTransformEditUpdates } from "@/timeline/transform-keyframes";
+import { mediaTime, type MediaTime } from "@/wasm";
 
 const MIN_DRAG_DISTANCE = 0.5;
 const PRIMARY_POINTER_BUTTON = 0;
@@ -52,7 +55,9 @@ interface DragElementSnapshot {
 	readonly trackId: string;
 	readonly elementId: string;
 	readonly initialTransform: Transform;
-	readonly initialParams: ParamValues;
+	readonly initialElement: VisualElement;
+	/** 재생 헤드가 클립 밖이면 null. 키프레임 대신 기본값을 옮긴다 */
+	readonly localTime: MediaTime | null;
 }
 
 interface DraggingGesture extends CapturedPointerState {
@@ -206,8 +211,10 @@ function movedPastDragThreshold({
 
 function toDragElementSnapshots({
 	elementsWithTracks,
+	currentTime,
 }: {
 	elementsWithTracks: Array<{ track: TimelineTrack; element: TimelineElement }>;
+	currentTime: number;
 }): DragElementSnapshot[] {
 	const isVisualTrackedElement = (value: {
 		track: TimelineTrack;
@@ -217,12 +224,41 @@ function toDragElementSnapshots({
 
 	return elementsWithTracks
 		.filter(isVisualTrackedElement)
-		.map(({ track, element }) => ({
-			trackId: track.id,
-			elementId: element.id,
-			initialTransform: buildTransformFromParams({ params: element.params }),
-			initialParams: element.params,
-		}));
+		.map(({ track, element }) => {
+			const baseTransform = buildTransformFromParams({ params: element.params });
+			const isPlayheadWithinElement =
+				currentTime >= element.startTime &&
+				currentTime <= element.startTime + element.duration;
+			if (!isPlayheadWithinElement) {
+				return {
+					trackId: track.id,
+					elementId: element.id,
+					initialTransform: baseTransform,
+					initialElement: element,
+					localTime: null,
+				};
+			}
+
+			const localTime = mediaTime({
+				ticks: getElementLocalTime({
+					timelineTime: currentTime,
+					elementStartTime: element.startTime,
+					elementDuration: element.duration,
+				}),
+			});
+			return {
+				trackId: track.id,
+				elementId: element.id,
+				// 키프레임이 있으면 지금 화면에 보이는 위치에서 끌기 시작한다
+				initialTransform: resolveTransformAtTime({
+					baseTransform,
+					animations: element.animations,
+					localTime,
+				}),
+				initialElement: element,
+				localTime,
+			};
+		});
 }
 
 export class PreviewInteractionController {
@@ -492,6 +528,7 @@ export class PreviewInteractionController {
 			elementsWithTracks: this.deps.timeline.getElementsWithTracks({
 				elements: dragSelection,
 			}),
+			currentTime: this.deps.scene.getCurrentTime(),
 		});
 
 		if (draggableElements.length === 0) {
@@ -568,17 +605,20 @@ export class PreviewInteractionController {
 			snappedPosition.y - firstElement.initialTransform.position.y;
 
 		this.deps.timeline.previewElements(
-			drag.elements.map(({ trackId, elementId, initialTransform, initialParams }) => ({
-				trackId,
-				elementId,
-				updates: {
-					params: {
-						...initialParams,
-						"transform.positionX": initialTransform.position.x + deltaSnappedX,
-						"transform.positionY": initialTransform.position.y + deltaSnappedY,
-					},
-				},
-			})),
+			drag.elements.map(
+				({ trackId, elementId, initialTransform, initialElement, localTime }) => ({
+					trackId,
+					elementId,
+					updates: buildTransformEditUpdates({
+						element: initialElement,
+						localTime,
+						values: {
+							"transform.positionX": initialTransform.position.x + deltaSnappedX,
+							"transform.positionY": initialTransform.position.y + deltaSnappedY,
+						},
+					}),
+				}),
+			),
 		);
 	}
 }

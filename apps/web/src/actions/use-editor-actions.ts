@@ -42,6 +42,11 @@ import { findSubtitleEntry, listSubtitleGroups } from "@/subtitles/groups";
 import { splitIndexAtTime } from "@/subtitles/edit";
 import { cueOf, mergeSubtitles, splitSubtitle } from "@/subtitles/list-actions";
 import { planNudge } from "@/timeline/group-move";
+import {
+	getTransformKeyframesAtTime,
+	getTransformKeyframeToggleState,
+	getTransformValuesAtTime,
+} from "@/timeline/transform-keyframes";
 
 export function useEditorActions() {
 	const editor = useEditor();
@@ -568,6 +573,44 @@ export function useEditorActions() {
 		"toggle-bookmark",
 		() => {
 			editor.scenes.toggleBookmark({ time: editor.playback.getCurrentTime() });
+		},
+		undefined,
+	);
+
+	// CapCut 키프레임 버튼: 재생 헤드 위치에 위치·크기·회전을 한꺼번에 찍거나 지운다
+	useActionHandler(
+		"toggle-transform-keyframe",
+		() => {
+			const selected = editor.timeline.getElementsWithTracks({
+				elements: selectedElements,
+			});
+			const state = getTransformKeyframeToggleState({
+				elements: selected.map(({ element }) => element),
+				playheadTime: editor.playback.getCurrentTime(),
+			});
+			if (state.status === "disabled") return;
+
+			const ref = { trackId: selected[0].track.id, elementId: state.element.id };
+			if (state.status === "keyed") {
+				editor.timeline.removeKeyframes({
+					keyframes: getTransformKeyframesAtTime(state).map((keyframe) => ({
+						...ref,
+						...keyframe,
+					})),
+				});
+				return;
+			}
+
+			editor.timeline.upsertKeyframes({
+				keyframes: getTransformValuesAtTime(state).map(
+					({ propertyPath, value }) => ({
+						...ref,
+						propertyPath,
+						time: state.localTime,
+						value,
+					}),
+				),
+			});
 		},
 		undefined,
 	);
