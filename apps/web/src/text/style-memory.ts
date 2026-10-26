@@ -12,6 +12,7 @@ export const TEXT_STYLE_PARAM_KEYS = [
 	"fontFamily",
 	"fontSize",
 	"color",
+	"colorOpacity",
 	"textAlign",
 	"fontWeight",
 	"fontStyle",

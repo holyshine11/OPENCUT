@@ -169,6 +169,7 @@ export function drawMeasuredTextLayout({
 	ctx,
 	layout,
 	textColor,
+	fillOpacity = 1,
 	background,
 	backgroundColor,
 	stroke,
@@ -178,6 +179,11 @@ export function drawMeasuredTextLayout({
 	ctx: TextCanvasContext;
 	layout: MeasuredTextLayout;
 	textColor: string;
+	/**
+	 * 0~1, applies to the glyph fill only. Below 1 with an outline or shadow,
+	 * the glyphs are cut out of what is already on ctx, so ctx must hold only this text
+	 */
+	fillOpacity?: number;
 	background?: ResolvedTextBackgroundLike | null;
 	backgroundColor?: string;
 	/** width is a percentage of the font size */
@@ -189,71 +195,132 @@ export function drawMeasuredTextLayout({
 	ctx.font = layout.fontString;
 	ctx.textAlign = layout.textAlign;
 	ctx.textBaseline = textBaseline;
-	ctx.fillStyle = textColor;
 	setCanvasLetterSpacing({ ctx, letterSpacingPx: layout.letterSpacing });
 
-	if (
-		background?.enabled &&
-		backgroundColor &&
-		backgroundColor !== "transparent" &&
-		layout.lines.length > 0
-	) {
-		const backgroundRect = getTextBackgroundRect({
-			block: layout.block,
-			background: {
-				...background,
-				color: backgroundColor,
-			},
-			fontSizeRatio: layout.fontSizeRatio,
-		});
-		if (backgroundRect) {
-			const p =
-				clamp({
-					value: background.cornerRadius,
-					min: CORNER_RADIUS_MIN,
-					max: CORNER_RADIUS_MAX,
-				}) / 100;
-			const radius =
-				(Math.min(backgroundRect.width, backgroundRect.height) / 2) * p;
-			ctx.fillStyle = backgroundColor;
-			ctx.beginPath();
-			ctx.roundRect(
-				backgroundRect.left,
-				backgroundRect.top,
-				backgroundRect.width,
-				backgroundRect.height,
-				radius,
-			);
-			ctx.fill();
-			ctx.fillStyle = textColor;
-		}
+	const outline = stroke && stroke.width > 0 ? stroke : null;
+	const opacity = clamp({ value: fillOpacity, min: 0, max: 1 });
+	if (opacity >= 1 || (!outline && !shadow)) {
+		drawTextBackground({ ctx, layout, background, backgroundColor });
+		drawTextLines({ ctx, layout, textColor, fillOpacity: opacity, outline, shadow });
+		return;
 	}
 
+	// The outline and shadow must not fade with the letters, and the outline's inner
+	// half must not show through them: draw both from opaque glyphs, cut the glyphs
+	// out, slide the background underneath, then fill the holes with the faded glyphs
+	drawTextLines({
+		ctx,
+		layout,
+		textColor,
+		fillOpacity: 1,
+		outline,
+		shadow,
+		decorate: false,
+	});
+	ctx.globalCompositeOperation = "destination-out";
+	drawTextLines({ ctx, layout, textColor, fillOpacity: 1, decorate: false });
+	ctx.globalCompositeOperation = "destination-over";
+	drawTextBackground({ ctx, layout, background, backgroundColor });
+	ctx.globalCompositeOperation = "source-over";
+	drawTextLines({ ctx, layout, textColor, fillOpacity: opacity });
+}
+
+function drawTextBackground({
+	ctx,
+	layout,
+	background,
+	backgroundColor,
+}: {
+	ctx: TextCanvasContext;
+	layout: MeasuredTextLayout;
+	background?: ResolvedTextBackgroundLike | null;
+	backgroundColor?: string;
+}): void {
+	if (
+		!background?.enabled ||
+		!backgroundColor ||
+		backgroundColor === "transparent" ||
+		layout.lines.length === 0
+	) {
+		return;
+	}
+	const backgroundRect = getTextBackgroundRect({
+		block: layout.block,
+		background: {
+			...background,
+			color: backgroundColor,
+		},
+		fontSizeRatio: layout.fontSizeRatio,
+	});
+	if (!backgroundRect) return;
+	const p =
+		clamp({
+			value: background.cornerRadius,
+			min: CORNER_RADIUS_MIN,
+			max: CORNER_RADIUS_MAX,
+		}) / 100;
+	const radius =
+		(Math.min(backgroundRect.width, backgroundRect.height) / 2) * p;
+	ctx.fillStyle = backgroundColor;
+	ctx.beginPath();
+	ctx.roundRect(
+		backgroundRect.left,
+		backgroundRect.top,
+		backgroundRect.width,
+		backgroundRect.height,
+		radius,
+	);
+	ctx.fill();
+}
+
+function drawTextLines({
+	ctx,
+	layout,
+	textColor,
+	fillOpacity,
+	outline = null,
+	shadow = null,
+	decorate = true,
+}: {
+	ctx: TextCanvasContext;
+	layout: MeasuredTextLayout;
+	textColor: string;
+	fillOpacity: number;
+	outline?: { color: string; width: number } | null;
+	shadow?: TextShadow | null;
+	decorate?: boolean;
+}): void {
+	ctx.fillStyle = textColor;
+	const baseAlpha = ctx.globalAlpha;
 	const lineX = getLineX({ textAlign: layout.textAlign, block: layout.block });
 	for (let index = 0; index < layout.lines.length; index++) {
 		const lineY = index * layout.lineHeightPx - layout.block.visualCenterOffset;
 		// cast the shadow once per line, from the outline when there is one so it is not doubled
 		if (shadow) applyTextShadow({ ctx, shadow, scaledFontSize: layout.scaledFontSize });
-		if (stroke && stroke.width > 0) {
+		if (outline) {
 			// stroke is centered on the glyph edge and the fill covers the inner half, so double it
-			ctx.strokeStyle = stroke.color;
-			ctx.lineWidth = ((layout.scaledFontSize * stroke.width) / 100) * 2;
+			ctx.strokeStyle = outline.color;
+			ctx.lineWidth = ((layout.scaledFontSize * outline.width) / 100) * 2;
 			ctx.lineJoin = "round";
 			ctx.strokeText(layout.lines[index], lineX, lineY);
 			clearTextShadow({ ctx });
 		}
+		ctx.globalAlpha = baseAlpha * fillOpacity;
 		ctx.fillText(layout.lines[index], lineX, lineY);
 		clearTextShadow({ ctx });
-		drawTextDecoration({
-			ctx,
-			textDecoration: layout.textDecoration,
-			lineWidth: layout.lineMetrics[index].width,
-			lineX,
-			lineY,
-			metrics: layout.lineMetrics[index],
-			scaledFontSize: layout.scaledFontSize,
-			textAlign: layout.textAlign,
-		});
+		if (decorate) {
+			drawTextDecoration({
+				ctx,
+				textDecoration: layout.textDecoration,
+				lineWidth: layout.lineMetrics[index].width,
+				lineX,
+				lineY,
+				metrics: layout.lineMetrics[index],
+				scaledFontSize: layout.scaledFontSize,
+				textAlign: layout.textAlign,
+			});
+		}
+		ctx.globalAlpha = baseAlpha;
 	}
 }
 

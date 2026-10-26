@@ -443,6 +443,7 @@ export const ko: Messages = {
 		Shadow: "그림자",
 		"Shadow Color": "그림자 색",
 		"Shadow Opacity": "그림자 불투명도",
+		"Text Opacity": "글자 불투명도",
 		"Shadow Blur": "그림자 흐림",
 		"Shadow X": "그림자 X",
 		"Shadow Y": "그림자 Y",

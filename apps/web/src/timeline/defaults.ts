@@ -22,6 +22,8 @@ const defaultTransitionSeconds = 0.5;
 
 const defaultTextLetterSpacing = 0;
 const defaultTextLineHeight = 1.2;
+// 글자 채움만의 불투명도(0~100). 배경·테두리·그림자는 그대로 두고 글자만 비치게 한다
+const defaultTextColorOpacity = 100;
 
 const defaultTextBackground = {
 	enabled: false,
@@ -52,6 +54,7 @@ const defaultTextElement: Omit<TextElement, "id"> = {
 		fontSize: 15,
 		fontFamily: "Pretendard",
 		color: "#ffffff",
+		colorOpacity: defaultTextColorOpacity,
 		textAlign: "center",
 		fontWeight: "normal",
 		fontStyle: "normal",
@@ -102,6 +105,7 @@ export const DEFAULTS = {
 	text: {
 		letterSpacing: defaultTextLetterSpacing,
 		lineHeight: defaultTextLineHeight,
+		colorOpacity: defaultTextColorOpacity,
 		background: defaultTextBackground,
 		stroke: defaultTextStroke,
 		shadow: DEFAULT_TEXT_SHADOW,

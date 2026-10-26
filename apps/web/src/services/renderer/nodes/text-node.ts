@@ -20,6 +20,8 @@ export interface ResolvedTextNodeState {
 	transform: Transform;
 	opacity: number;
 	textColor: string;
+	/** 0~100, 글자 채움에만 적용된다 */
+	textOpacity: number;
 	backgroundColor: string;
 	effectPasses: EffectPass[][];
 	measuredText: MeasuredTextElement;
@@ -54,6 +56,7 @@ export function renderTextToContext({
 		ctx,
 		layout: resolved.measuredText,
 		textColor: resolved.textColor,
+		fillOpacity: resolved.textOpacity / 100,
 		background: resolved.measuredText.resolvedBackground,
 		backgroundColor: resolved.backgroundColor,
 		stroke: resolveTextStroke({ params: node.params.params }),

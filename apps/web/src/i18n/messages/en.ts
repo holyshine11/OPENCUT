@@ -465,6 +465,7 @@ export const en = {
 		Shadow: "Shadow",
 		"Shadow Color": "Shadow Color",
 		"Shadow Opacity": "Shadow Opacity",
+		"Text Opacity": "Text Opacity",
 		"Shadow Blur": "Shadow Blur",
 		"Shadow X": "Shadow X",
 		"Shadow Y": "Shadow Y",

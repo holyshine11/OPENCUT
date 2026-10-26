@@ -18,9 +18,14 @@ import {
 	getTextMeasurementContext,
 	measureTextElement,
 } from "@/text/measure-element";
-import { resolveColorAtTime, resolveOpacityAtTime } from "@/animation/values";
+import {
+	resolveColorAtTime,
+	resolveNumberAtTime,
+	resolveOpacityAtTime,
+} from "@/animation/values";
 import { resolveTransformAtTime } from "@/rendering/animation-values";
 import { videoCache } from "@/services/video-cache/service";
+import { DEFAULTS } from "@/timeline/defaults";
 import type { CanvasRenderer } from "./canvas-renderer";
 import type { AnyBaseNode } from "./nodes/base-node";
 import {
@@ -396,6 +401,15 @@ function resolveTextNode({
 					: "#ffffff",
 			animations: node.params.animations,
 			propertyPath: "color",
+			localTime,
+		}),
+		textOpacity: resolveNumberAtTime({
+			baseValue:
+				typeof node.params.params.colorOpacity === "number"
+					? node.params.params.colorOpacity
+					: DEFAULTS.text.colorOpacity,
+			animations: node.params.animations,
+			propertyPath: "colorOpacity",
 			localTime,
 		}),
 		backgroundColor: resolveColorAtTime({

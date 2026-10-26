@@ -32,6 +32,7 @@ const PROPERTY_LABELS: Partial<Record<string, string>> = {
 	opacity: "Opacity",
 	volume: "Volume",
 	color: "Color",
+	colorOpacity: "Text Opacity",
 	"background.color": "BG Color",
 	"background.paddingX": "BG Pad X",
 	"background.paddingY": "BG Pad Y",

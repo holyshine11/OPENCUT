@@ -322,6 +322,17 @@ const textElementParams: ElementParamDefinition[] = [
 		default: "#ffffff",
 	},
 	{
+		key: "colorOpacity",
+		label: "Text Opacity",
+		type: "number",
+		default: DEFAULTS.text.colorOpacity,
+		min: 0,
+		max: 100,
+		step: 1,
+		suffix: "%",
+		slider: true,
+	},
+	{
 		key: "textAlign",
 		label: "Text Align",
 		type: "select",
