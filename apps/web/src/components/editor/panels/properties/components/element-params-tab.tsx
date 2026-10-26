@@ -35,8 +35,10 @@ export function ElementParamsTab({
 		startTime: element.startTime,
 		duration: element.duration,
 	});
-	const params = getElementParams({ element }).flatMap((param) => {
-		if (paramKeys && !paramKeys.includes(param.key)) return [];
+	const params = orderByKeys({
+		params: getElementParams({ element }),
+		paramKeys,
+	}).flatMap((param) => {
 		const resolved = resolveParam ? resolveParam(param) : param;
 		return resolved ? [resolved] : [];
 	});
@@ -116,6 +118,21 @@ function ElementParamField({
 			}
 		/>
 	);
+}
+
+/** paramKeys가 있으면 그 순서대로 보인다. 다른 정의 묶음의 필드를 원하는 자리에 끼울 수 있다 */
+function orderByKeys({
+	params,
+	paramKeys,
+}: {
+	params: readonly ElementParamDefinition[];
+	paramKeys?: readonly string[];
+}): ElementParamDefinition[] {
+	if (!paramKeys) return [...params];
+	return paramKeys.flatMap((key) => {
+		const param = params.find((candidate) => candidate.key === key);
+		return param ? [param] : [];
+	});
 }
 
 function buildValues({

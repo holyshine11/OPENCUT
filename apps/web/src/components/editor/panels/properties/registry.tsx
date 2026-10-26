@@ -63,6 +63,8 @@ const TEXT_PARAM_KEYS = [
 	"fontFamily",
 	"fontSize",
 	"color",
+	// 혼합 탭과 같은 요소 불투명도다. 자막을 다듬다 탭을 옮기지 않도록 색 아래에도 둔다
+	"opacity",
 	"textAlign",
 	"fontWeight",
 	"fontStyle",
