@@ -687,7 +687,8 @@ impl Compositor {
         effect_pass_groups: &[Vec<EffectPassDescriptor>],
     ) -> Result<wgpu::Texture, CompositorError> {
         let mut current = self.copy_texture(context, encoder, source, width, height);
-        for group in effect_pass_groups {
+        // 세기가 0인 블러처럼 할 일이 없는 효과는 빈 묶음으로 온다. 그대로 넘기면 MissingEffectPasses로 프레임 전체가 실패한다
+        for group in effect_pass_groups.iter().filter(|group| !group.is_empty()) {
             let passes = map_effect_passes(group);
             current = self.effects.apply_with_encoder(
                 context,
