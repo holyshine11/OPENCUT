@@ -6,6 +6,11 @@ import { TransformHandles } from "./transform-handles";
 import { MaskHandles } from "./mask-handles";
 import { SnapGuides } from "./snap-guides";
 import { TextEditOverlay } from "./text-edit-overlay";
+import { BrushOverlay } from "./brush-overlay";
+import { useBrushToolStore } from "@/graphics/brush-tool-store";
+import { MultiSelectionOverlay } from "./multi-selection-overlay";
+import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-panel-store";
+import { useStickersStore } from "@/stickers/stickers-store";
 import { usePropertiesStore } from "@/components/editor/panels/properties/stores/properties-store";
 import { useEditor } from "@/editor/use-editor";
 import { useMessages } from "@/i18n";
@@ -17,6 +22,12 @@ export function PreviewInteractionOverlay() {
 	const viewport = usePreviewViewport();
 	const selectedElements = useEditor((e) => e.selection.getSelectedElements());
 	const activeTabPerType = usePropertiesStore((s) => s.activeTabPerType);
+	const assetsTab = useAssetsPanelStore((s) => s.activeTab);
+	const stickerCategory = useStickersStore((s) => s.selectedCategory);
+	const brushTool = useBrushToolStore((s) => s.tool);
+	// 이동 도구일 땐 평소처럼 클립을 잡아 옮기고 크기를 바꾼다
+	const isBrushMode =
+		assetsTab === "stickers" && stickerCategory === "brush" && brushTool !== "move";
 
 	const selectedRef =
 		selectedElements.length === 1 ? selectedElements[0] : null;
@@ -38,6 +49,7 @@ export function PreviewInteractionOverlay() {
 		onDoubleClick,
 		editingText,
 		commitTextEdit,
+		marqueeRect,
 	} = usePreviewInteraction({
 		onSnapLinesChange: setSnapLines,
 		isMaskMode,
@@ -87,7 +99,9 @@ export function PreviewInteractionOverlay() {
 				onDoubleClick={onDoubleClick}
 				onDragStart={(e) => e.preventDefault()}
 			/>
-			{editingText ? (
+			{isBrushMode ? (
+				<BrushOverlay />
+			) : editingText ? (
 				<TextEditOverlay
 					trackId={editingText.trackId}
 					elementId={editingText.elementId}
@@ -97,7 +111,10 @@ export function PreviewInteractionOverlay() {
 			) : isMaskMode ? (
 				<MaskHandles onSnapLinesChange={setSnapLines} />
 			) : (
-				<TransformHandles onSnapLinesChange={setSnapLines} />
+				<>
+					<TransformHandles onSnapLinesChange={setSnapLines} />
+					<MultiSelectionOverlay marqueeRect={marqueeRect} />
+				</>
 			)}
 			<SnapGuides lines={snapLines} />
 		</div>

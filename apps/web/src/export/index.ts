@@ -64,6 +64,53 @@ export function downloadBuffer({
 	downloadBlob({ blob: new Blob([buffer], { type: mimeType }), filename });
 }
 
+type SaveFilePicker = (options: {
+	suggestedName: string;
+	types: { accept: Record<string, string[]> }[];
+}) => Promise<FileSystemFileHandle>;
+
+/**
+ * Lets the user choose the file name and folder. Must run inside the click
+ * (user activation), so call it before the long export starts.
+ */
+export async function pickSaveFile({
+	filename,
+	mimeType,
+	extension,
+}: {
+	filename: string;
+	mimeType: string;
+	extension: string;
+}): Promise<FileSystemFileHandle | "cancelled" | "unsupported"> {
+	// Chromium only; Safari/Firefox fall back to a plain download
+	const picker = (window as { showSaveFilePicker?: SaveFilePicker })
+		.showSaveFilePicker;
+	if (!picker) return "unsupported";
+	try {
+		return await picker({
+			suggestedName: filename,
+			types: [{ accept: { [mimeType]: [extension] } }],
+		});
+	} catch (error) {
+		if (error instanceof DOMException && error.name === "AbortError") {
+			return "cancelled";
+		}
+		return "unsupported";
+	}
+}
+
+export async function writeBufferToFile({
+	buffer,
+	handle,
+}: {
+	buffer: ArrayBuffer;
+	handle: FileSystemFileHandle;
+}): Promise<void> {
+	const writable = await handle.createWritable();
+	await writable.write(buffer);
+	await writable.close();
+}
+
 /** Saves a Blob without reading it into memory first (large backups stay lazy) */
 export function downloadBlob({
 	blob,

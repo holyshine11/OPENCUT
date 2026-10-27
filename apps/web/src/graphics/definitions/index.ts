@@ -1,4 +1,5 @@
 import { graphicsRegistry } from "../registry";
+import { brushGraphicDefinition } from "./brush";
 import { ellipseGraphicDefinition } from "./ellipse";
 import { polygonGraphicDefinition } from "./polygon";
 import { rectangleGraphicDefinition } from "./rectangle";
@@ -9,6 +10,7 @@ const defaultGraphicDefinitions = [
 	ellipseGraphicDefinition,
 	polygonGraphicDefinition,
 	starGraphicDefinition,
+	brushGraphicDefinition,
 ];
 
 export function registerDefaultGraphics(): void {

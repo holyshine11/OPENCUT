@@ -33,6 +33,9 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { translateLabel, useMessages } from "@/i18n";
 import { parseStickerId } from "@/stickers/sticker-id";
 import { FLAGS_PROVIDER_ID } from "@/stickers/providers/flags";
+import { AddTrackCommand, BatchCommand, InsertElementCommand } from "@/commands";
+import { BRUSH_DEFINITION_ID } from "@/graphics/definitions/brush";
+import { useBrushToolStore } from "@/graphics/brush-tool-store";
 
 export function StickersView() {
 	const m = useMessages();
@@ -92,9 +95,45 @@ export function StickersView() {
 					))}
 				</TabsList>
 				<div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4">
-					<StickersContentView />
+					{selectedCategory === "brush" ? <BrushView /> : <StickersContentView />}
 				</div>
 			</Tabs>
+		</div>
+	);
+}
+
+function BrushView() {
+	const m = useMessages();
+	const editor = useEditor();
+	const setBrushTool = useBrushToolStore((s) => s.setTool);
+
+	// 새 트랙에 빈 브러쉬 클립을 넣고 선택해, 지우개가 골라져 있어도 바로 그릴 수 있게 한다
+	const addBrushClip = () => {
+		const addTrack = new AddTrackCommand({ type: "graphic" });
+		const insert = new InsertElementCommand({
+			placement: { mode: "explicit", trackId: addTrack.getTrackId() },
+			element: buildGraphicElement({
+				definitionId: BRUSH_DEFINITION_ID,
+				name: m.stickers.categories.brush,
+				startTime: editor.playback.getCurrentTime(),
+			}),
+		});
+		editor.command.execute({ command: new BatchCommand([addTrack, insert]) });
+		setBrushTool("draw");
+	};
+
+	return (
+		<div className="flex flex-col gap-3 pb-4">
+			<p className="text-muted-foreground text-sm text-balance">
+				{m.stickers.brushHint}
+			</p>
+			<Button
+				variant="outline"
+				size="sm"
+				onClick={addBrushClip}
+			>
+				{m.stickers.brushNewClip}
+			</Button>
 		</div>
 	);
 }

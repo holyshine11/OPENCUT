@@ -9,4 +9,5 @@ export const STICKER_CATEGORIES = {
 	decor: "Decor",
 	flags: "Flags",
 	shapes: "Shapes",
+	brush: "Brush",
 };

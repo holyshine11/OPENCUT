@@ -177,6 +177,8 @@ interface BaseParamDefinition<TKey extends string = string> {
 	label: string;
 	group?: ParamGroup;
 	keyframable?: boolean;
+	/** 속성 패널에 그리지 않는 내부 값 (예: 브러쉬 경로) */
+	hidden?: boolean;
 	dependencies?: Array<{ param: string; equals: ParamValue }>;
 }
 

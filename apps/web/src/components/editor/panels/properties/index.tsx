@@ -17,6 +17,8 @@ import { EmptyView } from "./empty-view";
 import { useMessages } from "@/i18n";
 import { isRetimableElement } from "@/timeline";
 import { SpeedTab } from "@/speed/components/speed-tab";
+import { TextAlignSection } from "@/text/components/text-align-section";
+import { isVisualElement } from "@/timeline/element-utils";
 
 export function PropertiesPanel() {
 	const editor = useEditor();
@@ -41,10 +43,19 @@ export function PropertiesPanel() {
 			.flatMap(({ element, track }) =>
 				isRetimableElement(element) ? [{ trackId: track.id, element }] : [],
 			);
-		if (speedTargets.length === selectedElements.length) {
+		// 화면에 보이는 요소(자막·도형·영상 등)만 골랐으면 여백 정렬과 간격 맞추기를 한꺼번에 한다
+		const alignTargets = editor.timeline
+			.getElementsWithTracks({ elements: selectedElements })
+			.flatMap(({ element, track }) =>
+				isVisualElement(element) ? [{ trackId: track.id, element }] : [],
+			);
+		const canAlign = alignTargets.length === selectedElements.length;
+		const canRetime = speedTargets.length === selectedElements.length;
+		if (canAlign || canRetime) {
 			return (
 				<div className="panel bg-background h-full overflow-y-auto rounded-sm border">
-					<SpeedTab targets={speedTargets} />
+					{canAlign && <TextAlignSection targets={alignTargets} />}
+					{canRetime && <SpeedTab targets={speedTargets} />}
 				</div>
 			);
 		}

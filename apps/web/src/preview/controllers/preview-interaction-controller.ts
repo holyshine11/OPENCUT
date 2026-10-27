@@ -49,6 +49,33 @@ interface PendingGesture extends CapturedPointerState {
 	readonly topmostHit: ElementWithBounds | null;
 	readonly selectedHit: ElementWithBounds | null;
 	readonly selectedElements: readonly ElementRef[];
+	/** Shift·⌘·Ctrl 를 누른 채 눌렀다. 클릭은 선택에 넣고 빼며, 끌기는 기존 선택에 더해 함께 옮긴다 */
+	readonly additive: boolean;
+}
+
+/** 빈 곳에서 끌어 사각형 안에 걸친 요소를 고른다 */
+interface MarqueeGesture extends CapturedPointerState {
+	readonly kind: "marquee";
+	readonly origin: Point;
+	readonly current: Point;
+	readonly additive: boolean;
+	readonly selectedElements: readonly ElementRef[];
+}
+
+export interface MarqueeRect {
+	readonly left: number;
+	readonly top: number;
+	readonly right: number;
+	readonly bottom: number;
+}
+
+function toMarqueeRect({ a, b }: { a: Point; b: Point }): MarqueeRect {
+	return {
+		left: Math.min(a.x, b.x),
+		top: Math.min(a.y, b.y),
+		right: Math.max(a.x, b.x),
+		bottom: Math.max(a.y, b.y),
+	};
 }
 
 interface DragElementSnapshot {
@@ -74,6 +101,7 @@ interface DraggingGesture extends CapturedPointerState {
 type GestureSession =
 	| { readonly kind: "idle" }
 	| PendingGesture
+	| MarqueeGesture
 	| DraggingGesture;
 
 const IDLE_GESTURE: GestureSession = { kind: "idle" };
@@ -170,9 +198,11 @@ function isSameElementRef({
 function buildDragSelection({
 	selectedElements,
 	dragTarget,
+	additive,
 }: {
 	selectedElements: readonly ElementRef[];
 	dragTarget: ElementWithBounds;
+	additive: boolean;
 }): ElementRef[] {
 	const dragTargetRef = {
 		trackId: dragTarget.trackId,
@@ -184,7 +214,7 @@ function buildDragSelection({
 			isSameElementRef({ left: selectedElement, right: dragTargetRef }),
 		)
 	) {
-		return [dragTargetRef];
+		return additive ? [dragTargetRef, ...selectedElements] : [dragTargetRef];
 	}
 
 	return [
@@ -294,6 +324,11 @@ export class PreviewInteractionController {
 		return this.gesture.kind === "dragging";
 	}
 
+	get marqueeRect(): MarqueeRect | null {
+		if (this.gesture.kind !== "marquee") return null;
+		return toMarqueeRect({ a: this.gesture.origin, b: this.gesture.current });
+	}
+
 	get editingText(): EditingTextState | null {
 		return this.editingTextState;
 	}
@@ -368,6 +403,9 @@ export class PreviewInteractionController {
 		currentTarget,
 		pointerId,
 		button,
+		shiftKey,
+		metaKey,
+		ctrlKey,
 	}: ReactPointerEvent): void {
 		if (this.editingTextState) return;
 		if (this.deps.preview.isMaskMode()) return;
@@ -397,6 +435,7 @@ export class PreviewInteractionController {
 				preferredElements: [...selectedElements],
 			}),
 			selectedElements,
+			additive: shiftKey || metaKey || ctrlKey,
 		};
 
 		currentTarget.setPointerCapture(pointerId);
@@ -421,7 +460,25 @@ export class PreviewInteractionController {
 				return;
 			}
 
-			this.beginDragFromPending({ pending });
+			if (!pending.topmostHit && !pending.selectedHit) {
+				this.gesture = {
+					kind: "marquee",
+					origin: pending.origin,
+					current: currentPos,
+					pointerId: pending.pointerId,
+					captureTarget: pending.captureTarget,
+					additive: pending.additive,
+					selectedElements: pending.selectedElements,
+				};
+			} else {
+				this.beginDragFromPending({ pending });
+			}
+		}
+
+		if (this.gesture.kind === "marquee") {
+			this.gesture = { ...this.gesture, current: currentPos };
+			this.notify();
+			return;
 		}
 
 		if (this.gesture.kind !== "dragging") return;
@@ -449,6 +506,17 @@ export class PreviewInteractionController {
 			return;
 		}
 
+		if (this.gesture.kind === "marquee") {
+			const marquee = this.gesture;
+			if (type !== "pointercancel") {
+				this.selectInMarquee({ marquee });
+			}
+			this.gesture = IDLE_GESTURE;
+			this.releaseCapturedPointer({ pointerState: marquee });
+			this.notify();
+			return;
+		}
+
 		if (this.gesture.kind !== "pending") return;
 
 		const pending = this.gesture;
@@ -456,7 +524,23 @@ export class PreviewInteractionController {
 		if (type !== "pointercancel") {
 			const clickTarget = pending.topmostHit;
 			if (!clickTarget) {
-				this.deps.selection.clearSelection();
+				if (!pending.additive) this.deps.selection.clearSelection();
+			} else if (pending.additive) {
+				const clickRef = {
+					trackId: clickTarget.trackId,
+					elementId: clickTarget.elementId,
+				};
+				const isSelected = pending.selectedElements.some((selected) =>
+					isSameElementRef({ left: selected, right: clickRef }),
+				);
+				this.deps.selection.setSelected(
+					isSelected
+						? pending.selectedElements.filter(
+								(selected) =>
+									!isSameElementRef({ left: selected, right: clickRef }),
+							)
+						: [...pending.selectedElements, clickRef],
+				);
 			} else {
 				this.deps.selection.setSelected([
 					{
@@ -470,6 +554,35 @@ export class PreviewInteractionController {
 		this.gesture = IDLE_GESTURE;
 		this.clearSnapLines();
 		this.releaseCapturedPointer({ pointerState: pending });
+	}
+
+	private selectInMarquee({ marquee }: { marquee: MarqueeGesture }): void {
+		const rect = toMarqueeRect({ a: marquee.origin, b: marquee.current });
+		const inside = this.getVisibleElementsWithBounds()
+			.filter(({ bounds }) => {
+				// shortcut: 회전은 무시하고 축 정렬 상자로 겹침을 본다
+				const halfW = Math.abs(bounds.width) / 2;
+				const halfH = Math.abs(bounds.height) / 2;
+				return (
+					bounds.cx + halfW >= rect.left &&
+					bounds.cx - halfW <= rect.right &&
+					bounds.cy + halfH >= rect.top &&
+					bounds.cy - halfH <= rect.bottom
+				);
+			})
+			.map(({ trackId, elementId }) => ({ trackId, elementId }));
+		const base = marquee.additive
+			? marquee.selectedElements.filter(
+					(selected) =>
+						!inside.some((ref) => isSameElementRef({ left: ref, right: selected })),
+				)
+			: [];
+		const next = [...base, ...inside];
+		if (next.length === 0) {
+			this.deps.selection.clearSelection();
+		} else {
+			this.deps.selection.setSelected(next);
+		}
 	}
 
 	private notify(): void {
@@ -523,6 +636,7 @@ export class PreviewInteractionController {
 		const dragSelection = buildDragSelection({
 			selectedElements: pending.selectedElements,
 			dragTarget,
+			additive: pending.additive,
 		});
 		const draggableElements = toDragElementSnapshots({
 			elementsWithTracks: this.deps.timeline.getElementsWithTracks({
@@ -539,12 +653,7 @@ export class PreviewInteractionController {
 		}
 
 		if (pending.selectedHit === null) {
-			this.deps.selection.setSelected([
-				{
-					trackId: dragTarget.trackId,
-					elementId: dragTarget.elementId,
-				},
-			]);
+			this.deps.selection.setSelected(dragSelection);
 		}
 
 		this.gesture = {

@@ -25,6 +25,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@/utils/ui";
 import type { MediaTime } from "@/wasm";
+import { BRUSH_DEFINITION_ID } from "@/graphics/definitions/brush";
+import { BrushToolSection } from "./brush-tool-section";
 
 registerDefaultGraphics();
 
@@ -55,11 +57,14 @@ export function GraphicTab({
 		localTime,
 	});
 
-	const shapeParams = definition.params.filter((p) => p.group !== "stroke");
+	const shapeParams = definition.params.filter(
+		(p) => p.group !== "stroke" && !p.hidden,
+	);
 	const hasStrokeParams = definition.params.some((p) => p.group === "stroke");
 
 	return (
 		<div className="flex flex-col">
+			{element.definitionId === BRUSH_DEFINITION_ID && <BrushToolSection />}
 			<Section collapsible sectionKey={`${element.id}:graphic`}>
 				<SectionHeader>
 					<SectionTitle>

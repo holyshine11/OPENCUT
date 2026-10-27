@@ -18,6 +18,8 @@ import {
 	getExportMimeType,
 	getExportFileExtension,
 	downloadBuffer,
+	pickSaveFile,
+	writeBufferToFile,
 } from "@/export";
 import { Check, Copy, Download, RotateCcw } from "lucide-react";
 import {
@@ -119,6 +121,12 @@ function ExportPopover({
 	const handleExport = async () => {
 		if (!activeProject) return;
 
+		const extension = getExportFileExtension({ format });
+		const filename = `${activeProject.metadata.name}${extension}`;
+		const mimeType = getExportMimeType({ format });
+		const target = await pickSaveFile({ filename, mimeType, extension });
+		if (target === "cancelled") return;
+
 		const result = await editor.project.export({
 			options: {
 				format,
@@ -135,11 +143,11 @@ function ExportPopover({
 		}
 
 		if (result.success && result.buffer) {
-			downloadBuffer({
-				buffer: result.buffer,
-				filename: `${activeProject.metadata.name}${getExportFileExtension({ format })}`,
-				mimeType: getExportMimeType({ format }),
-			});
+			if (target === "unsupported") {
+				downloadBuffer({ buffer: result.buffer, filename, mimeType });
+			} else {
+				await writeBufferToFile({ buffer: result.buffer, handle: target });
+			}
 
 			editor.project.clearExportState();
 			onOpenChange(false);

@@ -1,3 +1,4 @@
+import { BRUSH_DEFINITION_ID } from "@/graphics/definitions/brush";
 import { buildGraphicPreviewUrl, buildDefaultGraphicInstance, graphicsRegistry, registerDefaultGraphics } from "@/graphics";
 import type { ParamValues } from "@/params";
 import { buildStickerId, parseStickerId } from "../sticker-id";
@@ -43,11 +44,14 @@ const LEGACY_SHAPE_PRESETS: Record<string, ShapeGraphicPreset> = {
 
 function getShapePresets(): ShapeGraphicPreset[] {
 	registerDefaultGraphics();
-	return graphicsRegistry.getAll().map((definition) => ({
-		shapeKey: definition.id,
-		name: definition.name,
-		definitionId: definition.id,
-	}));
+	return graphicsRegistry
+		.getAll()
+		.filter((definition) => definition.id !== BRUSH_DEFINITION_ID)
+		.map((definition) => ({
+			shapeKey: definition.id,
+			name: definition.name,
+			definitionId: definition.id,
+		}));
 }
 
 function getShapePreset({

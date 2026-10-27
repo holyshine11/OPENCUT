@@ -35,6 +35,7 @@ import { GraphicTab } from "@/graphics/components/graphic-tab";
 import { OcShapesIcon } from "@/components/icons";
 import { AutocutTab } from "@/autocut/components/autocut-tab";
 import { TtsLineTab } from "@/tts/components/tts-line-tab";
+import { TextAlignSection } from "@/text/components/text-align-section";
 
 const TRANSFORM_PARAM_KEYS = [
 	"transform.positionX",
@@ -275,12 +276,15 @@ function buildTextTab({ element }: { element: TextElement }): PropertiesTabDef {
 		id: "text",
 		icon: <HugeiconsIcon icon={TextFontIcon} size={16} />,
 		content: ({ trackId }) => (
-			<ElementParamsTab
-				element={element}
-				trackId={trackId}
-				paramKeys={TEXT_PARAM_KEYS}
-				sectionKey="text"
-			/>
+			<>
+				<TextAlignSection targets={[{ trackId, element }]} />
+				<ElementParamsTab
+					element={element}
+					trackId={trackId}
+					paramKeys={TEXT_PARAM_KEYS}
+					sectionKey="text"
+				/>
+			</>
 		),
 	};
 }
