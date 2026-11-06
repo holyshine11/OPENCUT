@@ -17,6 +17,7 @@ export const TEXT_ANIMATION_MAX_LOOP_PERIOD: () => number;
 export const TEXT_ANIMATION_MIN_DURATION: () => number;
 export const TEXT_ANIMATION_MIN_LOOP_PERIOD: () => number;
 export const resolveTextAnimation: (a: any) => any;
+export const resolveTextAnimationUnits: (a: any) => any;
 export const textAnimationEffectiveDurations: (a: any) => any;
 export const textAnimationPresets: () => any;
 export const textAnimationSliderRange: (a: any) => any;

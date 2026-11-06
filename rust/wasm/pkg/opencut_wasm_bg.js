@@ -292,6 +292,16 @@ export function resolveTextAnimation(arg0) {
 }
 
 /**
+ * 유닛 프리셋(타자기, 글자 웨이브 등)의 단위별 상태. 블록 프리셋은 resolve_text_animation이 맡는다
+ * @param {ResolveTextAnimationUnitsOptions} arg0
+ * @returns {TextAnimationUnits}
+ */
+export function resolveTextAnimationUnits(arg0) {
+    const ret = wasm.resolveTextAnimationUnits(arg0);
+    return ret;
+}
+
+/**
  * @param {RoundToFrameOptions} arg0
  * @returns {MediaTime | undefined}
  */
@@ -2446,12 +2456,12 @@ export function __wbg_writeTexture_d42ce6ec94b2c6ca() { return handleError(funct
     arg0.writeTexture(arg1, getArrayU8FromWasm0(arg2, arg3), arg4, arg5);
 }, arguments); }
 export function __wbindgen_cast_0000000000000001(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2537, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2540, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h0482c28e5b7d9940);
     return ret;
 }
 export function __wbindgen_cast_0000000000000002(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 551, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 554, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h24978a624779a23e);
     return ret;
 }

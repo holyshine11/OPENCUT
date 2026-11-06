@@ -9,6 +9,7 @@ import {
 /** 인/아웃/반복 애니메이션 계산은 `rust/crates/text-animation`에 있다. 시간은 모두 초 단위다 */
 export {
 	resolveTextAnimation,
+	resolveTextAnimationUnits,
 	textAnimationEffectiveDurations,
 	textAnimationPresets,
 	textAnimationSliderRange,

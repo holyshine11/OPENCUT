@@ -3,12 +3,15 @@
 //! 길이/주기는 그 슬롯이 없는 것으로 본다.
 
 mod presets;
+mod units;
 
 use bridge::export;
 use serde::de::IgnoredAny;
 use serde::{Deserialize, Deserializer, Serialize};
 
 pub use presets::{LOOP_PRESETS, REVEAL_PRESETS, sample_loop, sample_reveal};
+pub use units::{UNIT_LOOP_PRESETS, UNIT_REVEAL_PRESETS};
+use units::{UnitGroups, is_unit_loop, loop_states, reveal_states, unit_reveal_preset};
 
 #[export]
 pub const TEXT_ANIMATION_DEFAULT_DURATION: f64 = 0.5;
@@ -135,12 +138,18 @@ fn is_positive(value: f64) -> bool {
 
 fn valid_reveal(slot: &Option<TextRevealSlot>) -> Option<&TextRevealSlot> {
     slot.as_ref()
-        .filter(|slot| is_positive(slot.duration) && REVEAL_PRESETS.contains(&slot.kind.as_str()))
+        .filter(|slot| {
+            is_positive(slot.duration)
+                && (REVEAL_PRESETS.contains(&slot.kind.as_str()) || unit_reveal_preset(&slot.kind).is_some())
+        })
 }
 
 fn valid_loop(slot: &Option<TextLoopSlot>) -> Option<&TextLoopSlot> {
     slot.as_ref()
-        .filter(|slot| is_positive(slot.period) && LOOP_PRESETS.contains(&slot.kind.as_str()))
+        .filter(|slot| {
+            is_positive(slot.period)
+                && (LOOP_PRESETS.contains(&slot.kind.as_str()) || is_unit_loop(&slot.kind))
+        })
 }
 
 /// 렌더에 실제로 쓰는 인/아웃 길이(초)
@@ -229,15 +238,91 @@ pub fn resolve_text_animation(
             }
         }
     }
-    if let Some(slot) = valid_loop(&animation.r#loop) {
-        // local / period를 먼저 하면 아주 작은 주기에서 무한대가 되어 NaN이 나온다
-        let offset = if slot.offset.is_finite() { slot.offset.max(0.0) } else { 0.0 };
-        let phase = ((local % slot.period + offset % slot.period) % slot.period) / slot.period;
-        if let Some(sample) = sample_loop(&slot.kind, phase) {
+    if let Some(slot) = valid_loop(&animation.r#loop)
+        && let Some(sample) = sample_loop(&slot.kind, loop_phase(slot, local)) {
             state = state.compose(sample);
         }
-    }
     if state.is_finite() { state } else { UnitState::IDENTITY }
+}
+
+fn loop_phase(slot: &TextLoopSlot, local: f64) -> f64 {
+    // local / period를 먼저 하면 아주 작은 주기에서 무한대가 되어 NaN이 나온다
+    let offset = if slot.offset.is_finite() { slot.offset.max(0.0) } else { 0.0 };
+    ((local % slot.period + offset % slot.period) % slot.period) / slot.period
+}
+
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(from_wasm_abi))]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveTextAnimationUnitsOptions {
+    #[serde(default, deserialize_with = "lenient_or_default")]
+    pub animation: TextAnimation,
+    pub local_seconds: f64,
+    pub clip_seconds: f64,
+    /// 그리는 단위(읽는 순서)마다 몇 번째 단어인지
+    pub word_of: Vec<u32>,
+    /// 그리는 단위마다 몇 번째 줄인지
+    pub line_of: Vec<u32>,
+}
+
+#[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
+#[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct TextAnimationUnits {
+    /// 단위마다 덧씌울 변화. dx/dy는 줄 높이 비율, 중심은 단위의 가운데. 유닛 프리셋이 없으면 빈 배열
+    pub states: Vec<UnitState>,
+}
+
+/// 유닛 프리셋(타자기, 글자 웨이브 등)의 단위별 상태. 블록 프리셋은 resolve_text_animation이 맡는다
+#[export]
+pub fn resolve_text_animation_units(
+    ResolveTextAnimationUnitsOptions { animation, local_seconds, clip_seconds, word_of, line_of }: ResolveTextAnimationUnitsOptions,
+) -> TextAnimationUnits {
+    let groups = UnitGroups { word_of: &word_of, line_of: &line_of };
+    let count = word_of.len().min(line_of.len());
+    let empty = TextAnimationUnits { states: Vec::new() };
+    if count == 0 || !is_positive(clip_seconds) || !local_seconds.is_finite() {
+        return empty;
+    }
+    let local = local_seconds.clamp(0.0, clip_seconds);
+    let durations = effective_durations(&animation, clip_seconds);
+    let mut states = vec![UnitState::IDENTITY; count];
+    let mut used = false;
+    let mut compose = |layer: Vec<UnitState>| {
+        used = true;
+        for (state, sample) in states.iter_mut().zip(layer) {
+            *state = state.compose(sample);
+        }
+    };
+
+    if let Some(slot) = valid_reveal(&animation.r#in)
+        && let Some(preset) = unit_reveal_preset(&slot.kind)
+    {
+        // 인이 끝난 뒤에도 원래 모습으로 같은 단위 그리기를 유지해야 글리프가 바뀌지 않는다
+        let progress = if durations.in_seconds > 0.0 { local / durations.in_seconds } else { 1.0 };
+        compose(reveal_states(preset, progress, &groups));
+    }
+    if let Some(slot) = valid_reveal(&animation.out)
+        && let Some(preset) = unit_reveal_preset(&slot.kind)
+    {
+        let out_start = clip_seconds - durations.out_seconds;
+        let progress = if durations.out_seconds > 0.0 {
+            ((local - out_start) / durations.out_seconds).max(0.0)
+        } else {
+            0.0
+        };
+        compose(reveal_states(preset, 1.0 - progress, &groups));
+    }
+    if let Some(slot) = valid_loop(&animation.r#loop)
+        && is_unit_loop(&slot.kind)
+    {
+        compose(loop_states(&slot.kind, loop_phase(slot, local), &groups));
+    }
+    if !used || !states.iter().all(|state| state.is_finite()) {
+        return if used { TextAnimationUnits { states: vec![UnitState::IDENTITY; count] } } else { empty };
+    }
+    TextAnimationUnits { states }
 }
 
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
@@ -281,13 +366,26 @@ pub fn text_animation_slider_range(
 pub struct TextAnimationPresets {
     pub reveal: Vec<String>,
     pub r#loop: Vec<String>,
+    /// 글자/단어/줄 단위로 그려야 하는 프리셋 id. 이 중 하나라도 걸린 클립은 클립 전체를 단위별로 그린다
+    pub units: Vec<String>,
 }
 
 #[export]
 pub fn text_animation_presets() -> TextAnimationPresets {
     TextAnimationPresets {
-        reveal: REVEAL_PRESETS.iter().map(|id| id.to_string()).collect(),
-        r#loop: LOOP_PRESETS.iter().map(|id| id.to_string()).collect(),
+        reveal: REVEAL_PRESETS
+            .iter()
+            .copied()
+            .chain(UNIT_REVEAL_PRESETS.iter().map(|preset| preset.id))
+            .map(String::from)
+            .collect(),
+        r#loop: LOOP_PRESETS.iter().chain(UNIT_LOOP_PRESETS).map(|id| id.to_string()).collect(),
+        units: UNIT_REVEAL_PRESETS
+            .iter()
+            .map(|preset| preset.id)
+            .chain(UNIT_LOOP_PRESETS.iter().copied())
+            .map(String::from)
+            .collect(),
     }
 }
 
@@ -506,5 +604,53 @@ mod tests {
         let r = range(1.0, 1.0, 0.0);
         assert!(!r.enabled);
         assert!(close(r.max, 0.0));
+    }
+
+    fn units(animation: TextAnimation, local_seconds: f64) -> Vec<UnitState> {
+        resolve_text_animation_units(ResolveTextAnimationUnitsOptions {
+            animation,
+            local_seconds,
+            clip_seconds: 3.0,
+            word_of: vec![0, 0, 1],
+            line_of: vec![0, 0, 0],
+        })
+        .states
+    }
+
+    fn reveal_slot(kind: &str) -> Option<TextRevealSlot> {
+        Some(TextRevealSlot { kind: kind.into(), duration: 0.5 })
+    }
+
+    #[test]
+    fn unit_presets_keep_unit_drawing_for_the_whole_clip() {
+        let typewriter = TextAnimation { r#in: reveal_slot("typewriter"), ..Default::default() };
+        assert!(units(typewriter.clone(), 0.0).iter().all(|s| s.opacity == 0.0));
+        let after = units(typewriter, 2.0);
+        assert_eq!(after, vec![UnitState::IDENTITY; 3]);
+    }
+
+    #[test]
+    fn block_only_animation_has_no_unit_states() {
+        let fade = TextAnimation { r#in: reveal_slot("fade"), ..Default::default() };
+        assert!(units(fade, 0.1).is_empty());
+    }
+
+    #[test]
+    fn unit_out_hides_letters_from_the_end_at_clip_end() {
+        let out = TextAnimation { out: reveal_slot("typewriter"), ..Default::default() };
+        let near_end = units(out, 2.9);
+        assert!(near_end[0].opacity > 0.0);
+        assert_eq!(near_end[2].opacity, 0.0);
+    }
+
+    #[test]
+    fn unit_preset_does_not_move_the_block() {
+        let typewriter = TextAnimation { r#in: reveal_slot("typewriter"), ..Default::default() };
+        let block = resolve_text_animation(ResolveTextAnimationOptions {
+            animation: typewriter,
+            local_seconds: 0.0,
+            clip_seconds: 3.0,
+        });
+        assert_eq!(block, UnitState::IDENTITY);
     }
 }

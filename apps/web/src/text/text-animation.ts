@@ -5,10 +5,66 @@ import { DEFAULTS } from "@/timeline/defaults";
 import type { TextElement } from "@/timeline/types";
 import {
 	resolveTextAnimation,
+	resolveTextAnimationUnits,
 	TICKS_PER_SECOND,
 	textAnimationEffectiveDurations,
+	textAnimationPresets,
 	type TextAnimation,
 } from "@/wasm";
+import type { TextCanvasContext } from "./layout";
+import type { MeasuredTextLayout } from "./primitives";
+import { buildTextUnits, type ResolvedTextUnit } from "./text-units";
+
+const UNIT_PRESETS = new Set(textAnimationPresets().units);
+
+/** 글자/단어/줄 단위로 그려야 하는 프리셋이 하나라도 걸려 있는지 */
+export function usesUnitDrawing(animation: TextAnimation | undefined): boolean {
+	return [animation?.in, animation?.out, animation?.loop].some(
+		// 저장값은 검증 없이 들어오므로 null이나 모양이 틀린 슬롯도 걸러 낸다
+		(slot) => typeof slot?.type === "string" && UNIT_PRESETS.has(slot.type),
+	);
+}
+
+/**
+ * 유닛 프리셋이 걸린 클립의 조각별 모습. 없으면 undefined이고 줄 단위로 그린다.
+ * localTime, duration은 틱이다
+ */
+export function resolveTextUnits({
+	animation,
+	localTime,
+	duration,
+	layout,
+	ctx,
+}: {
+	animation: TextAnimation | undefined;
+	localTime: number;
+	duration: number;
+	layout: MeasuredTextLayout;
+	ctx: TextCanvasContext;
+}): ResolvedTextUnit[] | undefined {
+	if (!animation || !usesUnitDrawing(animation)) return undefined;
+	const { units, wordOf, lineOf } = buildTextUnits({ layout, ctx });
+	if (units.length === 0) return undefined;
+	const { states } = resolveTextAnimationUnits({
+		animation,
+		localSeconds: localTime / TICKS_PER_SECOND,
+		clipSeconds: duration / TICKS_PER_SECOND,
+		wordOf,
+		lineOf,
+	});
+	if (states.length !== units.length) return undefined;
+	return units.map((unit, index) => {
+		const state = states[index];
+		return {
+			...unit,
+			dx: state.dx * layout.lineHeightPx,
+			dy: state.dy * layout.lineHeightPx,
+			scale: state.scale,
+			rotate: state.rotate,
+			opacity: state.opacity,
+		};
+	});
+}
 
 export type RevealSide = "in" | "out";
 export type TextAnimationSlot = RevealSide | "loop";

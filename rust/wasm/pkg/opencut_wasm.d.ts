@@ -119,6 +119,20 @@ export interface ResolveTextAnimationOptions {
     clipSeconds: number;
 }
 
+export interface ResolveTextAnimationUnitsOptions {
+    animation?: TextAnimation;
+    localSeconds: number;
+    clipSeconds: number;
+    /**
+     * 그리는 단위(읽는 순서)마다 몇 번째 단어인지
+     */
+    wordOf: number[];
+    /**
+     * 그리는 단위마다 몇 번째 줄인지
+     */
+    lineOf: number[];
+}
+
 export interface RoundToFrameOptions {
     time: MediaTime;
     rate: FrameRate;
@@ -144,6 +158,10 @@ export interface TextAnimationEffectiveDurationsOptions {
 export interface TextAnimationPresets {
     reveal: string[];
     loop: string[];
+    /**
+     * 글자/단어/줄 단위로 그려야 하는 프리셋 id. 이 중 하나라도 걸린 클립은 클립 전체를 단위별로 그린다
+     */
+    units: string[];
 }
 
 export interface TextAnimationSliderRangeOptions {
@@ -156,6 +174,13 @@ export interface TextAnimationSliderRangeOptions {
      * 이 슬롯의 유효 길이
      */
     currentSeconds: number;
+}
+
+export interface TextAnimationUnits {
+    /**
+     * 단위마다 덧씌울 변화. dx/dy는 줄 높이 비율, 중심은 단위의 가운데. 유닛 프리셋이 없으면 빈 배열
+     */
+    states: UnitState[];
 }
 
 export interface TextLoopSlot {
@@ -247,6 +272,11 @@ export function resizeCompositor(width: number, height: number): void;
  * 한 시점에 텍스트 전체에 덧씌울 변화. 인/아웃 구간과 반복이 겹치면 둘 다 적용한다
  */
 export function resolveTextAnimation(arg0: ResolveTextAnimationOptions): UnitState;
+
+/**
+ * 유닛 프리셋(타자기, 글자 웨이브 등)의 단위별 상태. 블록 프리셋은 resolve_text_animation이 맡는다
+ */
+export function resolveTextAnimationUnits(arg0: ResolveTextAnimationUnitsOptions): TextAnimationUnits;
 
 export function roundToFrame(arg0: RoundToFrameOptions): MediaTime | undefined;
 

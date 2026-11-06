@@ -44,7 +44,7 @@ import {
 import { ImageNode, loadImageSource } from "./nodes/image-node";
 import { StickerNode, loadStickerSource } from "./nodes/sticker-node";
 import { TextNode, type ResolvedTextNodeState } from "./nodes/text-node";
-import { applyTextAnimation } from "@/text/text-animation";
+import { applyTextAnimation, resolveTextUnits } from "@/text/text-animation";
 import {
 	TransitionNode,
 	type ResolvedTransitionNodeState,
@@ -412,8 +412,16 @@ function resolveTextNode({
 		width: context.renderer.width,
 		height: context.renderer.height,
 	});
+	const units = resolveTextUnits({
+		animation: node.params.textAnimation,
+		localTime,
+		duration: node.params.duration,
+		layout: measuredText,
+		ctx: getTextMeasurementContext(),
+	});
 
 	return {
+		...(units && { units }),
 		transform: animated.transform,
 		opacity: animated.opacity,
 		textColor: resolveColorAtTime({
