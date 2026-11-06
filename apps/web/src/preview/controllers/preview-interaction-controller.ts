@@ -1,3 +1,4 @@
+import { setEditingTextElementId } from "@/preview/text-editing-store";
 import type {
 	MouseEvent as ReactMouseEvent,
 	PointerEvent as ReactPointerEvent,
@@ -342,6 +343,7 @@ export class PreviewInteractionController {
 		this.unsubscribePlayback?.();
 		this.unsubscribePlayback = null;
 		this.abortActiveGesture();
+		if (this.editingTextState) setEditingTextElementId({ elementId: null });
 		this.editingTextState = null;
 		this.subscribers.clear();
 	}
@@ -368,6 +370,7 @@ export class PreviewInteractionController {
 		if (!this.editingTextState) return;
 
 		this.editingTextState = null;
+		setEditingTextElementId({ elementId: null });
 		this.deps.timeline.commitPreview();
 		this.notify();
 	}
@@ -394,6 +397,7 @@ export class PreviewInteractionController {
 			elementId: hit.elementId,
 			element: hit.element,
 		};
+		setEditingTextElementId({ elementId: hit.elementId });
 		this.notify();
 	}
 

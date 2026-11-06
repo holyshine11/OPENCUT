@@ -1,7 +1,12 @@
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/timeline/creation";
 import type { TTimelineViewState } from "@/project/types";
 import type { BlendMode, Transform } from "@/rendering";
-import { ZERO_MEDIA_TIME } from "@/wasm";
+import {
+	TEXT_ANIMATION_DEFAULT_DURATION,
+	TEXT_ANIMATION_DEFAULT_LOOP_PERIOD,
+	TEXT_ANIMATION_MIN_DURATION,
+	ZERO_MEDIA_TIME,
+} from "@/wasm";
 import type { TextElement } from "./types";
 import { DEFAULT_TEXT_SHADOW } from "@/text/shadow";
 
@@ -109,6 +114,11 @@ export const DEFAULTS = {
 		background: defaultTextBackground,
 		stroke: defaultTextStroke,
 		shadow: DEFAULT_TEXT_SHADOW,
+		animation: {
+			duration: TEXT_ANIMATION_DEFAULT_DURATION,
+			minDuration: TEXT_ANIMATION_MIN_DURATION,
+			loopPeriod: TEXT_ANIMATION_DEFAULT_LOOP_PERIOD,
+		},
 		element: defaultTextElement,
 	},
 	timeline: {

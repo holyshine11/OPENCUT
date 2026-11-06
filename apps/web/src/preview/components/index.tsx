@@ -10,6 +10,7 @@ import { CanvasRenderer } from "@/services/renderer/canvas-renderer";
 import { TICKS_PER_SECOND } from "@/wasm";
 import type { RootNode } from "@/services/renderer/nodes/root-node";
 import { buildScene } from "@/services/renderer/scene-builder";
+import { useTextEditingStore } from "@/preview/text-editing-store";
 import { PreviewOverlayLayer } from "./overlay-layer";
 import { PreviewInteractionOverlay } from "./preview-interaction-overlay";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -99,6 +100,7 @@ function RenderTreeController() {
 	);
 	const mediaAssets = useEditor((e) => e.media.getAssets());
 	const activeProject = useEditor((e) => e.project.getActive());
+	const staticTextElementId = useTextEditingStore((state) => state.elementId);
 
 	const { width, height } = usePreviewSize();
 
@@ -113,10 +115,18 @@ function RenderTreeController() {
 			canvasSize: { width, height },
 			background: activeProject.settings.background,
 			isPreview: true,
+			staticTextElementId,
 		});
 
 		editor.renderer.setRenderTree({ renderTree });
-	}, [tracks, mediaAssets, activeProject?.settings.background, width, height]);
+	}, [
+		tracks,
+		mediaAssets,
+		activeProject?.settings.background,
+		width,
+		height,
+		staticTextElementId,
+	]);
 
 	return null;
 }

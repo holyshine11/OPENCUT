@@ -1,3 +1,4 @@
+import { splitTextAnimation, withTextAnimation } from "@/text/text-animation";
 import type { EditorCore } from "@/core";
 import {
 	BatchCommand,
@@ -81,6 +82,11 @@ export function splitSubtitle({
 	if (!pieces) return false;
 	const [first, second] = pieces;
 	const { id: _id, ...element } = entry.element;
+	// 나눈 자리에서 다시 퇴장/등장하지 않게 타임라인 분할과 같은 규칙으로 애니메이션을 나눈다
+	const animation = splitTextAnimation({
+		animation: element.textAnimation,
+		rightStartSeconds: second.start - cueOf({ entry }).start,
+	});
 
 	editor.command.execute({
 		command: new BatchCommand([
@@ -92,17 +98,21 @@ export function splitSubtitle({
 						patch: {
 							...timingPatch({ ...first, trimStart: element.trimStart }),
 							params: { content: first.text },
+							textAnimation: animation.left,
 						},
 					},
 				],
 			}),
 			new InsertElementCommand({
 				placement: { mode: "explicit", trackId: entry.trackId },
-				element: {
-					...element,
-					...timingPatch({ ...second, trimStart: element.trimStart }),
-					params: { ...element.params, content: second.text },
-				},
+				element: withTextAnimation({
+					element: {
+						...element,
+						...timingPatch({ ...second, trimStart: element.trimStart }),
+						params: { ...element.params, content: second.text },
+					},
+					animation: animation.right,
+				}),
 			}),
 		]),
 	});

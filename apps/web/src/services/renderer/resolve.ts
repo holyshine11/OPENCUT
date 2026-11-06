@@ -44,6 +44,7 @@ import {
 import { ImageNode, loadImageSource } from "./nodes/image-node";
 import { StickerNode, loadStickerSource } from "./nodes/sticker-node";
 import { TextNode, type ResolvedTextNodeState } from "./nodes/text-node";
+import { applyTextAnimation } from "@/text/text-animation";
 import {
 	TransitionNode,
 	type ResolvedTransitionNodeState,
@@ -382,8 +383,16 @@ function resolveTextNode({
 		elementDuration: node.params.duration,
 	});
 	const background = buildTextBackgroundFromElement({ element: node.params });
-
-	return {
+	const measuredText = measureTextElement({
+		element: node.params,
+		canvasHeight: node.params.canvasHeight,
+		localTime,
+		ctx: getTextMeasurementContext(),
+	});
+	const animated = applyTextAnimation({
+		animation: node.params.textAnimation,
+		localTime,
+		duration: node.params.duration,
 		transform: resolveTransformAtTime({
 			baseTransform: node.params.transform,
 			animations: node.params.animations,
@@ -394,6 +403,19 @@ function resolveTextNode({
 			animations: node.params.animations,
 			localTime,
 		}),
+		box: measuredText.visualRect,
+	});
+	const effectPasses = resolveEffectPassGroups({
+		effects: node.params.effects,
+		animations: node.params.animations,
+		localTime,
+		width: context.renderer.width,
+		height: context.renderer.height,
+	});
+
+	return {
+		transform: animated.transform,
+		opacity: animated.opacity,
 		textColor: resolveColorAtTime({
 			baseColor:
 				typeof node.params.params.color === "string"
@@ -418,19 +440,12 @@ function resolveTextNode({
 			propertyPath: "background.color",
 			localTime,
 		}),
-		effectPasses: resolveEffectPassGroups({
-			effects: node.params.effects,
-			animations: node.params.animations,
-			localTime,
-			width: context.renderer.width,
-			height: context.renderer.height,
-		}),
-		measuredText: measureTextElement({
-			element: node.params,
-			canvasHeight: node.params.canvasHeight,
-			localTime,
-			ctx: getTextMeasurementContext(),
-		}),
+		// 애니메이션 블러는 사용자 효과보다 먼저 건다
+		effectPasses:
+			animated.blurPasses.length > 0
+				? [animated.blurPasses, ...effectPasses]
+				: effectPasses,
+		measuredText,
 	};
 }
 

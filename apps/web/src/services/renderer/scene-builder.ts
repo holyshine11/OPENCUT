@@ -61,11 +61,13 @@ function buildTrackNodes({
 	mediaMap,
 	canvasSize,
 	isPreview,
+	staticTextElementId,
 }: {
 	tracks: TimelineTrack[];
 	mediaMap: Map<string, MediaAsset>;
 	canvasSize: TCanvasSize;
 	isPreview?: boolean;
+	staticTextElementId?: string | null;
 }): AnyBaseNode[] {
 	const nodes: AnyBaseNode[] = [];
 
@@ -148,6 +150,7 @@ function buildTrackNodes({
 				nodes.push(
 					new TextNode({
 						...element,
+						...(element.id === staticTextElementId && { textAnimation: undefined }),
 						transform: buildTransformFromParams({ params: element.params }),
 						opacity: readOpacityFromParams({ params: element.params }),
 						blendMode: readBlendModeFromParams({ params: element.params }),
@@ -276,6 +279,8 @@ export type BuildSceneParams = {
 	duration: number;
 	background: TBackground;
 	isPreview?: boolean;
+	/** 프리뷰에서 직접 편집 중인 텍스트. 커서와 글자가 어긋나지 않게 애니메이션 없이 그린다 */
+	staticTextElementId?: string | null;
 };
 
 export function buildScene({
@@ -285,6 +290,7 @@ export function buildScene({
 	duration,
 	background,
 	isPreview,
+	staticTextElementId,
 }: BuildSceneParams) {
 	const rootNode = new RootNode({ duration });
 	const mediaMap = new Map(mediaAssets.map((m) => [m.id, m]));
@@ -303,6 +309,7 @@ export function buildScene({
 		mediaMap,
 		canvasSize,
 		isPreview,
+		staticTextElementId,
 	});
 
 	if (background.type === "blur") {

@@ -3,11 +3,13 @@ import { getSourceSpanAtClipTime } from "@/retime";
 import { isRetimableElement } from "@/timeline/element-utils";
 import type { TimelineElement } from "@/timeline/types";
 import { generateUUID } from "@/utils/id";
+import { splitTextAnimation, withTextAnimation } from "@/text/text-animation";
 import {
 	addMediaTime,
 	type MediaTime,
 	roundMediaTime,
 	subMediaTime,
+	TICKS_PER_SECOND,
 } from "@/wasm";
 
 // 자른 자리에는 페이드가 없다. 왼쪽은 페이드 아웃과 크로스페이드(바로 뒤가 오른쪽 조각이 된다), 오른쪽은 페이드 인을 뗀다
@@ -68,8 +70,21 @@ export function splitElementAtTime({
 		shouldIncludeSplitBoundary: true,
 	});
 
+	const textAnimation =
+		element.type === "text"
+			? splitTextAnimation({
+					animation: element.textAnimation,
+					rightStartSeconds: relativeTime / TICKS_PER_SECOND,
+				})
+			: null;
+	// 텍스트만 textAnimation을 가진다. 다른 종류는 그대로 둔다
+	const splitText = (piece: TimelineElement, side: "left" | "right") =>
+		textAnimation && piece.type === "text"
+			? withTextAnimation({ element: piece, animation: textAnimation[side] })
+			: piece;
+
 	return {
-		left: {
+		left: splitText({
 			...withoutTransition(element),
 			duration: leftVisibleDuration,
 			trimEnd: addMediaTime({ a: element.trimEnd, b: rightSourceSpan }),
@@ -77,8 +92,8 @@ export function splitElementAtTime({
 			animations: leftAnimations,
 			...clearFade({ element, keys: ["fadeOut", "crossfade"] }),
 			...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-		},
-		right: {
+		} as TimelineElement, "left"),
+		right: splitText({
 			...element,
 			id: generateUUID(),
 			startTime: splitTime,
@@ -88,7 +103,7 @@ export function splitElementAtTime({
 			animations: rightAnimations,
 			...clearFade({ element, keys: ["fadeIn"] }),
 			...(retimeRef !== undefined ? { retime: retimeRef } : {}),
-		},
+		} as TimelineElement, "right"),
 	};
 }
 

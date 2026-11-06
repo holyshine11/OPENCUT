@@ -1,6 +1,30 @@
 /**
  * @returns {number}
  */
+export function TEXT_ANIMATION_DEFAULT_DURATION() {
+    const ret = wasm.TEXT_ANIMATION_DEFAULT_DURATION();
+    return ret;
+}
+
+/**
+ * @returns {number}
+ */
+export function TEXT_ANIMATION_DEFAULT_LOOP_PERIOD() {
+    const ret = wasm.TEXT_ANIMATION_DEFAULT_LOOP_PERIOD();
+    return ret;
+}
+
+/**
+ * @returns {number}
+ */
+export function TEXT_ANIMATION_MIN_DURATION() {
+    const ret = wasm.TEXT_ANIMATION_MIN_DURATION();
+    return ret;
+}
+
+/**
+ * @returns {number}
+ */
 export function TICKS_PER_SECOND() {
     const ret = wasm.TICKS_PER_SECOND();
     return ret;
@@ -242,6 +266,16 @@ export function resizeCompositor(width, height) {
 }
 
 /**
+ * 한 시점에 텍스트 전체에 덧씌울 변화. 인/아웃 구간과 반복이 겹치면 둘 다 적용한다
+ * @param {ResolveTextAnimationOptions} arg0
+ * @returns {UnitState}
+ */
+export function resolveTextAnimation(arg0) {
+    const ret = wasm.resolveTextAnimation(arg0);
+    return ret;
+}
+
+/**
  * @param {RoundToFrameOptions} arg0
  * @returns {MediaTime | undefined}
  */
@@ -256,6 +290,33 @@ export function roundToFrame(arg0) {
  */
 export function snappedSeekTime(arg0) {
     const ret = wasm.snappedSeekTime(arg0);
+    return ret;
+}
+
+/**
+ * @param {TextAnimationEffectiveDurationsOptions} arg0
+ * @returns {EffectiveDurations}
+ */
+export function textAnimationEffectiveDurations(arg0) {
+    const ret = wasm.textAnimationEffectiveDurations(arg0);
+    return ret;
+}
+
+/**
+ * @returns {TextAnimationPresets}
+ */
+export function textAnimationPresets() {
+    const ret = wasm.textAnimationPresets();
+    return ret;
+}
+
+/**
+ * 인/아웃 길이 슬라이더 범위. 최대를 먼저 구하고 최소가 최대를 넘지 않게 한다
+ * @param {TextAnimationSliderRangeOptions} arg0
+ * @returns {SliderRange}
+ */
+export function textAnimationSliderRange(arg0) {
+    const ret = wasm.textAnimationSliderRange(arg0);
     return ret;
 }
 
@@ -1527,6 +1588,9 @@ export function __wbg_set_05b085c909633819() { return handleError(function (arg0
 export function __wbg_set_311d3efbf4bfd23f(arg0, arg1, arg2) {
     arg0.set(arg1, arg2 >>> 0);
 }
+export function __wbg_set_6be42768c690e380(arg0, arg1, arg2) {
+    arg0[arg1] = arg2;
+}
 export function __wbg_set_a_2f4495829c853bba(arg0, arg1) {
     arg0.a = arg1;
 }
@@ -2366,12 +2430,12 @@ export function __wbg_writeTexture_d42ce6ec94b2c6ca() { return handleError(funct
     arg0.writeTexture(arg1, getArrayU8FromWasm0(arg2, arg3), arg4, arg5);
 }, arguments); }
 export function __wbindgen_cast_0000000000000001(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2516, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 2537, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h0482c28e5b7d9940);
     return ret;
 }
 export function __wbindgen_cast_0000000000000002(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 530, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 551, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h24978a624779a23e);
     return ret;
 }

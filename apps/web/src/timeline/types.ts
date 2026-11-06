@@ -2,7 +2,7 @@ import type { ElementAnimations } from "@/animation/types";
 import type { Effect } from "@/effects/types";
 import type { Mask } from "@/masks/types";
 import type { ParamValues } from "@/params";
-import type { MediaTime } from "@/wasm";
+import type { MediaTime, TextAnimation } from "@/wasm";
 
 export type ElementRef = {
 	trackId: string;
@@ -206,6 +206,8 @@ export interface TextElement extends BaseTimelineElement {
 	 * 앞을 자르거나 나눠도 그대로 맞는다. 자막을 단어 경계에서 나눌 때 쓴다
 	 */
 	subtitleWordOffsets?: number[];
+	/** 인/아웃/반복 애니메이션. 길이는 초이고, 클립보다 길면 렌더할 때 비율대로 줄인다 */
+	textAnimation?: TextAnimation;
 	/** 대본 읽기로 함께 만든 음성 클립의 tts.lineId. 자막 글자를 합친 값이 tts.text와 다르면 음성이 낡았다 */
 	ttsLineId?: string;
 }
