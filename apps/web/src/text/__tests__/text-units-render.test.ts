@@ -5,6 +5,8 @@ import { drawMeasuredTextLayout, measureTextLayout } from "../primitives";
 import { buildTextUnits, type ResolvedTextUnit } from "../text-units";
 import { drawTextAnimationThumbnail } from "../components/text-animation-thumbnail";
 import { textAnimationPresets } from "@/wasm";
+import { en } from "@/i18n/messages/en";
+import { ko } from "@/i18n/messages/ko";
 
 // 반투명 조각의 임시 캔버스. 테스트 환경에는 OffscreenCanvas가 없어 napi 캔버스로 대신한다
 (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas ??= function OffscreenCanvas(
@@ -55,6 +57,8 @@ function render({
 					dx: 0,
 					dy: 0,
 					scale: 1,
+					stretchX: 1,
+					stretchY: 1,
 					rotate: 0,
 					opacity: units === "half" ? 0.5 : 1,
 				}));
@@ -151,6 +155,8 @@ describe("유닛 그리기는 정지 상태에서 줄 그리기와 같은 그림
 				dx: 0,
 				dy: 0,
 				scale: 1,
+				stretchX: 1,
+				stretchY: 1,
 				rotate: 0,
 				opacity,
 			}));
@@ -208,6 +214,8 @@ describe("유닛 그리기는 정지 상태에서 줄 그리기와 같은 그림
 				dx: 0,
 				dy: 0,
 				scale: 1,
+				stretchX: 1,
+				stretchY: 1,
 				rotate: 0,
 				opacity,
 			}));
@@ -249,6 +257,8 @@ describe("유닛 그리기는 정지 상태에서 줄 그리기와 같은 그림
 							dx: 0,
 							dy: 0,
 							scale: 1,
+							stretchX: 1,
+							stretchY: 1,
 							rotate: 0,
 							opacity: 1,
 						}));
@@ -299,5 +309,79 @@ describe("프리셋 썸네일", () => {
 			expect(differingPixels(draw("in", type, 1), rest)).toBeLessThan(20);
 		}
 		for (const type of presets.loop) expect(inked(draw("loop", type, 0.25))).toBeGreaterThan(0);
+	});
+
+	test("모든 프리셋에 한국어와 영어 이름이 있다", () => {
+		for (const type of [...presets.reveal, ...presets.loop]) {
+			expect(ko.properties.textAnimation.presets[type]).toBeString();
+			expect(en.properties.textAnimation.presets[type]).toBeString();
+		}
+	});
+
+	test("글리치는 빨강과 청록 잔상을 그리고, 다 나타나면 잔상이 없다", () => {
+		const tinted = (data: Uint8ClampedArray) => {
+			let red = 0;
+			let cyan = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				if (data[i + 3] === 0) continue;
+				if (data[i] > 200 && data[i + 1] < 120) red++;
+				if (data[i] < 120 && data[i + 2] > 200) cyan++;
+			}
+			return { red, cyan };
+		};
+		const frames = Array.from({ length: 20 }, (_, i) => tinted(draw("loop", "glitch", i / 20)));
+		expect(frames.some(({ red, cyan }) => red > 0 && cyan > 0)).toBe(true);
+		expect(tinted(draw("in", "glitchIn", 1))).toEqual({ red: 0, cyan: 0 });
+	});
+
+	describe("글리치 잔상 합성", () => {
+		const paint = ({
+			split,
+			background = false,
+			fillOpacity = 1,
+			stroke = false,
+		}: { split: number; background?: boolean; fillOpacity?: number; stroke?: boolean }) => {
+			const canvas = createCanvas(WIDTH, HEIGHT);
+			const ctx = canvas.getContext("2d") as unknown as TextCanvasContext;
+			const layout = measureTextLayout({
+				text: { content: "HH", fontSize: 30, fontFamily: "sans-serif", fontWeight: "bold", fontStyle: "normal", textAlign: "center" },
+				canvasHeight: HEIGHT,
+				ctx,
+			});
+			ctx.translate(WIDTH / 2, HEIGHT / 2);
+			drawMeasuredTextLayout({
+				ctx,
+				layout,
+				textColor: "#ffffff",
+				fillOpacity,
+				stroke: stroke ? { color: "#ffffff", width: 1 } : null,
+				background: background
+					? { enabled: true, color: "#000000", cornerRadius: 0, paddingX: 40, paddingY: 20, offsetX: 0, offsetY: 0 }
+					: null,
+				backgroundColor: "#000000",
+				split,
+			});
+			return ctx.getImageData(0, 0, WIDTH, HEIGHT).data;
+		};
+		const tintedCount = (data: Uint8ClampedArray) => {
+			let count = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				const [r, g, b] = [data[i], data[i + 1], data[i + 2]];
+				if (data[i + 3] > 0 && Math.max(r, g, b) - Math.min(r, g, b) > 80) count++;
+			}
+			return count;
+		};
+
+		test("불투명 배경 위에 잔상이 보인다", () => {
+			expect(tintedCount(paint({ split: 6, background: true }))).toBeGreaterThan(100);
+			expect(tintedCount(paint({ split: 0, background: true }))).toBe(0);
+		});
+
+		test("반투명 채움과 외곽선의 지우기 합성이 잔상을 지우지 않는다", () => {
+			// 채움이 비면 글자 속으로 잔상이 비쳐야 하므로 불투명 채움일 때보다 색 픽셀이 많다
+			const opaque = tintedCount(paint({ split: 3, stroke: true }));
+			const hollow = tintedCount(paint({ split: 3, stroke: true, fillOpacity: 0 }));
+			expect(hollow).toBeGreaterThan(opaque);
+		});
 	});
 });

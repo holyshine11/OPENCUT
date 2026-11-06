@@ -19,7 +19,8 @@ export interface EffectiveDurations {
 
 /**
  * 한 유닛(지금은 텍스트 전체)에 덧씌울 변화. dx/dy는 텍스트 박스 너비/높이 비율,
- * rotate는 도, blur는 텍스트 높이 비율
+ * rotate는 도, blur는 텍스트 높이 비율. stretch_x/stretch_y는 scale 위에 곱하는 가로/세로 배율,
+ * split은 빨강/청록 잔상을 좌우로 벌리는 거리(텍스트 높이 비율)
  */
 export interface UnitState {
     dx: number;
@@ -28,6 +29,9 @@ export interface UnitState {
     rotate: number;
     opacity: number;
     blur: number;
+    stretchX: number;
+    stretchY: number;
+    split: number;
 }
 
 export interface FloorToFrameOptions {

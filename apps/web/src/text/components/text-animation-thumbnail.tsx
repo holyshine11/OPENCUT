@@ -80,12 +80,18 @@ export function drawTextAnimationThumbnail({
 		size / 2 + state.dx * layout.block.maxWidth,
 		ctx.canvas.height / 2 + state.dy * layout.block.height,
 	);
-	ctx.scale(state.scale, state.scale);
+	ctx.scale(state.scale * state.stretchX, state.scale * state.stretchY);
 	ctx.rotate((state.rotate * Math.PI) / 180);
 	ctx.globalAlpha = state.opacity;
 	const sigma = state.blur * layout.block.height * state.scale;
 	if (sigma > 0) ctx.filter = `blur(${sigma}px)`;
-	drawMeasuredTextLayout({ ctx, layout, textColor: color, units });
+	drawMeasuredTextLayout({
+		ctx,
+		layout,
+		textColor: color,
+		units,
+		split: state.split * layout.block.height,
+	});
 	ctx.restore();
 }
 

@@ -40,12 +40,17 @@ pub const UNIT_REVEAL_PRESETS: &[UnitRevealPreset] = &[
     reveal("waveIn", UnitKind::Grapheme, 0.3, UnitOrder::Forward),
     reveal("randomAppear", UnitKind::Grapheme, 0.5, UnitOrder::Random),
     reveal("scatter", UnitKind::Grapheme, 0.2, UnitOrder::Random),
+    reveal("letterDrop", UnitKind::Grapheme, 0.3, UnitOrder::Forward),
+    reveal("letterSpin", UnitKind::Grapheme, 0.3, UnitOrder::Forward),
+    reveal("letterZoom", UnitKind::Grapheme, 0.3, UnitOrder::Forward),
+    reveal("letterFlip", UnitKind::Grapheme, 0.35, UnitOrder::Forward),
     reveal("wordByWord", UnitKind::Word, 0.6, UnitOrder::Forward),
+    reveal("wordSlide", UnitKind::Word, 0.5, UnitOrder::Forward),
     reveal("lineRise", UnitKind::Line, 0.6, UnitOrder::Forward),
 ];
 
 /// 반복 유닛 프리셋. 모두 글자 단위다
-pub const UNIT_LOOP_PRESETS: &[&str] = &["letterWave", "letterJump"];
+pub const UNIT_LOOP_PRESETS: &[&str] = &["letterWave", "letterJump", "letterShake", "letterPulse", "letterSwing"];
 
 const WAVE_IN_DISTANCE: f64 = 0.5;
 const WORD_RISE_DISTANCE: f64 = 0.3;
@@ -56,6 +61,16 @@ const LETTER_WAVE_HEIGHT: f64 = 0.15;
 /// 글자 하나마다 물결 위상이 이만큼 늦는다(한 바퀴 비율)
 const LETTER_WAVE_SPACING: f64 = 0.08;
 const LETTER_JUMP_HEIGHT: f64 = 0.3;
+const LETTER_DROP_HEIGHT: f64 = 0.8;
+const LETTER_SPIN_DEGREES: f64 = -180.0;
+const LETTER_ZOOM_START_SCALE: f64 = 2.5;
+const WORD_SLIDE_DISTANCE: f64 = 0.6;
+const LETTER_SHAKE_DISTANCE: f64 = 0.04;
+/// 글자 떨림이 한 주기에 가로/세로로 떨리는 횟수. 서로 달라야 원을 그리지 않는다
+const LETTER_SHAKE_CYCLES_X: f64 = 5.0;
+const LETTER_SHAKE_CYCLES_Y: f64 = 7.0;
+const LETTER_PULSE_SCALE: f64 = 0.25;
+const LETTER_SWING_DEGREES: f64 = 15.0;
 
 pub fn unit_reveal_preset(id: &str) -> Option<&'static UnitRevealPreset> {
     UNIT_REVEAL_PRESETS.iter().find(|preset| preset.id == id)
@@ -75,8 +90,25 @@ fn ease_out_back(t: f64) -> f64 {
     1.0 + (OVERSHOOT + 1.0) * u.powi(3) + OVERSHOOT * u.powi(2)
 }
 
+fn ease_out_bounce(t: f64) -> f64 {
+    const N: f64 = 7.5625;
+    const D: f64 = 2.75;
+    if t < 1.0 / D {
+        N * t * t
+    } else if t < 2.0 / D {
+        let u = t - 1.5 / D;
+        N * u * u + 0.75
+    } else if t < 2.5 / D {
+        let u = t - 2.25 / D;
+        N * u * u + 0.9375
+    } else {
+        let u = t - 2.625 / D;
+        N * u * u + 0.984375
+    }
+}
+
 /// 0~1 사이의 고정된 난수. 같은 클립은 매 프레임, 내보내기에서도 같은 순서가 나와야 한다
-fn hash01(value: u32, salt: u32) -> f64 {
+pub(crate) fn hash01(value: u32, salt: u32) -> f64 {
     let mut x = value.wrapping_mul(0x9E37_79B9) ^ salt.wrapping_mul(0x85EB_CA6B);
     x ^= x >> 16;
     x = x.wrapping_mul(0x7FEB_352D);
@@ -111,6 +143,19 @@ fn sample_unit_reveal(id: &str, t: f64, unit: u32) -> UnitState {
         "waveIn" => UnitState { dy: WAVE_IN_DISTANCE * rest, opacity: e, ..base },
         "wordByWord" => UnitState { dy: WORD_RISE_DISTANCE * rest, opacity: e, ..base },
         "lineRise" => UnitState { dy: LINE_RISE_DISTANCE * rest, opacity: e, ..base },
+        "letterDrop" => UnitState {
+            dy: -LETTER_DROP_HEIGHT * (1.0 - ease_out_bounce(t)),
+            opacity: (t * 3.0).min(1.0),
+            ..base
+        },
+        "letterSpin" => UnitState { rotate: LETTER_SPIN_DEGREES * rest, scale: e, opacity: e, ..base },
+        "letterZoom" => UnitState {
+            scale: LETTER_ZOOM_START_SCALE + (1.0 - LETTER_ZOOM_START_SCALE) * e,
+            opacity: e,
+            ..base
+        },
+        "letterFlip" => UnitState { stretch_x: e, opacity: (t * 3.0).min(1.0), ..base },
+        "wordSlide" => UnitState { dx: WORD_SLIDE_DISTANCE * rest, opacity: e, ..base },
         "scatter" => {
             let angle = TAU * hash01(unit, 1);
             UnitState {
@@ -184,6 +229,20 @@ pub fn loop_states(id: &str, phase: f64, groups: &UnitGroups) -> Vec<UnitState> 
                         base
                     }
                 }
+                "letterShake" => {
+                    // 글자마다 다른 위상으로 떨어 한꺼번에 움직이지 않는다
+                    let x = TAU * (LETTER_SHAKE_CYCLES_X * phase + hash01(unit as u32, 8));
+                    let y = TAU * (LETTER_SHAKE_CYCLES_Y * phase + hash01(unit as u32, 9));
+                    UnitState { dx: LETTER_SHAKE_DISTANCE * x.sin(), dy: LETTER_SHAKE_DISTANCE * y.sin(), ..base }
+                }
+                "letterPulse" => {
+                    let wave = (TAU * (phase - unit as f64 * LETTER_WAVE_SPACING)).sin().max(0.0);
+                    UnitState { scale: 1.0 + LETTER_PULSE_SCALE * wave, ..base }
+                }
+                "letterSwing" => {
+                    let wave = (TAU * (phase - unit as f64 * LETTER_WAVE_SPACING)).sin();
+                    UnitState { rotate: LETTER_SWING_DEGREES * wave, ..base }
+                }
                 _ => base,
             }
         })
@@ -211,6 +270,7 @@ mod tests {
                 assert!((state.opacity - 1.0).abs() < 1e-9, "{} end", preset.id);
                 assert!(state.dx.abs() < 1e-9 && state.dy.abs() < 1e-9, "{} end pos", preset.id);
                 assert!((state.scale - 1.0).abs() < 1e-9 && state.rotate.abs() < 1e-9, "{} end shape", preset.id);
+                assert!((state.stretch_x - 1.0).abs() < 1e-9 && (state.stretch_y - 1.0).abs() < 1e-9, "{} end stretch", preset.id);
             }
         }
     }
@@ -253,7 +313,8 @@ mod tests {
             let start = loop_states(id, 0.0, &g);
             let end = loop_states(id, 1.0 - 1e-12, &g);
             for (a, b) in start.iter().zip(end.iter()) {
-                assert!((a.dy - b.dy).abs() < 1e-6, "{id}");
+                assert!((a.dx - b.dx).abs() < 1e-6 && (a.dy - b.dy).abs() < 1e-6, "{id}");
+                assert!((a.scale - b.scale).abs() < 1e-6 && (a.rotate - b.rotate).abs() < 1e-6, "{id}");
             }
         }
     }

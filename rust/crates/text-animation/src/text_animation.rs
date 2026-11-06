@@ -26,10 +26,12 @@ pub const TEXT_ANIMATION_MIN_LOOP_PERIOD: f64 = 0.2;
 pub const TEXT_ANIMATION_MAX_LOOP_PERIOD: f64 = 4.0;
 
 /// 한 유닛(지금은 텍스트 전체)에 덧씌울 변화. dx/dy는 텍스트 박스 너비/높이 비율,
-/// rotate는 도, blur는 텍스트 높이 비율
+/// rotate는 도, blur는 텍스트 높이 비율. stretch_x/stretch_y는 scale 위에 곱하는 가로/세로 배율,
+/// split은 빨강/청록 잔상을 좌우로 벌리는 거리(텍스트 높이 비율)
 #[cfg_attr(feature = "wasm", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "wasm", tsify(into_wasm_abi))]
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct UnitState {
     pub dx: f64,
     pub dy: f64,
@@ -37,6 +39,9 @@ pub struct UnitState {
     pub rotate: f64,
     pub opacity: f64,
     pub blur: f64,
+    pub stretch_x: f64,
+    pub stretch_y: f64,
+    pub split: f64,
 }
 
 impl UnitState {
@@ -47,15 +52,28 @@ impl UnitState {
         rotate: 0.0,
         opacity: 1.0,
         blur: 0.0,
+        stretch_x: 1.0,
+        stretch_y: 1.0,
+        split: 0.0,
     };
 
     fn is_finite(&self) -> bool {
-        [self.dx, self.dy, self.scale, self.rotate, self.opacity, self.blur]
-            .iter()
+        [
+            self.dx,
+            self.dy,
+            self.scale,
+            self.rotate,
+            self.opacity,
+            self.blur,
+            self.stretch_x,
+            self.stretch_y,
+            self.split,
+        ]
+        .iter()
             .all(|value| value.is_finite())
     }
 
-    /// 두 변화를 겹친다. 이동/회전/블러는 더하고 크기/투명도는 곱한다
+    /// 두 변화를 겹친다. 이동/회전/블러/잔상은 더하고 크기/투명도는 곱한다
     pub fn compose(self, other: Self) -> Self {
         Self {
             dx: self.dx + other.dx,
@@ -64,6 +82,9 @@ impl UnitState {
             rotate: self.rotate + other.rotate,
             opacity: self.opacity * other.opacity,
             blur: self.blur + other.blur,
+            stretch_x: self.stretch_x * other.stretch_x,
+            stretch_y: self.stretch_y * other.stretch_y,
+            split: self.split + other.split,
         }
     }
 }
@@ -425,7 +446,26 @@ mod tests {
             assert!(close(start.dx, next.dx) && close(start.dy, next.dy), "{id}");
             assert!(close(start.scale, next.scale) && close(start.rotate, next.rotate), "{id}");
             assert!(close(start.opacity, next.opacity), "{id}");
+            assert!(close(start.stretch_x, next.stretch_x) && close(start.stretch_y, next.stretch_y), "{id}");
+            assert!(close(start.split, next.split), "{id}");
         }
+    }
+
+    #[test]
+    fn stepped_loops_actually_change_within_a_period() {
+        let varies = |id: &str, field: fn(UnitState) -> f64| {
+            let samples: Vec<f64> = (0..40).map(|i| field(sample_loop(id, f64::from(i) / 40.0).unwrap())).collect();
+            samples.iter().any(|v| !close(*v, samples[0]))
+        };
+        assert!(varies("flicker", |s| s.opacity));
+        assert!(varies("glitch", |s| s.split));
+    }
+
+    #[test]
+    fn glitch_in_flickers_and_splits_before_settling() {
+        let mid: Vec<UnitState> = (1..12).map(|i| sample_reveal("glitchIn", f64::from(i) / 12.0 - 0.01).unwrap()).collect();
+        assert!(mid.iter().any(|s| s.opacity == 0.0) && mid.iter().any(|s| s.opacity == 1.0));
+        assert!(mid.iter().all(|s| s.split > 0.0));
     }
 
     #[test]

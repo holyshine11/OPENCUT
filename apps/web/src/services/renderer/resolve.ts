@@ -422,6 +422,7 @@ function resolveTextNode({
 
 	return {
 		...(units && { units }),
+		...(animated.split > 0 && { split: animated.split }),
 		transform: animated.transform,
 		opacity: animated.opacity,
 		textColor: resolveColorAtTime({

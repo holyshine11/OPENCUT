@@ -15,6 +15,9 @@ export interface ResolvedTextUnit extends TextDrawUnit {
 	dx: number;
 	dy: number;
 	scale: number;
+	/** scale 위에 곱하는 가로/세로 배율 */
+	stretchX: number;
+	stretchY: number;
 	rotate: number;
 	opacity: number;
 }

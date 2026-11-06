@@ -60,6 +60,8 @@ export function resolveTextUnits({
 			dx: state.dx * layout.lineHeightPx,
 			dy: state.dy * layout.lineHeightPx,
 			scale: state.scale,
+			stretchX: state.stretchX,
+			stretchY: state.stretchY,
 			rotate: state.rotate,
 			opacity: state.opacity,
 		};
@@ -144,15 +146,21 @@ export function applyTextAnimation({
 	transform: Transform;
 	opacity: number;
 	box: { width: number; height: number };
-}): { transform: Transform; opacity: number; blurPasses: EffectPass[] } {
-	if (!animation) return { transform, opacity, blurPasses: [] };
+}): {
+	transform: Transform;
+	opacity: number;
+	blurPasses: EffectPass[];
+	/** 글리치 잔상 거리. 텍스트 자체 좌표계(변환 전 px) */
+	split: number;
+} {
+	if (!animation) return { transform, opacity, blurPasses: [], split: 0 };
 	const state = resolveTextAnimation({
 		animation,
 		localSeconds: localTime / TICKS_PER_SECOND,
 		clipSeconds: duration / TICKS_PER_SECOND,
 	});
-	const scaleX = transform.scaleX * state.scale;
-	const scaleY = transform.scaleY * state.scale;
+	const scaleX = transform.scaleX * state.scale * state.stretchX;
+	const scaleY = transform.scaleY * state.scale * state.stretchY;
 	const sigma = state.blur * box.height * Math.abs(scaleY);
 	return {
 		transform: {
@@ -167,6 +175,7 @@ export function applyTextAnimation({
 		},
 		opacity: opacity * state.opacity,
 		blurPasses: buildGaussianBlurPasses({ sigmaX: sigma, sigmaY: sigma }),
+		split: state.split * box.height,
 	};
 }
 

@@ -166,6 +166,12 @@ function clearTextShadow({ ctx }: { ctx: TextCanvasContext }): void {
 	ctx.shadowOffsetY = 0;
 }
 
+/** 글리치 잔상 색과 방향. 빨강은 왼쪽, 청록은 오른쪽으로 벌린다 */
+const SPLIT_GHOSTS = [
+	{ color: "#ff2050", side: -1 },
+	{ color: "#20e0ff", side: 1 },
+] as const;
+
 export function drawMeasuredTextLayout({
 	ctx,
 	layout,
@@ -177,6 +183,7 @@ export function drawMeasuredTextLayout({
 	shadow,
 	textBaseline = "middle",
 	units = null,
+	split = 0,
 }: {
 	ctx: TextCanvasContext;
 	layout: MeasuredTextLayout;
@@ -198,7 +205,33 @@ export function drawMeasuredTextLayout({
 	 * 배경은 전체 크기로 한 번 그린다. 이때도 ctx에는 이 텍스트만 있어야 한다
 	 */
 	units?: readonly ResolvedTextUnit[] | null;
+	/** 글리치 빨강/청록 잔상을 좌우로 벌리는 거리(현재 좌표계 px). 0이면 그리지 않는다 */
+	split?: number;
 }): void {
+	if (split > 0) {
+		// 본체(외곽선, 그림자, 채움 지우기 합성까지)를 먼저 끝낸 뒤 잔상과 배경을 그 아래에 깐다.
+		// 본체의 지우기 합성이 잔상을 지우지 않고, 반투명 채움 아래로 잔상이 비친다
+		drawMeasuredTextLayout({
+			ctx,
+			layout,
+			textColor,
+			fillOpacity,
+			stroke,
+			shadow,
+			textBaseline,
+			units,
+		});
+		const composite = ctx.globalCompositeOperation;
+		ctx.globalCompositeOperation = "destination-over";
+		for (const { color, side } of SPLIT_GHOSTS) {
+			ctx.translate(side * split, 0);
+			drawMeasuredTextLayout({ ctx, layout, textColor: color, textBaseline, units });
+			ctx.translate(-side * split, 0);
+		}
+		drawTextBackground({ ctx, layout, background, backgroundColor });
+		ctx.globalCompositeOperation = composite;
+		return;
+	}
 	ctx.font = layout.fontString;
 	ctx.textAlign = units ? "left" : layout.textAlign;
 	ctx.textBaseline = textBaseline;
@@ -351,7 +384,11 @@ function drawGlyphLayers({
 		decorate?: boolean;
 	}) => (units ? drawTextUnits({ ...options, units }) : drawTextRows(options));
 	if (opacity >= 1 || (!outline && !shadow)) {
+		// 맨 아래에 깐다. 먼저 그린 글리치 잔상을 덮지 않는다(빈 캔버스에서는 그냥 그리는 것과 같다)
+		const composite = ctx.globalCompositeOperation;
+		ctx.globalCompositeOperation = "destination-over";
 		drawTextBackground({ ctx, layout, background, backgroundColor });
+		ctx.globalCompositeOperation = composite;
 		drawTextLines({ ctx, layout, textColor, fillOpacity: opacity, outline, shadow });
 		return;
 	}
@@ -500,7 +537,9 @@ function withUnitTransform({
 	ctx.save();
 	ctx.translate(getLineLeft({ layout, line: unit.line }) + unit.x + unit.width / 2 + unit.dx, lineY + unit.dy);
 	if (unit.rotate) ctx.rotate((unit.rotate * Math.PI) / 180);
-	if (unit.scale !== 1) ctx.scale(unit.scale, unit.scale);
+	const scaleX = unit.scale * unit.stretchX;
+	const scaleY = unit.scale * unit.stretchY;
+	if (scaleX !== 1 || scaleY !== 1) ctx.scale(scaleX, scaleY);
 	draw();
 	ctx.restore();
 }
