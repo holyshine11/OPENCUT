@@ -1,12 +1,18 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { UnavailableIcon } from "@hugeicons/core-free-icons";
 import type { EditorCore } from "@/core";
 import { useEditor } from "@/editor/use-editor";
 import { useMessages } from "@/i18n";
 import { SectionTitle } from "@/components/section";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useAdjustFavorites } from "@/effects/adjust-favorites-store";
+import { AdjustFavoriteButton } from "@/effects/components/adjust-favorite-button";
+import { listSubtitleGroups } from "@/subtitles/groups";
+import { excludeLockedElements } from "@/timeline/track-capabilities";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
@@ -24,17 +30,24 @@ import {
 } from "@/wasm";
 import {
 	isPositive,
+	sharedTextAnimation,
 	type TextAnimationSlot,
 	textAnimationPreviewRange,
 	withLoopPreset,
 	withRevealDuration,
 	withRevealPreset,
 } from "../text-animation";
+import { TextAnimationThumbnail } from "./text-animation-thumbnail";
 
 const SLOTS: TextAnimationSlot[] = ["in", "out", "loop"];
 const DURATION_STEP_SECONDS = 0.05;
 const DURATION_FRACTION_DIGITS = 2;
 const PRESETS = textAnimationPresets();
+const FILTERS = ["all", "favorites"] as const;
+type PresetFilter = (typeof FILTERS)[number];
+
+/** 즐겨찾기는 조정 프리셋 저장소를 같이 쓰고 접두어로 구분한다. 인과 아웃은 같은 프리셋을 공유한다 */
+const favoriteId = (type: string) => `text-animation:${type}`;
 
 let stopRangePreview: (() => void) | null = null;
 
@@ -93,10 +106,49 @@ export function TextAnimationTab({
 		fallback: element,
 	});
 
+	const [query, setQuery] = useState("");
+	const [chosenFilter, setFilter] = useState<PresetFilter>("all");
+	const favoriteIds = useAdjustFavorites((state) => state.favorites);
+	const scene = useEditor((e) => e.scenes.getActiveSceneOrNull());
+	const subtitleEntries = useMemo(() => {
+		if (!scene || !element.subtitleGroupId) return [];
+		const entries =
+			listSubtitleGroups({ tracks: scene.tracks }).find(
+				(group) => group.groupId === element.subtitleGroupId,
+			)?.entries ?? [];
+		// 잠긴 트랙의 자막은 건드리지 않는다
+		return excludeLockedElements({ tracks: scene.tracks, elements: entries });
+	}, [scene, element.subtitleGroupId]);
+
 	const animation = element.textAnimation;
 	const clipSeconds = element.duration / TICKS_PER_SECOND;
-	const presets = slot === "loop" ? PRESETS.loop : PRESETS.reveal;
+	const slotPresets = slot === "loop" ? PRESETS.loop : PRESETS.reveal;
 	const activeType = animation?.[slot]?.type ?? null;
+	const label = (type: string) => m.properties.textAnimation.presets[type] ?? type;
+	const favorites = slotPresets.filter((type) => favoriteIds.includes(favoriteId(type)));
+	// 마지막 즐겨찾기를 빼면 즐겨찾기 칩이 사라지므로 모두로 돌아간다
+	const filter = favorites.length > 0 ? chosenFilter : "all";
+	const needle = query.trim().toLocaleLowerCase();
+	const presets = (filter === "favorites" ? favorites : slotPresets).filter(
+		(type) =>
+			!needle ||
+			label(type).toLocaleLowerCase().includes(needle) ||
+			type.toLocaleLowerCase().includes(needle),
+	);
+
+	// 이 클립의 인/아웃/반복을 같은 자막 묶음의 모든 클립에 실행 취소 한 번으로 넣는다
+	const applyToSubtitles = () => {
+		const shared = sharedTextAnimation(animation);
+		editor.timeline.updateElements({
+			updates: subtitleEntries.map((entry) => ({
+				trackId: entry.trackId,
+				elementId: entry.element.id,
+				patch: {
+					textAnimation: entry.element.id === element.id ? animation : shared,
+				},
+			})),
+		});
+	};
 
 	// 프리뷰 오버레이는 undefined 패치를 변경으로 보지 않아 슬롯을 모두 지울 때 무시된다. 바로 명령 하나로 넣는다
 	const apply = (next: TextAnimation | undefined) =>
@@ -147,25 +199,82 @@ export function TextAnimationTab({
 					))}
 				</ToggleGroup>
 
+				<Input
+					size="sm"
+					variant="default"
+					placeholder={m.properties.textAnimation.search}
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+					showClearIcon
+					onClear={() => setQuery("")}
+					className="w-full"
+					containerClassName="w-full"
+				/>
+				{favorites.length > 0 && (
+					<div className="flex gap-1.5">
+						{FILTERS.map((id) => (
+							<button
+								key={id}
+								type="button"
+								aria-pressed={id === filter}
+								onClick={() => setFilter(id)}
+								className={cn(
+									"cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+									id === filter
+										? "bg-primary text-primary-foreground border-primary"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								{m.properties.textAnimation.filters[id]}
+							</button>
+						))}
+					</div>
+				)}
+
 				<div className="grid grid-cols-4 gap-2">
 					<PresetTile
 						label={m.properties.textAnimation.none}
 						isActive={activeType === null}
 						onSelect={() => pick(null)}
 					>
-						<HugeiconsIcon icon={UnavailableIcon} className="size-6" />
+						{() => <HugeiconsIcon icon={UnavailableIcon} className="size-6" />}
 					</PresetTile>
 					{presets.map((type) => (
 						<PresetTile
 							key={type}
-							label={m.properties.textAnimation.presets[type] ?? type}
+							label={label(type)}
 							isActive={type === activeType}
 							onSelect={() => pick(type)}
+							overlay={<AdjustFavoriteButton presetId={favoriteId(type)} />}
 						>
-							<span className="text-sm font-semibold">{m.properties.textAnimation.sample}</span>
+							{(isPlaying) => (
+								<TextAnimationThumbnail
+									slot={slot}
+									type={type}
+									content={m.properties.textAnimation.sample}
+									fontFamily={
+										typeof element.params.fontFamily === "string"
+											? element.params.fontFamily
+											: String(DEFAULTS.text.element.params.fontFamily)
+									}
+									isPlaying={isPlaying}
+									isActive={type === activeType}
+								/>
+							)}
 						</PresetTile>
 					))}
 				</div>
+				{presets.length === 0 && (
+					<p className="text-muted-foreground text-center text-xs">
+						{m.properties.textAnimation.noResults}
+					</p>
+				)}
+
+				{subtitleEntries.length > 1 && (
+					<Button variant="outline" size="sm" onClick={applyToSubtitles}>
+						{m.properties.textAnimation.applyToSubtitles({ count: subtitleEntries.length })}
+					</Button>
+				)}
 
 				{animation && slot !== "loop" && animation[slot] && (
 					<DurationSlider
@@ -349,37 +458,52 @@ function PresetTile({
 	label,
 	isActive,
 	onSelect,
+	overlay,
 	children,
 }: {
 	label: string;
 	isActive: boolean;
 	onSelect: () => void;
-	children: React.ReactNode;
+	/** 칸 위에 얹는 버튼(즐겨찾기). 버튼 안에 버튼을 둘 수 없어 바깥에 겹친다 */
+	overlay?: React.ReactNode;
+	children: (isPlaying: boolean) => React.ReactNode;
 }) {
+	// 포인터와 키보드 포커스는 따로 들어오고 나간다. 둘 중 하나라도 있으면 재생한다
+	const [isHovered, setIsHovered] = useState(false);
+	const [isFocused, setIsFocused] = useState(false);
 	return (
-		<button
-			type="button"
-			title={label}
-			aria-pressed={isActive}
-			onClick={onSelect}
-			className="flex min-w-0 cursor-pointer flex-col gap-1 text-left"
+		<div
+			className="group relative min-w-0"
+			onPointerEnter={() => setIsHovered(true)}
+			onPointerLeave={() => setIsHovered(false)}
 		>
-			<span
-				className={cn(
-					"bg-accent text-muted-foreground flex aspect-square w-full items-center justify-center rounded-md border-2",
-					isActive ? "border-primary text-foreground" : "border-transparent",
-				)}
+			{overlay}
+			<button
+				type="button"
+				title={label}
+				aria-pressed={isActive}
+				onClick={onSelect}
+				onFocus={() => setIsFocused(true)}
+				onBlur={() => setIsFocused(false)}
+				className="flex w-full min-w-0 cursor-pointer flex-col gap-1 text-left"
 			>
-				{children}
-			</span>
-			<span
-				className={cn(
-					"truncate text-[11px]",
-					isActive ? "text-foreground" : "text-muted-foreground",
-				)}
-			>
-				{label}
-			</span>
-		</button>
+				<span
+					className={cn(
+						"bg-accent text-muted-foreground flex aspect-square w-full items-center justify-center overflow-hidden rounded-md border-2",
+						isActive ? "border-primary text-foreground" : "border-transparent",
+					)}
+				>
+					{children(isHovered || isFocused)}
+				</span>
+				<span
+					className={cn(
+						"truncate text-[11px]",
+						isActive ? "text-foreground" : "text-muted-foreground",
+					)}
+				>
+					{label}
+				</span>
+			</button>
+		</div>
 	);
 }

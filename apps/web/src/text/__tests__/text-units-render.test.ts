@@ -3,6 +3,8 @@ import { createCanvas } from "@napi-rs/canvas";
 import type { TextCanvasContext } from "../layout";
 import { drawMeasuredTextLayout, measureTextLayout } from "../primitives";
 import { buildTextUnits, type ResolvedTextUnit } from "../text-units";
+import { drawTextAnimationThumbnail } from "../components/text-animation-thumbnail";
+import { textAnimationPresets } from "@/wasm";
 
 // 반투명 조각의 임시 캔버스. 테스트 환경에는 OffscreenCanvas가 없어 napi 캔버스로 대신한다
 (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas ??= function OffscreenCanvas(
@@ -268,4 +270,34 @@ describe("유닛 그리기는 정지 상태에서 줄 그리기와 같은 그림
 
 	// 반투명 글자 속으로 자기 그림자가 비치지 않는지는 destination-out 텍스트 합성이라 napi 캔버스로 확인할 수
 	// 없다. Chrome 캔버스에서 같은 순서로 재현해 확인했다(불투명 그림을 50%로 얹은 기준과 가장자리 몇 픽셀만 다름)
+});
+
+describe("프리셋 썸네일", () => {
+	const presets = textAnimationPresets();
+	const draw = (slot: "in" | "out" | "loop", type: string, seconds: number) => {
+		const canvas = createCanvas(64, 64);
+		const ctx = canvas.getContext("2d") as unknown as TextCanvasContext;
+		drawTextAnimationThumbnail({
+			ctx,
+			slot,
+			type,
+			seconds,
+			content: "가나다",
+			fontFamily: "sans-serif",
+			color: "#ffffff",
+		});
+		return ctx.getImageData(0, 0, 64, 64).data;
+	};
+	const inked = (data: Uint8ClampedArray) => data.filter((_, i) => i % 4 === 3 && data[i] > 0).length;
+
+	test("모든 프리셋이 정지 화면에서 무언가를 그리고, 인이 끝나면 정지 상태와 같다", () => {
+		const rest = draw("loop", "none", 0);
+		expect(inked(rest)).toBeGreaterThan(50);
+		for (const type of presets.reveal) {
+			expect(inked(draw("in", type, 0.3))).toBeGreaterThan(0);
+			expect(inked(draw("out", type, 0.7))).toBeGreaterThan(0);
+			expect(differingPixels(draw("in", type, 1), rest)).toBeLessThan(20);
+		}
+		for (const type of presets.loop) expect(inked(draw("loop", type, 0.25))).toBeGreaterThan(0);
+	});
 });

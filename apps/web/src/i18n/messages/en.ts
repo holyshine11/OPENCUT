@@ -309,7 +309,11 @@ export const en = {
 			loop: "Loop",
 			none: "None",
 			duration: "Duration",
-			sample: "Aa",
+			sample: "Abc",
+			search: "Search",
+			filters: { all: "All", favorites: "Favorites" },
+			noResults: "No matching animations",
+			applyToSubtitles: ({ count }: { count: number }) => `Apply to all captions (${count})`,
 			period: "Cycle",
 			seconds: ({ value }: { value: string }) => `${value}s`,
 			presets: {

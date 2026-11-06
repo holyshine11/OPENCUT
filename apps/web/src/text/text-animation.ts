@@ -105,6 +105,15 @@ export function splitTextAnimation({
 	};
 }
 
+/** 다른 클립에 옮길 사본. 반복 offset은 분할한 조각끼리 이어 돌기 위한 값이라 빼고 옮긴다 */
+export function sharedTextAnimation(
+	animation: TextAnimation | undefined,
+): TextAnimation | undefined {
+	if (!animation?.loop) return animation;
+	const { offset: _offset, ...loop } = animation.loop;
+	return { ...animation, loop };
+}
+
 /** 요소에 textAnimation을 넣거나(값이 있을 때) 뺀 사본. 빈 키를 남기지 않는다 */
 export function withTextAnimation<T extends Partial<TextElement>>({
 	element,

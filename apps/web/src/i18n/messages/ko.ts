@@ -290,7 +290,11 @@ export const ko: Messages = {
 			loop: "반복",
 			none: "없음",
 			duration: "길이",
-			sample: "가나",
+			sample: "가나다",
+			search: "검색",
+			filters: { all: "모두", favorites: "즐겨찾기" },
+			noResults: "검색 결과가 없어요",
+			applyToSubtitles: ({ count }) => `자막 전체에 적용 (${count}개)`,
 			period: "주기",
 			seconds: ({ value }) => `${value}초`,
 			presets: {

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mediaTimeFromSeconds, type TextAnimation } from "@/wasm";
 import type { TextCanvasContext } from "../layout";
 import type { MeasuredTextLayout } from "../primitives";
-import { resolveTextUnits, usesUnitDrawing } from "../text-animation";
+import { resolveTextUnits, sharedTextAnimation, usesUnitDrawing } from "../text-animation";
 import { buildTextUnits } from "../text-units";
 
 const CHAR_WIDTH = 10;
@@ -121,5 +121,19 @@ describe("resolveTextUnits", () => {
 		});
 		// 줄씩 올라오기는 줄 높이의 0.6배 아래에서 시작한다
 		expect(units?.[0].dy).toBeCloseTo(24, 6);
+	});
+});
+
+describe("sharedTextAnimation", () => {
+	test("반복 offset만 빼고 나머지는 그대로 옮긴다", () => {
+		const animation: TextAnimation = {
+			in: { type: "typewriter", duration: 0.7 },
+			loop: { type: "letterWave", period: 1.2, offset: 3 },
+		};
+		expect(sharedTextAnimation(animation)).toEqual({
+			in: { type: "typewriter", duration: 0.7 },
+			loop: { type: "letterWave", period: 1.2 },
+		});
+		expect(sharedTextAnimation(undefined)).toBeUndefined();
 	});
 });
