@@ -17,8 +17,24 @@ export function TEXT_ANIMATION_DEFAULT_LOOP_PERIOD() {
 /**
  * @returns {number}
  */
+export function TEXT_ANIMATION_MAX_LOOP_PERIOD() {
+    const ret = wasm.TEXT_ANIMATION_MAX_LOOP_PERIOD();
+    return ret;
+}
+
+/**
+ * @returns {number}
+ */
 export function TEXT_ANIMATION_MIN_DURATION() {
     const ret = wasm.TEXT_ANIMATION_MIN_DURATION();
+    return ret;
+}
+
+/**
+ * @returns {number}
+ */
+export function TEXT_ANIMATION_MIN_LOOP_PERIOD() {
+    const ret = wasm.TEXT_ANIMATION_MIN_LOOP_PERIOD();
     return ret;
 }
 

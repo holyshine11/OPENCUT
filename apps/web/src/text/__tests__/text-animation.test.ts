@@ -5,7 +5,15 @@ import { DEFAULTS } from "@/timeline/defaults";
 import { splitElementAtTime } from "@/timeline/split-element";
 import type { TextElement } from "@/timeline/types";
 import { mediaTimeFromSeconds, type TextAnimation } from "@/wasm";
-import { applyTextAnimation, splitTextAnimation } from "../text-animation";
+import {
+	applyTextAnimation,
+	isPositive,
+	splitTextAnimation,
+	textAnimationPreviewRange,
+	withLoopPreset,
+	withRevealDuration,
+	withRevealPreset,
+} from "../text-animation";
 
 const ticks = (seconds: number) => mediaTimeFromSeconds({ seconds });
 
@@ -204,5 +212,65 @@ describe("applyTextAnimation (틱 단위 입력)", () => {
 		});
 		expect(result.transform).toBe(identity.transform);
 		expect(result.opacity).toBe(1);
+	});
+});
+
+describe("패널 슬롯 편집", () => {
+	test("새 인 프리셋은 기본 길이, 바꾸면 길이 유지, 없음이면 슬롯이 빠진다", () => {
+		const added = withRevealPreset({ animation: undefined, side: "in", type: "fade" });
+		expect(added).toEqual({
+			in: { type: "fade", duration: DEFAULTS.text.animation.duration },
+		});
+		const swapped = withRevealPreset({
+			animation: { in: { type: "fade", duration: 1.2 } },
+			side: "in",
+			type: "pop",
+		});
+		expect(swapped?.in).toEqual({ type: "pop", duration: 1.2 });
+		expect(withRevealPreset({ animation: added, side: "in", type: null })).toBeUndefined();
+	});
+
+	test("길이 슬라이더는 인과 아웃을 둘 다 유효 길이로 저장한다", () => {
+		// 저장값 1:9인 클립을 1초로 트림하면 유효값은 0.1/0.9
+		const animation: TextAnimation = {
+			in: { type: "fade", duration: 1 },
+			out: { type: "fade", duration: 9 },
+		};
+		const next = withRevealDuration({ animation, side: "in", seconds: 0.05, clipSeconds: 1 });
+		expect(next.in?.duration).toBe(0.05);
+		expect(next.out?.duration).toBeCloseTo(0.9, 9);
+	});
+
+	test("깨진 저장 주기도 숫자로 걸러 낸다", () => {
+		expect(isPositive("bad")).toBe(false);
+		expect(isPositive(undefined)).toBe(false);
+		expect(isPositive(Number.NaN)).toBe(false);
+		expect(isPositive(0.5)).toBe(true);
+	});
+
+	test("반복 프리셋을 바꿔도 주기와 offset은 유지한다", () => {
+		const animation: TextAnimation = { loop: { type: "pulse", period: 2, offset: 0.5 } };
+		expect(withLoopPreset({ animation, type: "blink" })?.loop).toEqual({
+			type: "blink",
+			period: 2,
+			offset: 0.5,
+		});
+		expect(withLoopPreset({ animation: undefined, type: "float" })?.loop).toEqual({
+			type: "float",
+			period: DEFAULTS.text.animation.loopPeriod,
+		});
+		expect(withLoopPreset({ animation, type: null })).toBeUndefined();
+	});
+
+	test("프리셋을 고르면 그 구간만 재생한다", () => {
+		expect(
+			textAnimationPreviewRange({ animation: fullAnimation, slot: "in", clipSeconds: 3 }),
+		).toEqual({ startSeconds: 0, endSeconds: 0.5 });
+		expect(
+			textAnimationPreviewRange({ animation: fullAnimation, slot: "out", clipSeconds: 3 }),
+		).toEqual({ startSeconds: 2.5, endSeconds: 3 });
+		expect(
+			textAnimationPreviewRange({ animation: fullAnimation, slot: "loop", clipSeconds: 1.5 }),
+		).toEqual({ startSeconds: 0, endSeconds: 1.5 });
 	});
 });

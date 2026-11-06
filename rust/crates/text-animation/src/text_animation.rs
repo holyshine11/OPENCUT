@@ -16,6 +16,11 @@ pub const TEXT_ANIMATION_DEFAULT_DURATION: f64 = 0.5;
 pub const TEXT_ANIMATION_MIN_DURATION: f64 = 0.1;
 #[export]
 pub const TEXT_ANIMATION_DEFAULT_LOOP_PERIOD: f64 = 1.0;
+/// 반복 주기 슬라이더 범위(초)
+#[export]
+pub const TEXT_ANIMATION_MIN_LOOP_PERIOD: f64 = 0.2;
+#[export]
+pub const TEXT_ANIMATION_MAX_LOOP_PERIOD: f64 = 4.0;
 
 /// 한 유닛(지금은 텍스트 전체)에 덧씌울 변화. dx/dy는 텍스트 박스 너비/높이 비율,
 /// rotate는 도, blur는 텍스트 높이 비율

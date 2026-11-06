@@ -6,6 +6,7 @@ import { useAssetsPanelStore } from "@/components/editor/panels/assets/assets-pa
 import { AudioWaveform, WAVEFORM_GAIN_SAMPLE_COUNT } from "./audio-waveform";
 import { AudioVolumeLine } from "./audio-volume-line";
 import { ClipFadeHandles } from "./clip-fade-handles";
+import { TextAnimationBands } from "@/text/components/text-animation-bands";
 import { useElementPreview } from "@/timeline/hooks/use-element-preview";
 import {
 	useKeyframeDrag,
@@ -663,6 +664,9 @@ function ElementInner({
 					</div>
 					{pixelsPerSecond !== null && (
 						<AutocutReviewOverlay element={visibleElement} pixelsPerSecond={pixelsPerSecond} />
+					)}
+					{pixelsPerSecond !== null && visibleElement.type === "text" && (
+						<TextAnimationBands element={visibleElement} pixelsPerSecond={pixelsPerSecond} />
 					)}
 					{element.groupId && (
 						<HugeiconsIcon

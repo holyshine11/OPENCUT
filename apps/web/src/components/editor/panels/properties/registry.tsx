@@ -25,6 +25,7 @@ import {
 	AudioWave01Icon,
 	ScissorIcon,
 	VoiceIcon,
+	Motion02Icon,
 } from "@hugeicons/core-free-icons";
 import { ElementParamsTab } from "./components/element-params-tab";
 import { ClipEffectsTab, StandaloneEffectTab } from "@/effects/components/effects-tab";
@@ -36,6 +37,7 @@ import { OcShapesIcon } from "@/components/icons";
 import { AutocutTab } from "@/autocut/components/autocut-tab";
 import { TtsLineTab } from "@/tts/components/tts-line-tab";
 import { TextAlignSection } from "@/text/components/text-align-section";
+import { TextAnimationTab } from "@/text/components/text-animation-tab";
 
 const TRANSFORM_PARAM_KEYS = [
 	"transform.positionX",
@@ -105,6 +107,7 @@ export type PropertiesTabId =
 	| "masks"
 	| "effects"
 	| "text"
+	| "animation"
 	| "graphic"
 	| "autocut"
 	| "tts";
@@ -289,6 +292,20 @@ function buildTextTab({ element }: { element: TextElement }): PropertiesTabDef {
 	};
 }
 
+function buildTextAnimationTab({
+	element,
+}: {
+	element: TextElement;
+}): PropertiesTabDef {
+	return {
+		id: "animation",
+		icon: <HugeiconsIcon icon={Motion02Icon} size={16} />,
+		content: ({ trackId }) => (
+			<TextAnimationTab element={element} trackId={trackId} />
+		),
+	};
+}
+
 function buildGraphicTab({
 	element,
 }: {
@@ -324,6 +341,7 @@ function getTextConfig({
 		defaultTab: "text",
 		tabs: [
 			buildTextTab({ element }),
+			buildTextAnimationTab({ element }),
 			buildTransformTab({ element }),
 			buildBlendingTab({ element }),
 			...(element.ttsLineId ? [buildTtsTab({ element })] : []),

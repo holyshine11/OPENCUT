@@ -4,7 +4,9 @@ import type { BlendMode, Transform } from "@/rendering";
 import {
 	TEXT_ANIMATION_DEFAULT_DURATION,
 	TEXT_ANIMATION_DEFAULT_LOOP_PERIOD,
+	TEXT_ANIMATION_MAX_LOOP_PERIOD,
 	TEXT_ANIMATION_MIN_DURATION,
+	TEXT_ANIMATION_MIN_LOOP_PERIOD,
 	ZERO_MEDIA_TIME,
 } from "@/wasm";
 import type { TextElement } from "./types";
@@ -118,6 +120,8 @@ export const DEFAULTS = {
 			duration: TEXT_ANIMATION_DEFAULT_DURATION,
 			minDuration: TEXT_ANIMATION_MIN_DURATION,
 			loopPeriod: TEXT_ANIMATION_DEFAULT_LOOP_PERIOD,
+			minLoopPeriod: TEXT_ANIMATION_MIN_LOOP_PERIOD,
+			maxLoopPeriod: TEXT_ANIMATION_MAX_LOOP_PERIOD,
 		},
 		element: defaultTextElement,
 	},

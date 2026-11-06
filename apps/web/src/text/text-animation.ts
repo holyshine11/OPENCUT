@@ -1,12 +1,21 @@
 import { buildGaussianBlurPasses } from "@/effects/definitions/blur";
 import type { EffectPass } from "@/effects/types";
 import type { Transform } from "@/rendering";
+import { DEFAULTS } from "@/timeline/defaults";
 import type { TextElement } from "@/timeline/types";
 import {
 	resolveTextAnimation,
 	TICKS_PER_SECOND,
+	textAnimationEffectiveDurations,
 	type TextAnimation,
 } from "@/wasm";
+
+export type RevealSide = "in" | "out";
+export type TextAnimationSlot = RevealSide | "loop";
+
+/** 저장값은 검증 없이 들어오므로 문자열이나 빈 값도 걸러 낸다 */
+export const isPositive = (value: unknown): value is number =>
+	typeof value === "number" && Number.isFinite(value) && value > 0;
 
 function withoutEmptySlots(
 	animation: TextAnimation,
@@ -95,3 +104,99 @@ export function applyTextAnimation({
 		blurPasses: buildGaussianBlurPasses({ sigmaX: sigma, sigmaY: sigma }),
 	};
 }
+
+/** 인/아웃 프리셋을 고르거나(type) 지운다(null). 이미 있던 길이는 유지하고, 없으면 기본 길이로 시작한다 */
+export function withRevealPreset({
+	animation,
+	side,
+	type,
+}: {
+	animation: TextAnimation | undefined;
+	side: RevealSide;
+	type: string | null;
+}): TextAnimation | undefined {
+	const current = animation ?? {};
+	if (type === null) return withoutEmptySlots({ ...current, [side]: undefined });
+	const existing = current[side]?.duration;
+	return {
+		...current,
+		[side]: {
+			type,
+			duration: isPositive(existing) ? existing : DEFAULTS.text.animation.duration,
+		},
+	};
+}
+
+/**
+ * 인/아웃 길이 슬라이더 값을 반영한다. 슬라이더는 클립에 맞춰 줄인 유효 길이를 보여 주므로
+ * 인과 아웃을 둘 다 유효 길이로 저장해 저장값과 화면 값을 맞춘다
+ */
+export function withRevealDuration({
+	animation,
+	side,
+	seconds,
+	clipSeconds,
+}: {
+	animation: TextAnimation;
+	side: RevealSide;
+	seconds: number;
+	clipSeconds: number;
+}): TextAnimation {
+	const effective = textAnimationEffectiveDurations({ animation, clipSeconds });
+	const next = { ...animation };
+	if (next.in) {
+		next.in = { ...next.in, duration: side === "in" ? seconds : effective.inSeconds };
+	}
+	if (next.out) {
+		next.out = { ...next.out, duration: side === "out" ? seconds : effective.outSeconds };
+	}
+	return next;
+}
+
+/** 반복 프리셋을 고르거나(type) 지운다(null). 주기는 이미 있던 값을 유지한다 */
+export function withLoopPreset({
+	animation,
+	type,
+}: {
+	animation: TextAnimation | undefined;
+	type: string | null;
+}): TextAnimation | undefined {
+	const current = animation ?? {};
+	if (type === null) return withoutEmptySlots({ ...current, loop: undefined });
+	const existing = current.loop;
+	return {
+		...current,
+		loop: {
+			...existing,
+			type,
+			period: isPositive(existing?.period)
+				? existing.period
+				: DEFAULTS.text.animation.loopPeriod,
+		},
+	};
+}
+
+/** 프리셋을 고른 뒤 프리뷰에서 한 번 재생할 구간(클립 시작 기준 초) */
+export function textAnimationPreviewRange({
+	animation,
+	slot,
+	clipSeconds,
+}: {
+	animation: TextAnimation;
+	slot: TextAnimationSlot;
+	clipSeconds: number;
+}): { startSeconds: number; endSeconds: number } {
+	const effective = textAnimationEffectiveDurations({ animation, clipSeconds });
+	if (slot === "in") return { startSeconds: 0, endSeconds: effective.inSeconds };
+	if (slot === "out") {
+		return { startSeconds: clipSeconds - effective.outSeconds, endSeconds: clipSeconds };
+	}
+	const period = animation.loop?.period ?? DEFAULTS.text.animation.loopPeriod;
+	return {
+		startSeconds: 0,
+		endSeconds: Math.min(clipSeconds, period * LOOP_PREVIEW_CYCLES),
+	};
+}
+
+/** 반복 프리셋을 고르면 이만큼 돌려 보여 준다 */
+const LOOP_PREVIEW_CYCLES = 2;

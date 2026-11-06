@@ -187,7 +187,11 @@ export function TEXT_ANIMATION_DEFAULT_DURATION(): number;
 
 export function TEXT_ANIMATION_DEFAULT_LOOP_PERIOD(): number;
 
+export function TEXT_ANIMATION_MAX_LOOP_PERIOD(): number;
+
 export function TEXT_ANIMATION_MIN_DURATION(): number;
+
+export function TEXT_ANIMATION_MIN_LOOP_PERIOD(): number;
 
 export function TICKS_PER_SECOND(): number;
 
