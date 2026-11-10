@@ -11,19 +11,22 @@ export type FrameDescriptor = {
 	items: FrameItemDescriptor[];
 };
 
+export type LayerDescriptor = {
+	textureId: string;
+	transform: QuadTransformDescriptor;
+	opacity: number;
+	blendMode: BlendMode;
+	effectPassGroups: EffectPass[][];
+	mask: LayerMaskDescriptor | null;
+};
+
 export type FrameItemDescriptor =
-	| {
-			type: "layer";
-			textureId: string;
-			transform: QuadTransformDescriptor;
-			opacity: number;
-			blendMode: BlendMode;
-			effectPassGroups: EffectPass[][];
-			mask: LayerMaskDescriptor | null;
-	  }
+	| ({ type: "layer" } & LayerDescriptor)
 	| {
 			type: "sceneEffect";
 			effectPassGroups: EffectPass[][];
+			/** 있으면 이 레이어가 불투명한 자리에만 효과가 보인다 (블러, 모자이크 상자) */
+			region?: LayerDescriptor;
 	  }
 	| {
 			/** 두 클립을 각각 투명 바탕에 합성한 뒤 전환 셰이더로 섞어 씬에 얹는다 */

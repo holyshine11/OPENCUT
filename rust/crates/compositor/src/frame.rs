@@ -30,6 +30,9 @@ pub enum FrameItemDescriptor {
     Layer(LayerDescriptor),
     SceneEffect {
         effect_pass_groups: Vec<Vec<EffectPassDescriptor>>,
+        /// When set, the effect only shows where this layer is opaque (blur/mosaic boxes).
+        #[serde(default)]
+        region: Option<LayerDescriptor>,
     },
     /// Composites `from_items` and `to_items` onto separate transparent canvases,
     /// mixes them with the transition shader, then blends the result over the scene.
@@ -124,10 +127,27 @@ mod tests {
             r#"{"type":"sceneEffect","effectPassGroups":[[{"shader":"color-adjust","uniforms":{"u_params":[0.5]}}]]}"#,
         )
         .unwrap();
-        let FrameItemDescriptor::SceneEffect { effect_pass_groups } = item else {
+        let FrameItemDescriptor::SceneEffect {
+            effect_pass_groups,
+            region,
+        } = item
+        else {
             panic!("expected a scene effect");
         };
         assert_eq!(effect_pass_groups[0][0].shader, "color-adjust");
+        assert!(region.is_none());
+    }
+
+    #[test]
+    fn scene_effect_reads_optional_region_layer() {
+        let item: FrameItemDescriptor = serde_json::from_str(
+            r#"{"type":"sceneEffect","effectPassGroups":[],"region":{"textureId":"box","transform":{"centerX":1,"centerY":2,"width":3,"height":4,"rotationDegrees":0,"flipX":false,"flipY":false},"opacity":1,"blendMode":"normal","effectPassGroups":[],"mask":null}}"#,
+        )
+        .unwrap();
+        let FrameItemDescriptor::SceneEffect { region, .. } = item else {
+            panic!("expected a scene effect");
+        };
+        assert_eq!(region.unwrap().texture_id, "box");
     }
 
     #[test]

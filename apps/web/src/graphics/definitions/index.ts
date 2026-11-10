@@ -1,4 +1,5 @@
 import { graphicsRegistry } from "../registry";
+import { blurGraphicDefinition, mosaicGraphicDefinition } from "./backdrop";
 import { brushGraphicDefinition } from "./brush";
 import { ellipseGraphicDefinition } from "./ellipse";
 import { polygonGraphicDefinition } from "./polygon";
@@ -10,6 +11,8 @@ const defaultGraphicDefinitions = [
 	ellipseGraphicDefinition,
 	polygonGraphicDefinition,
 	starGraphicDefinition,
+	blurGraphicDefinition,
+	mosaicGraphicDefinition,
 	brushGraphicDefinition,
 ];
 

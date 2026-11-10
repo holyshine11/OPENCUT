@@ -452,8 +452,11 @@ impl Compositor {
                         frame.height,
                     )?;
                 }
-                FrameItemDescriptor::SceneEffect { effect_pass_groups } => {
-                    scene = self.apply_effect_groups(
+                FrameItemDescriptor::SceneEffect {
+                    effect_pass_groups,
+                    region,
+                } => {
+                    let effected = self.apply_effect_groups(
                         context,
                         encoder,
                         &scene,
@@ -461,6 +464,32 @@ impl Compositor {
                         frame.height,
                         effect_pass_groups,
                     )?;
+                    scene = match region {
+                        None => effected,
+                        Some(region) => {
+                            // The region layer's alpha decides where the effected scene replaces the original
+                            let region_texture =
+                                self.render_layer(context, encoder, frame, region)?;
+                            let masked = self.apply_mask(
+                                context,
+                                encoder,
+                                &effected,
+                                &region_texture,
+                                false,
+                                frame.width,
+                                frame.height,
+                            );
+                            self.blend_texture(
+                                context,
+                                encoder,
+                                &scene,
+                                &masked,
+                                region.blend_mode,
+                                frame.width,
+                                frame.height,
+                            )?
+                        }
+                    };
                 }
                 FrameItemDescriptor::Transition {
                     kind,

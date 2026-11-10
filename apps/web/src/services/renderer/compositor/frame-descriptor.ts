@@ -1,6 +1,6 @@
 import { drawCssBackground } from "@/gradients";
 import { getMaskDefinition } from "@/masks";
-import type { Mask, MaskBlendMode } from "@/masks/types";
+import type { Mask, MaskBlendMode, MaskFill } from "@/masks/types";
 import { getVisibleMasks } from "@/masks/list-ops";
 import {
 	fillStrengthToPixels,
@@ -8,6 +8,7 @@ import {
 	getMaskFill,
 	isEffectFill,
 } from "@/masks/fill";
+import { effectsRegistry, resolveEffectPasses } from "@/effects";
 import type { EffectPass } from "@/effects/types";
 import { buildGaussianBlurPasses } from "@/effects/definitions/blur";
 import { incrementCounter } from "@/diagnostics/render-perf";
@@ -31,12 +32,13 @@ import type { ResolvedVisualSourceNodeState } from "../nodes/visual-node";
 import type {
 	FrameDescriptor,
 	FrameItemDescriptor,
+	LayerDescriptor,
 	LayerMaskDescriptor,
 	QuadTransformDescriptor,
 	TextureCanvasDrawFn,
 	TextureUploadDescriptor,
 } from "./types";
-import { DEFAULT_GRAPHIC_SOURCE_SIZE } from "@/graphics";
+import { DEFAULT_GRAPHIC_SOURCE_SIZE, getGraphicDefinition } from "@/graphics";
 
 export async function buildFrameDescriptor({
 	node,
@@ -312,15 +314,38 @@ async function collectVisualSourceNode({
 		textures,
 	});
 
-	items.push({
-		type: "layer",
+	const layer: LayerDescriptor = {
 		textureId,
 		transform,
 		opacity: node.resolved.opacity,
 		blendMode: node.params.blendMode ?? "normal",
 		effectPassGroups: node.resolved.effectPasses,
 		mask,
-	});
+	};
+
+	const backdropFill =
+		node instanceof GraphicNode
+			? getGraphicDefinition({ definitionId: node.params.definitionId })
+					.backdropFill
+			: undefined;
+	if (backdropFill && node instanceof GraphicNode) {
+		// 블러, 모자이크 상자는 자기를 그리지 않고 아래 화면을 흐린 뒤 자기 모양만큼만 보여준다
+		const passes = buildBackdropPasses({
+			fill: backdropFill,
+			strength: Number(node.resolved.resolvedParams.strength),
+			renderer,
+		});
+		if (passes.length > 0) {
+			items.push({
+				type: "sceneEffect",
+				effectPassGroups: [passes],
+				region: layer,
+			});
+		}
+		return;
+	}
+
+	items.push({ type: "layer", ...layer });
 	items.push(
 		...buildEffectMaskLayers({
 			node,
@@ -337,6 +362,42 @@ async function collectVisualSourceNode({
 		}),
 		...strokeLayers,
 	);
+}
+
+/** stylize.wgsl의 pixelate는 칸 크기를 2 + size% * 98 픽셀로 잡는다 */
+const PIXELATE_MIN_CELL_PX = 2;
+const PIXELATE_CELL_RANGE_PX = 98;
+const PIXELATE_EFFECT_TYPE = "pixelate";
+
+function buildBackdropPasses({
+	fill,
+	strength,
+	renderer,
+}: {
+	fill: Exclude<MaskFill, "clip">;
+	strength: number;
+	renderer: CanvasRenderer;
+}): EffectPass[] {
+	const { width, height } = renderer;
+	// 마스크의 모자이크, 블러와 같은 강도 눈금을 쓴다
+	const strengthPx = fillStrengthToPixels({
+		strength: Number.isFinite(strength) ? strength : undefined,
+		canvasWidth: width,
+	});
+	if (fill === "blur") {
+		return buildGaussianBlurPasses({ sigmaX: strengthPx, sigmaY: strengthPx });
+	}
+	return resolveEffectPasses({
+		definition: effectsRegistry.get(PIXELATE_EFFECT_TYPE),
+		effectParams: {
+			size:
+				(Math.max(0, strengthPx - PIXELATE_MIN_CELL_PX) /
+					PIXELATE_CELL_RANGE_PX) *
+				100,
+		},
+		width,
+		height,
+	});
 }
 
 function collectTextNode({

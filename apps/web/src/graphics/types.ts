@@ -1,3 +1,4 @@
+import type { MaskFill } from "@/masks/types";
 import type { ParamDefinition, ParamValues } from "@/params";
 
 export const DEFAULT_GRAPHIC_SOURCE_SIZE = 512;
@@ -14,6 +15,11 @@ export interface GraphicDefinition {
 	name: string;
 	keywords: string[];
 	params: ParamDefinition[];
+	/**
+	 * 있으면 도형을 그리지 않고, 도형이 덮은 자리의 아래 화면에 이 효과를 건다.
+	 * 강도는 `strength` 파라미터에서 읽는다
+	 */
+	backdropFill?: Exclude<MaskFill, "clip">;
 	render(context: GraphicRenderContext): void;
 }
 
