@@ -28,7 +28,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DEFAULT_NEW_ELEMENT_DURATION } from "@/timeline/creation";
-import { mediaTimeFromSeconds, type MediaTime } from "@/wasm";
+import { addMediaTime, mediaTimeFromSeconds, ZERO_MEDIA_TIME, type MediaTime } from "@/wasm";
 import { useEditor } from "@/editor/use-editor";
 import { useFileUpload } from "@/media/use-file-upload";
 import { invokeAction } from "@/actions";
@@ -41,6 +41,8 @@ import {
 	useSelectionScope,
 } from "@/selection";
 import { buildElementFromMedia } from "@/timeline/element-utils";
+import { AddTrackCommand, BatchCommand, InsertElementCommand } from "@/commands";
+import { compareFileNames } from "@/media/filename-order";
 import {
 	type MediaSortKey,
 	type MediaSortOrder,
@@ -54,6 +56,7 @@ import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
 	Delete02Icon,
+	PlayListAddIcon,
 	Folder03Icon,
 	GridViewIcon,
 	LeftToRightListDashIcon,
@@ -149,6 +152,38 @@ export function MediaView() {
 			projectId: activeProject.metadata.id,
 			assetIds: ids,
 		});
+	};
+
+	// 동영상·이미지를 파일명 순으로 새 동영상 트랙 하나에 0초부터 이어 붙인다. 되돌리기 한 번에 전부 빠진다
+	const addAllToTimeline = () => {
+		const visuals = mediaFiles
+			.filter((asset) => asset.type === "video" || asset.type === "image")
+			.sort((a, b) => compareFileNames(a.name, b.name));
+		if (visuals.length === 0) {
+			toast.error(m.media.addAllEmpty);
+			return;
+		}
+		const track = new AddTrackCommand({ type: "video" });
+		let startTime = ZERO_MEDIA_TIME;
+		const inserts = visuals.map((asset) => {
+			const duration =
+				asset.duration != null
+					? mediaTimeFromSeconds({ seconds: asset.duration })
+					: DEFAULT_NEW_ELEMENT_DURATION;
+			const element = buildElementFromMedia({
+				mediaId: asset.id,
+				mediaType: asset.type,
+				name: asset.name,
+				duration,
+				startTime,
+			});
+			startTime = addMediaTime({ a: startTime, b: duration });
+			return new InsertElementCommand({
+				element,
+				placement: { mode: "explicit", trackId: track.getTrackId() },
+			});
+		});
+		editor.command.execute({ command: new BatchCommand([track, ...inserts]) });
 	};
 
 	const handleSort = ({ key }: { key: MediaSortKey }) => {
@@ -271,6 +306,7 @@ export function MediaView() {
 						sortOrder={mediaSortOrder}
 						onSort={handleSort}
 						onImport={openFilePicker}
+						onAddAll={addAllToTimeline}
 					/>
 				}
 				className={cn(isDragOver && "bg-accent/30")}
@@ -718,7 +754,9 @@ function MediaActions({
 	onSort,
 	onImport,
 	onOpenFolder,
+	onAddAll,
 }: {
+	onAddAll: () => void;
 	onOpenFolder: () => void;
 	mediaViewMode: MediaViewMode;
 	setMediaViewMode: (mode: MediaViewMode) => void;
@@ -732,6 +770,22 @@ function MediaActions({
 	return (
 		<div className="flex gap-1.5">
 			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							size="icon"
+							variant="ghost"
+							onClick={onAddAll}
+							disabled={isProcessing}
+							aria-label={m.media.addAll}
+						>
+							<HugeiconsIcon icon={PlayListAddIcon} />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>
+						<p>{m.media.addAll}</p>
+					</TooltipContent>
+				</Tooltip>
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button

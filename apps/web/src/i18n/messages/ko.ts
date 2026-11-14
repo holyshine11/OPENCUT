@@ -206,6 +206,8 @@ export const ko: Messages = {
 		},
 		sortTooltip: ({ field, ascending }) =>
 			`${field}순 정렬 (${ascending ? "오름차순" : "내림차순"})`,
+		addAll: "파일명 순으로 타임라인에 모두 넣기",
+		addAllEmpty: "타임라인에 넣을 동영상이나 이미지가 없어요",
 		import: "가져오기",
 	},
 	sounds: {
