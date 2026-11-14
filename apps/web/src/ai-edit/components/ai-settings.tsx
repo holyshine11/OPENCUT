@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { loadTtsServer, useTtsServer } from "@/tts/components/voice-fields";
 import { useMessages } from "@/i18n";
 import { useAiEditStore } from "../store";
-import { AiModelSelect } from "./ai-model-select";
+import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
 
 type Account =
 	| { status: "loading" }
@@ -86,6 +86,12 @@ export function AiSettings() {
 				<SectionHeader className="justify-between">
 					<SectionTitle className="flex-1">{m.aiEdit.model}</SectionTitle>
 					<AiModelSelect className="h-auto w-auto border-none bg-transparent p-1" />
+				</SectionHeader>
+			</Section>
+			<Section>
+				<SectionHeader className="justify-between">
+					<SectionTitle className="flex-1">{m.aiEdit.effort}</SectionTitle>
+					<AiEffortSelect className="h-auto w-auto border-none bg-transparent p-1" />
 				</SectionHeader>
 			</Section>
 			<div className="flex flex-col gap-3 px-3 py-3 text-sm">

@@ -7,3 +7,8 @@ export const AI_EDIT_MODELS = [
 ] as const;
 
 export const DEFAULT_AI_EDIT_MODEL = AI_EDIT_MODELS[0].id;
+
+/** 추론 강도. claude의 --effort에 그대로 넘긴다. 높을수록 꼼꼼하지만 느리고 사용량이 많다 */
+export const AI_EDIT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type AiEditEffort = (typeof AI_EDIT_EFFORTS)[number];
+export const DEFAULT_AI_EDIT_EFFORT: AiEditEffort = "high";

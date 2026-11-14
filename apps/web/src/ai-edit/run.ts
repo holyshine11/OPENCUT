@@ -127,6 +127,7 @@ export async function runAiEdit(): Promise<void> {
 			signal: abort.signal,
 			body: JSON.stringify({
 				model: store.getState().model,
+				effort: store.getState().effort,
 				sheets,
 				prompt: buildPrompt({
 					clips: promptClips,
