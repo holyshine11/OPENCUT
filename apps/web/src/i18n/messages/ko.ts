@@ -824,6 +824,9 @@ export const ko: Messages = {
 	subtitleList: {
 		exportSrt: "SRT 내보내기",
 		findReplace: "찾아 바꾸기",
+		copyChapters: "유튜브 챕터 복사",
+		chaptersCopied: "챕터를 복사했어요. 제목을 다듬어 설명란에 붙여 넣으세요.",
+		chaptersInvalid: "챕터를 만들 수 없어요. 자막이 더 길어야 해요(3개 이상, 각 10초 이상).",
 		empty: "자막 탭에서 자막을 생성하거나 가져오면 여기서 편집할 수 있어요.",
 		group: "자막 그룹",
 		groupOption: ({ index, count }) => `자막 ${index} (${count})`,
