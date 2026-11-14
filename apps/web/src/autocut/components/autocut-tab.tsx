@@ -25,7 +25,7 @@ import {
 } from "@/wasm";
 import { getMotionAnalysis, getSpeechAnalysis } from "../analysis";
 import { collectSubtitleWords, sourcePointsToTimeline } from "../apply";
-import { type EditPoint, findFillers, proposeEditPoints } from "../edit-points";
+import { type EditPoint, findFillers, findRetakes, proposeEditPoints } from "../edit-points";
 import { useAutocutReviewStore } from "../review-store";
 import settings from "../settings.json";
 import { collectSpeechRanges } from "../speech";
@@ -79,6 +79,7 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 				motionSeconds,
 				speech: [...vad, ...words],
 				fillers: findFillers({ vad, words, settings }),
+				retakes: findRetakes({ words, settings }),
 				frameSeconds: 1 / frameRateToFloat(fps),
 				settings,
 			});
@@ -134,6 +135,8 @@ export function AutocutTab({ element, trackId }: { element: VideoElement; trackI
 		event: m.autocut.reasonEvent,
 		fillerStart: m.autocut.reasonFillerStart,
 		fillerEnd: m.autocut.reasonFillerEnd,
+		retakeStart: m.autocut.reasonRetakeStart,
+		retakeEnd: m.autocut.reasonRetakeEnd,
 	};
 
 	return (

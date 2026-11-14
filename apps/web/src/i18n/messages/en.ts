@@ -253,6 +253,8 @@ export const en = {
 		reasonEvent: "Action",
 		reasonFillerStart: "Filler starts",
 		reasonFillerEnd: "Filler ends",
+		reasonRetakeStart: "Retake starts",
+		reasonRetakeEnd: "Retake ends",
 		playFrom: "Play from 1s before this point",
 		splitAt: ({ count }: { count: number }) => `Split at ${count} points`,
 		splitDone: ({ count }: { count: number }) => `Split at ${count} points. Undo with ⌘Z`,
