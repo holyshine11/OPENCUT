@@ -7,7 +7,7 @@ import {
 	DEFAULT_AI_EDIT_EFFORT,
 	DEFAULT_AI_EDIT_MODEL,
 } from "./models";
-import { type EditFormat, type EditPlan, FORMAT_IDS } from "./plan";
+import { type BeatTiming, type EditFormat, type EditPlan, FORMAT_IDS } from "./plan";
 
 export const AI_EDIT_STEPS = 5;
 const MAX_RECENT_HOOKS = 10;
@@ -18,6 +18,19 @@ export type AiEditJob =
 	| { status: "done"; plan: EditPlan; log: string[] }
 	| { status: "failed"; error: string; log: string[] };
 
+/** 마지막으로 타임라인에 넣은 AI 편집. 버튼을 다시 누르면 처음부터 하지 않고 이걸 다듬는다 */
+export interface LastAiEdit {
+	projectId: string;
+	format: EditFormat;
+	plan: EditPlan;
+	/** 계획의 클립 번호 → 미디어 id */
+	clips: Record<string, string>;
+	/** plan.beats와 같은 순서 */
+	timing: BeatTiming[];
+	/** 그때 넣은 영상 클립들. 하나도 안 남았으면(⌘Z, 전부 삭제) 처음부터 다시 편집한다 */
+	elementIds: string[];
+}
+
 interface AiEditStore {
 	model: string;
 	effort: AiEditEffort;
@@ -26,6 +39,7 @@ interface AiEditStore {
 	husbandVoice: string | null;
 	/** 최근에 쓴 훅. 다음 편집이 같은 틀을 피하게 프롬프트에 넣는다 */
 	recentHooks: string[];
+	last: LastAiEdit | null;
 	job: AiEditJob;
 	setModel: (model: string) => void;
 	setEffort: (effort: string) => void;
@@ -42,6 +56,7 @@ export const useAiEditStore = create<AiEditStore>()(
 			format: "short",
 			husbandVoice: null,
 			recentHooks: [],
+			last: null,
 			job: { status: "idle" },
 			setModel: (model) => {
 				if (AI_EDIT_MODELS.some((item) => item.id === model)) set({ model });
@@ -62,7 +77,14 @@ export const useAiEditStore = create<AiEditStore>()(
 		}),
 		{
 			name: "ai-edit",
-			partialize: ({ model, effort, format, husbandVoice, recentHooks }) => ({ model, effort, format, husbandVoice, recentHooks }),
+			partialize: ({ model, effort, format, husbandVoice, recentHooks, last }) => ({
+				model,
+				effort,
+				format,
+				husbandVoice,
+				recentHooks,
+				last,
+			}),
 		},
 	),
 );

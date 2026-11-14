@@ -75,52 +75,58 @@ export const record = (value: unknown): Record<string, unknown> =>
 	// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- 객체인지 확인한 뒤다
 	value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
-/**
- * Claude가 낸 마지막 메시지에서 계획을 꺼낸다. 모델 출력은 믿지 않는다:
- * 모르는 클립·길이를 벗어난 구간은 버리거나 클립 안으로 자른다. 쓸 컷이 하나도 없으면 던진다
- */
-export function parsePlan({
-	output,
-	durations,
-	sounds = [],
-}: {
-	output: string;
+/** 모델 메시지에 섞인 설명을 떼고 JSON 객체만 읽는다. 없으면 던진다 */
+function parseObject(output: string): Record<string, unknown> {
+	const start = output.indexOf("{");
+	const end = output.lastIndexOf("}");
+	if (start < 0 || end <= start) throw new Error("no plan");
+	return record(JSON.parse(output.slice(start, end + 1)));
+}
+
+type Limits = {
 	/** 클립 번호 → 길이(초) */
 	durations: Record<string, number>;
 	/** 쓸 수 있는 효과음 파일 이름 */
 	sounds?: string[];
-}): EditPlan {
-	const start = output.indexOf("{");
-	const end = output.lastIndexOf("}");
-	if (start < 0 || end <= start) throw new Error("no plan");
-	const raw = record(JSON.parse(output.slice(start, end + 1)));
+};
 
-	const beats = (Array.isArray(raw.beats) ? raw.beats : []).flatMap((item): EditBeat[] => {
-		const beat = record(item);
-		const clip = text(beat.clip);
-		const duration = durations[clip];
-		if (duration === undefined) return [];
-		const from = Math.max(0, Number(beat.start));
-		const to = Math.min(duration, Number(beat.end));
-		if (!(to - from >= MIN_BEAT_SECONDS)) return [];
-		const transition = text(beat.transition);
-		const sfx = text(beat.sfx);
-		const impact = IMPACTS.find((item) => item === text(beat.impact));
-		return [
-			{
-				clip,
-				start: from,
-				end: to,
-				narration: text(beat.narration),
-				voice: beat.voice === "husband" ? "husband" : "wife",
-				caption: text(beat.caption),
-				transition: isTransitionType(transition) ? transition : null,
-				sfx: sounds.includes(sfx) ? sfx : null,
-				impact: impact ?? null,
-				mosaic: (Array.isArray(beat.mosaic) ? beat.mosaic : []).flatMap(parseBox),
-			},
-		];
-	});
+/** 모델이 준 컷 하나. 모르는 클립이거나 너무 짧으면 버리고, 구간은 클립 안으로 자른다 */
+function parseBeat({ item, durations, sounds = [] }: Limits & { item: unknown }): EditBeat[] {
+	const beat = record(item);
+	const clip = text(beat.clip);
+	const duration = durations[clip];
+	if (duration === undefined) return [];
+	const from = Math.max(0, Number(beat.start));
+	const to = Math.min(duration, Number(beat.end));
+	if (!(to - from >= MIN_BEAT_SECONDS)) return [];
+	const transition = text(beat.transition);
+	const sfx = text(beat.sfx);
+	const impact = IMPACTS.find((item) => item === text(beat.impact));
+	return [
+		{
+			clip,
+			start: from,
+			end: to,
+			narration: text(beat.narration),
+			voice: beat.voice === "husband" ? "husband" : "wife",
+			caption: text(beat.caption),
+			transition: isTransitionType(transition) ? transition : null,
+			sfx: sounds.includes(sfx) ? sfx : null,
+			impact: impact ?? null,
+			mosaic: (Array.isArray(beat.mosaic) ? beat.mosaic : []).flatMap(parseBox),
+		},
+	];
+}
+
+/**
+ * Claude가 낸 마지막 메시지에서 계획을 꺼낸다. 모델 출력은 믿지 않는다:
+ * 모르는 클립·길이를 벗어난 구간은 버리거나 클립 안으로 자른다. 쓸 컷이 하나도 없으면 던진다
+ */
+export function parsePlan({ output, durations, sounds }: Limits & { output: string }): EditPlan {
+	const raw = parseObject(output);
+	const beats = (Array.isArray(raw.beats) ? raw.beats : []).flatMap((item) =>
+		parseBeat({ item, durations, sounds }),
+	);
 	if (beats.length === 0) throw new Error("no usable beats");
 
 	const youtube = record(raw.youtube);
@@ -139,6 +145,57 @@ export function parsePlan({
 	};
 }
 
+/**
+ * 이미 편집한 계획에 Claude가 낸 수정 사항(changes)만 얹는다. 컷 번호는 고치기 전 계획의 순서(1부터)다.
+ * 손대지 않은 컷은 그대로 남고, 못 쓰는 수정(모르는 클립, 너무 짧은 구간)은 버리고 원래 컷을 둔다.
+ * changed가 false면 고칠 게 없었다는 뜻이라 타임라인을 다시 짤 필요가 없다
+ */
+export function revisePlan({
+	previous,
+	output,
+	durations,
+	sounds,
+}: Limits & { previous: EditPlan; output: string }): { plan: EditPlan; changed: boolean } {
+	const raw = parseObject(output);
+	const changes = (Array.isArray(raw.changes) ? raw.changes : []).map(record);
+	const addedAfter = (number: number) =>
+		changes
+			.filter((change) => "add" in change && Number(change.after) === number)
+			.flatMap((change) => parseBeat({ item: change.add, durations, sounds }));
+
+	const beats = addedAfter(0);
+	for (const [index, old] of previous.beats.entries()) {
+		const own = changes.filter((change) => Number(change.beat) === index + 1);
+		// 그사이 미디어 패널에서 지운 클립의 컷도 뺀다
+		if (durations[old.clip] !== undefined && !own.some((change) => change.remove === true)) {
+			const set: Record<string, unknown> = Object.assign({}, ...own.map((change) => record(change.set)));
+			const [next] = Object.keys(set).length > 0 ? parseBeat({ item: { ...old, ...set }, durations, sounds }) : [];
+			// 안 고친 모자이크는 그대로 둔다(다시 읽으면 영역을 또 키운다)
+			beats.push(next ? ("mosaic" in set ? next : { ...next, mosaic: old.mosaic }) : old);
+		}
+		beats.push(...addedAfter(index + 1));
+	}
+	if (beats.length === 0) throw new Error("no usable beats");
+
+	const youtube = record(raw.youtube);
+	const look = text(raw.look);
+	const tags = texts(youtube.tags);
+	const plan: EditPlan = {
+		concept: text(raw.concept) || previous.concept,
+		hook: text(raw.hook) || previous.hook,
+		look: ADJUST_PRESETS.some((preset) => preset.id === look) ? look : previous.look,
+		beats,
+		youtube: {
+			title: text(youtube.title) || previous.youtube.title,
+			description: text(youtube.description) || previous.youtube.description,
+			tags: tags.length > 0 ? tags : previous.youtube.tags,
+		},
+		review: texts(raw.review),
+	};
+	const comparable = ({ review: _review, ...rest }: EditPlan) => JSON.stringify(rest);
+	return { plan, changed: comparable(plan) !== comparable(previous) };
+}
+
 export interface PlacedBeat {
 	/** 타임라인에서 컷이 시작하는 시각(초) */
 	at: number;
@@ -146,6 +203,12 @@ export interface PlacedBeat {
 	length: number;
 	/** 내레이션이 시작하는 시각(초). 음성이 없으면 null */
 	voiceAt: number | null;
+}
+
+/** 타임라인에 실제로 놓인 컷 길이와 그 컷 내레이션의 음성 길이(초). 다음에 다듬을 때 Claude에게 알려 준다 */
+export interface BeatTiming {
+	length: number;
+	voice: number | null;
 }
 
 /**

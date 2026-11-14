@@ -22,6 +22,7 @@ import { generateUUID } from "@/utils/id";
 import { mediaTimeFromSeconds, subMediaTime } from "@/wasm";
 import {
 	activeLoudness,
+	type BeatTiming,
 	type Box,
 	coverScale,
 	type EditFormat,
@@ -63,10 +64,14 @@ function mosaicMask(box: Box): Mask {
 	};
 }
 
+type Tts = NonNullable<AudioElement["tts"]>;
+const ttsKey = ({ lineId: _lineId, ...tts }: Tts) => JSON.stringify(tts);
+
 /**
  * 계획대로 타임라인을 새로 짠다. 있던 클립은 지우고 영상·내레이션·자막 트랙을 넣는데,
  * 전부 BatchCommand 하나라서 ⌘Z 한 번이면 AI 편집 전으로 돌아간다(합성한 음성 파일만 미디어 패널에 남는다).
- * voices가 null이면 내레이션 없이 자막만 넣는다
+ * voices가 null이면 내레이션 없이 자막만 넣는다.
+ * 타임라인에 같은 문장·같은 목소리 설정으로 만든 음성이 이미 있으면 다시 합성하지 않고 그 파일을 쓴다
  */
 export async function applyPlan({
 	editor,
@@ -88,24 +93,54 @@ export async function applyPlan({
 	sounds: SoundItem[];
 	signal: AbortSignal;
 	onProgress: (progress: { current: number; total: number }) => void;
-}): Promise<void> {
-	const spoken = plan.beats
-		.map((beat, index) => ({ index, text: beat.narration, voice: beat.voice }))
-		.filter((line) => voices && line.text);
-	// 합성은 목소리별로 묶어서 한다(파일 번호가 목소리마다 이어진다)
+}): Promise<BeatTiming[]> {
+	const spoken = plan.beats.flatMap((beat, index) => {
+		const voice = voices?.[beat.voice];
+		if (!voice || !beat.narration) return [];
+		const tts: Tts = {
+			text: beat.narration,
+			voice: voice.voiceSettings.voice,
+			style: voice.voiceSettings.style,
+			speed: voice.voiceSettings.speed,
+			strength: voice.voiceSettings.strength,
+			expressiveness: voice.voiceSettings.expressiveness,
+			model: voice.model,
+			lineId: generateUUID(),
+		};
+		return [{ index, who: beat.voice, tts }];
+	});
+
+	// 지난 편집에서 만든 음성. 문장과 목소리 설정이 그대로인 컷은 이걸 다시 쓴다
+	const made = new Map<string, MediaAsset>();
+	for (const track of editor.scenes.getActiveScene().tracks) {
+		for (const element of track.elements) {
+			if (element.type !== "audio" || !element.tts || !("mediaId" in element)) continue;
+			const asset = editor.media.getAssets().find((item) => item.id === element.mediaId);
+			if (asset?.duration) made.set(ttsKey(element.tts), asset);
+		}
+	}
 	const voiceOf = new Map<number, MediaAsset>();
+	const missing = spoken.filter((line) => {
+		const asset = made.get(ttsKey(line.tts));
+		if (asset) voiceOf.set(line.index, asset);
+		return !asset;
+	});
+
+	// 합성은 목소리별로 묶어서 한다(파일 번호가 목소리마다 이어진다)
+	let done = 0;
 	for (const who of ["wife", "husband"] as const) {
-		const lines = spoken.filter((line) => line.voice === who);
+		const lines = missing.filter((line) => line.who === who);
 		if (!voices || lines.length === 0) continue;
-		const done = voiceOf.size;
+		const before = done;
 		const assets = await synthesizeAssets({
 			editor,
-			sentences: lines.map((line) => line.text),
+			sentences: lines.map((line) => line.tts.text),
 			voiceSettings: voices[who].voiceSettings,
 			signal,
-			onProgress: ({ current }) => onProgress({ current: done + current, total: spoken.length }),
+			onProgress: ({ current }) => onProgress({ current: before + current, total: missing.length }),
 		});
 		for (const [order, line] of lines.entries()) voiceOf.set(line.index, assets[order]);
+		done += lines.length;
 	}
 
 	// 효과음은 프로젝트 미디어로 들여오고, 파일마다 다른 녹음 크기를 재 둔다
@@ -213,8 +248,7 @@ export async function applyPlan({
 
 	if (voices && voiceOf.size > 0) {
 		commands.push(audioTrack);
-		for (const { index, text, voice: who } of spoken) {
-			const voice = voices[who];
+		for (const { index, tts } of spoken) {
 			const asset = voiceOf.get(index);
 			const voiceAt = placed[index].voiceAt;
 			if (!asset || voiceAt === null) continue;
@@ -225,16 +259,6 @@ export async function applyPlan({
 				duration: mediaTimeFromSeconds({ seconds: asset.duration ?? 0 }),
 				startTime: mediaTimeFromSeconds({ seconds: voiceAt }),
 			});
-			const tts: AudioElement["tts"] = {
-				text,
-				voice: voice.voiceSettings.voice,
-				style: voice.voiceSettings.style,
-				speed: voice.voiceSettings.speed,
-				strength: voice.voiceSettings.strength,
-				expressiveness: voice.voiceSettings.expressiveness,
-				model: voice.model,
-				lineId: generateUUID(),
-			};
 			commands.push(
 				new InsertElementCommand({
 					placement: { mode: "explicit", trackId: audioTrack.getTrackId() },
@@ -298,4 +322,5 @@ export async function applyPlan({
 	editor.command.execute({ command: new BatchCommand(commands) });
 	// 빈 타임라인에 첫 영상을 넣으면 InsertElementCommand가 화면 크기를 그 영상에 맞춘다. 고른 형식으로 되돌린다
 	setCanvas();
+	return placed.map(({ length }, index) => ({ length, voice: voiceOf.get(index)?.duration ?? null }));
 }

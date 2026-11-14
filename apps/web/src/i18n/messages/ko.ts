@@ -265,6 +265,8 @@ export const ko: Messages = {
 		noVoice: "대본 읽기 서버가 꺼져 있어 내레이션 없이 자막만 넣어요",
 		readingClip: ({ current, total, name }) => `촬영본 훑어보는 중 ${current}/${total}: ${name}`,
 		asking: "Claude에게 촬영본을 보냈어요",
+		revising: "지난 AI 편집을 이어서 다듬어요. 고칠 곳만 찾아 고쳐요. 처음부터 다시 하려면 취소하고 ⌘Z로 되돌린 뒤 눌러 주세요",
+		noChanges: "고칠 곳을 찾지 못해 타임라인은 그대로 뒀어요",
 		applying: ({ count }) => `타임라인에 ${count}컷을 넣는 중`,
 		voicing: ({ current, total }) => `내레이션 만드는 중 ${current}/${total}`,
 		ytTitle: "유튜브 제목",

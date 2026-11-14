@@ -283,6 +283,8 @@ export const en = {
 		readingClip: ({ current, total, name }: { current: number; total: number; name: string }) =>
 			`Scanning footage ${current}/${total}: ${name}`,
 		asking: "Sent the footage to Claude",
+		revising: "Refining the last AI edit: only what needs fixing is changed. To start over, cancel, undo with ⌘Z, then press again",
+		noChanges: "Nothing needed fixing, so the timeline was left as is",
 		applying: ({ count }: { count: number }) => `Placing ${count} cuts on the timeline`,
 		voicing: ({ current, total }: { current: number; total: number }) => `Generating narration ${current}/${total}`,
 		ytTitle: "YouTube title",

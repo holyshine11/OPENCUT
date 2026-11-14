@@ -45,7 +45,7 @@ export function AiEditButton() {
 }
 
 /**
- * AI가 편집하는 동안 화면 전체를 덮는다. 뒤의 타임라인은 비쳐 보이지만 누르거나 단축키를 쓸 수 없다.
+ * AI가 편집하는 동안 화면 전체를 어둡게 덮고 진행 상황을 가운데에 띄운다. 편집 취소 말고는 누르거나 단축키를 쓸 수 없다.
  * 편집 도중 사람이 타임라인을 건드리면 계획과 어긋나기 때문이다
  */
 function AiEditOverlay() {
@@ -77,7 +77,7 @@ function AiEditOverlay() {
 	const currentStep = job.status === "running" ? job.step : job.status === "done" ? AI_EDIT_STEPS + 1 : 0;
 
 	return createPortal(
-		<div className="fixed inset-0 z-200 flex items-end justify-end bg-black/30 p-4">
+		<div className="fixed inset-0 z-200 flex items-center justify-center bg-black/60 p-4">
 			<div
 				ref={cardRef}
 				role="dialog"

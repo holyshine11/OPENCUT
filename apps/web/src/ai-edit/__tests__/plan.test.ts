@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { activeLoudness, coverScale, parsePlan, placeBeats, sfxVolume } from "../plan";
+import { activeLoudness, coverScale, parsePlan, placeBeats, revisePlan, sfxVolume } from "../plan";
 
 const durations = { c01: 10, c02: 4 };
 
@@ -108,5 +108,58 @@ describe("화면 맞춤과 믹싱", () => {
 	test("무음 구간은 빼고 크기를 잰다", () => {
 		expect(activeLoudness(new Float32Array([0, 0, 0.5, -0.5, 0, 0]))).toBeCloseTo(-6.02, 1);
 		expect(activeLoudness(new Float32Array([0, 0.001]))).toBeNull();
+	});
+});
+
+describe("revisePlan", () => {
+	const beat = ({ clip, start, end, caption }: { clip: string; start: number; end: number; caption: string }) => ({
+		clip, start, end, narration: "", voice: "wife" as const, caption, transition: null, sfx: null, impact: null,
+		mosaic: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }],
+	});
+	const previous = {
+		concept: "컨셉", hook: "훅", look: "food",
+		beats: [
+			beat({ clip: "c01", start: 0, end: 2, caption: "하나" }),
+			beat({ clip: "c01", start: 4, end: 6, caption: "둘" }),
+			beat({ clip: "c02", start: 0, end: 2, caption: "셋" }),
+		],
+		youtube: { title: "제목", description: "설명", tags: ["a"] },
+		review: ["지난 메모"],
+	};
+	const revise = ({ output, clips = durations }: { output: object; clips?: Record<string, number> }) =>
+		revisePlan({ previous, durations: clips, sounds: ["띵.mp3"], output: `[5/5] 끝\n${JSON.stringify(output)}` });
+
+	test("고친 컷만 바뀌고 나머지와 안 건드린 모자이크는 그대로다", () => {
+		const { plan, changed } = revise({ output: {
+			changes: [
+				{ beat: 1, set: { caption: "새 자막", end: 99, sfx: "띵.mp3" } },
+				{ beat: 2, remove: true },
+				{ after: 0, add: { clip: "c02", start: 2, end: 4, caption: "훅" } },
+				{ after: 3, add: { clip: "c01", start: 7, end: 9, caption: "끝" } },
+				{ after: 1, add: { clip: "c09", start: 0, end: 2 } },
+				{ beat: 3, set: { start: 1.9 } },
+			],
+			youtube: { title: "새 제목" },
+			review: ["1번 컷 자막을 줄임"],
+		} });
+		expect(changed).toBe(true);
+		expect(plan.beats.map((item) => item.caption)).toEqual(["훅", "새 자막", "셋", "끝"]);
+		expect(plan.beats[1]).toMatchObject({ end: 10, sfx: "띵.mp3", mosaic: previous.beats[0].mosaic });
+		// 너무 짧아지는 수정은 버리고 원래 컷을 둔다
+		expect(plan.beats[2]).toBe(previous.beats[2]);
+		expect(plan.youtube).toEqual({ title: "새 제목", description: "설명", tags: ["a"] });
+		expect(plan.look).toBe("food");
+		expect(plan.review).toEqual(["1번 컷 자막을 줄임"]);
+	});
+
+	test("고칠 게 없으면 changed가 false다", () => {
+		const { plan, changed } = revise({ output: { changes: [], review: ["고칠 곳 없음"] } });
+		expect(changed).toBe(false);
+		expect(plan.beats).toEqual(previous.beats);
+	});
+
+	test("지운 클립의 컷은 빠지고, 남는 컷이 없으면 던진다", () => {
+		expect(revise({ output: { changes: [] }, clips: { c01: 10 } }).plan.beats).toHaveLength(2);
+		expect(() => revise({ output: { changes: [1, 2, 3].map((number) => ({ beat: number, remove: true })) } })).toThrow();
 	});
 });
