@@ -34,5 +34,10 @@
 		],
 		"minSeconds": 0.2,
 		"maxSeconds": 1
+	},
+	"retakes": {
+		"minChars": 6,
+		"minSimilarity": 0.85,
+		"maxGapSeconds": 5
 	}
 }

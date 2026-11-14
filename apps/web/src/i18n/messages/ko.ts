@@ -236,6 +236,8 @@ export const ko: Messages = {
 		reasonEvent: "동작",
 		reasonFillerStart: "필러 시작",
 		reasonFillerEnd: "필러 끝",
+		reasonRetakeStart: "리테이크 시작",
+		reasonRetakeEnd: "리테이크 끝",
 		playFrom: "이 지점 1초 앞부터 재생",
 		splitAt: ({ count }) => `${count}곳에서 쪼개기`,
 		splitDone: ({ count }) => `${count}곳에서 쪼갰어요. ⌘Z로 되돌릴 수 있어요`,

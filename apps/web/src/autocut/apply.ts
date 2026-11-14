@@ -58,8 +58,8 @@ export function timelineToSource({
 	);
 }
 
-/** 자막 단어 하나. 시간은 클립 소스 기준(초). 단어 수와 단어 시각 수가 안 맞는 자막이면 글자는 빈 문자열이다 */
-export type SubtitleWord = TimeRange & { text: string };
+/** 자막 단어 하나. 시간은 클립 소스 기준(초). 단어 수와 단어 시각 수가 안 맞는 자막이면 글자는 빈 문자열이다. `cue`는 단어가 속한 자막 요소 id */
+export type SubtitleWord = TimeRange & { text: string; cue: string };
 
 /**
  * 클립 위에 놓인 자막의 단어 시각을 클립의 소스 시간(초)으로 모은다.
@@ -93,6 +93,7 @@ export function collectSubtitleWords({
 					start: toSource(Math.max(start, clipStart)),
 					end: toSource(Math.min(end, clipEnd)),
 					text: textOf(index),
+					cue: text.id,
 				});
 			});
 		}

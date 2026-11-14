@@ -24,7 +24,7 @@ export function frameDifference({
 }
 
 /** 문자열 유니언으로 둔다(enum 금지 규칙). 지점 바로 뒤에 무엇이 시작되는지다 */
-export type EditPointReason = "speechStart" | "speechEnd" | "motionStart" | "motionStop" | "event" | "fillerStart" | "fillerEnd";
+export type EditPointReason = "speechStart" | "speechEnd" | "motionStart" | "motionStop" | "event" | "fillerStart" | "fillerEnd" | "retakeStart" | "retakeEnd";
 
 /** 클립을 나눌 지점 하나. 시간은 소스 기준(초) */
 export interface EditPoint {
@@ -36,6 +36,8 @@ export interface EditPoint {
 
 // 같은 자리에 겹친 지점은 말 경계를 먼저 남긴다
 const PRIORITY: Record<EditPointReason, number> = {
+	retakeStart: 4,
+	retakeEnd: 4,
 	fillerStart: 4,
 	fillerEnd: 4,
 	speechStart: 3,
@@ -79,6 +81,57 @@ export function findFillers({
 }
 
 /**
+ * 같은 문장을 다시 말한 실패 테이크를 찾는다. 앞 테이크 시작부터 다시 말한 문장 시작까지를 준다.
+ * - 자막 요소(큐) 하나를 문장 하나로 보고, 필러만 있는 큐는 건너뛰어 직전 실제 문장과 비교한다
+ * - 문장부호와 공백을 뺀 글자로 비교한다. 앞 테이크가 중간에 끊긴 경우도 잡도록 뒤 문장은 앞 문장 길이만큼만 본다
+ * - 어절 비교는 조사·어미 때문에 빗나가서 글자 편집 거리를 쓴다
+ */
+export function findRetakes({
+	words,
+	settings,
+}: {
+	words: readonly (TimeRange & { text: string; cue: string })[];
+	settings: AutocutSettings;
+}): TimeRange[] {
+	const { retakes, fillers } = settings;
+	const strip = (text: string) => text.replace(/[\p{P}\s]/gu, "").toLowerCase();
+	const cues = new Map<string, { start: number; text: string; fillerOnly: boolean; end: number }>();
+	for (const word of words) {
+		const cue = cues.get(word.cue) ?? { start: word.start, end: word.end, text: "", fillerOnly: true };
+		const text = strip(word.text);
+		cue.start = Math.min(cue.start, word.start);
+		cue.end = Math.max(cue.end, word.end);
+		cue.text += text;
+		cue.fillerOnly &&= text === "" || fillers.words.includes(text);
+		cues.set(word.cue, cue);
+	}
+	const sentences = [...cues.values()].filter((cue) => !cue.fillerOnly).sort((a, b) => a.start - b.start);
+	const found: TimeRange[] = [];
+	sentences.slice(1).forEach((next, index) => {
+		const previous = sentences[index];
+		if (previous.text.length < retakes.minChars || next.start - previous.end > retakes.maxGapSeconds) return;
+		const distance = editDistance(previous.text, next.text.slice(0, previous.text.length));
+		if (1 - distance / previous.text.length >= retakes.minSimilarity) found.push({ start: previous.start, end: next.start });
+	});
+	return found;
+}
+
+/** 두 문자열의 레벤슈타인 거리(글자 단위) */
+function editDistance(a: string, b: string): number {
+	const x = [...a];
+	const y = [...b];
+	let row = Array.from({ length: y.length + 1 }, (_, j) => j);
+	for (let i = 1; i <= x.length; i++) {
+		const next = [i];
+		for (let j = 1; j <= y.length; j++) {
+			next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+		}
+		row = next;
+	}
+	return row[y.length];
+}
+
+/**
  * 말과 화면 움직임으로 클립을 나눌 지점을 찾는다. 자르거나 빠르게 넘길지는 정하지 않고 쪼갤 자리만 준다.
  * - 말 한 마디(`pauseSeconds`보다 짧은 쉼은 한 마디)마다 시작 조금 앞과 끝 조금 뒤. `minUtteranceSeconds`보다 짧은 말(VAD 블립)은 말로 안 치고,
  *   `minPieceSeconds`보다 짧은 말은 시작 앞 한 지점만 낸다
@@ -93,6 +146,7 @@ export function proposeEditPoints({
 	motionSeconds,
 	speech,
 	fillers = [],
+	retakes = [],
 	frameSeconds,
 	settings,
 }: {
@@ -100,6 +154,7 @@ export function proposeEditPoints({
 	motionSeconds: number;
 	speech: readonly TimeRange[];
 	fillers?: readonly TimeRange[];
+	retakes?: readonly TimeRange[];
 	frameSeconds?: number;
 	settings: AutocutSettings;
 }): EditPoint[] {
@@ -145,26 +200,36 @@ export function proposeEditPoints({
 		}
 		points.push(toPoint(candidate));
 	}
-	return withFillers({ points, fillers: fillers.map(({ start, end }) => ({ start: snap(start), end: snap(end) })), totalSeconds, near: rules.minPieceSeconds / 2 });
+	const snapRange = ({ start, end }: TimeRange) => ({ start: snap(start), end: snap(end) });
+	return withRanges({
+		points,
+		ranges: [
+			...fillers.map((range) => ({ ...snapRange(range), startReason: "fillerStart" as const, endReason: "fillerEnd" as const, enabled: true })),
+			// 리테이크는 오탐 비용이 커서 사람이 체크할 때만 쪼갠다
+			...retakes.map((range) => ({ ...snapRange(range), startReason: "retakeStart" as const, endReason: "retakeEnd" as const, enabled: false })),
+		],
+		totalSeconds,
+		near: rules.minPieceSeconds / 2,
+	});
 }
 
-/** 필러 앞뒤에 지점을 넣는다. 필러는 1초보다 짧아도 따로 떼어야 하므로 위의 합치기 규칙을 거치지 않고, 필러 안이나 `near`초 안의 다른 지점은 뺀다 */
-function withFillers({
+/** 필러·리테이크 앞뒤에 지점을 넣는다. 1초보다 짧아도 따로 떼어야 하므로 위의 합치기 규칙을 거치지 않고, 구간 안이나 `near`초 안의 말·움직임 지점은 뺀다 */
+function withRanges({
 	points,
-	fillers,
+	ranges,
 	totalSeconds,
 	near,
 }: {
 	points: EditPoint[];
-	fillers: readonly TimeRange[];
+	ranges: readonly (TimeRange & { startReason: EditPointReason; endReason: EditPointReason; enabled: boolean })[];
 	totalSeconds: number;
 	near: number;
 }): EditPoint[] {
-	if (fillers.length === 0) return points;
-	const kept = points.filter((point) => !fillers.some((filler) => point.time > filler.start - near && point.time < filler.end + near));
-	const added = fillers.flatMap((filler) => [
-		toPoint({ time: filler.start, reason: "fillerStart" }),
-		toPoint({ time: filler.end, reason: "fillerEnd" }),
+	if (ranges.length === 0) return points;
+	const kept = points.filter((point) => !ranges.some((range) => point.time > range.start - near && point.time < range.end + near));
+	const added = ranges.flatMap((range) => [
+		{ ...toPoint({ time: range.start, reason: range.startReason }), enabled: range.enabled },
+		{ ...toPoint({ time: range.end, reason: range.endReason }), enabled: range.enabled },
 	]);
 	return [...kept, ...added]
 		.filter((point) => point.time > 0 && point.time < totalSeconds)
