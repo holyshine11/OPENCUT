@@ -864,6 +864,9 @@ export const en = {
 		copyChapters: "Copy YouTube chapters",
 		chaptersCopied: "Chapters copied. Retitle them and paste into the description.",
 		chaptersInvalid: "Not enough captions for chapters (YouTube needs 3+, each 10s or longer).",
+		copyShorts: "Copy Shorts candidates",
+		shortsCopied: "Shorts candidates (20-55s) copied.",
+		shortsNone: "No 20-55s span found that could stand alone as a Short.",
 		empty: "Generate or import captions in the Captions tab to edit them here.",
 		group: "Subtitle group",
 		groupOption: ({ index, count }: { index: number; count: number }) =>
