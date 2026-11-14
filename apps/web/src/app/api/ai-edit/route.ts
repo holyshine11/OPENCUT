@@ -1,7 +1,7 @@
 // AI 자동 편집은 이 컴퓨터에 설치된 Claude Code(claude 명령)를 불러서 한다. API 키가 아니라
 // 사용자가 claude에 로그인해 둔 구독으로 돌기 때문에 로그인 확인·다시 로그인도 여기서 맡는다.
-// GET: 로그인 상태, POST ?action=login: 터미널에서 다시 로그인, POST: 스틸 시트와 프롬프트를 받아 진행 상황을 한 줄씩(NDJSON) 흘려보낸다
-import { execFile, spawn } from "node:child_process";
+// GET: 로그인 상태, POST ?action=login: 로그인 주소 받기, POST ?action=code: 브라우저에서 받은 코드로 로그인 마치기, POST: 스틸 시트와 프롬프트를 받아 진행 상황을 한 줄씩(NDJSON) 흘려보낸다
+import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -54,21 +54,73 @@ export async function GET(request: NextRequest) {
 	});
 }
 
-function login(): Promise<Response> {
-	// 로그인은 브라우저 창과 터미널 입력이 필요해서 터미널을 띄워 사용자가 직접 마치게 한다
-	return new Promise((resolve) =>
-		execFile(
-			"osascript",
-			["-e", 'tell application "Terminal" to do script "claude auth login"', "-e", 'tell application "Terminal" to activate'],
-			{ env: ENV },
-			(error) =>
-				resolve(
-					error
-						? Response.json({ error: "터미널을 열지 못했습니다. 터미널에서 claude auth login을 실행하세요." }, { status: 500 })
-						: new Response(null, { status: 204 }),
-				),
-		),
-	);
+const LOGIN_FAILED = "로그인 주소를 받지 못했습니다. 터미널에서 claude auth login을 실행하세요.";
+const LOGIN_TIMEOUT_MS = 10 * 60_000;
+const CODE_TIMEOUT_MS = 30_000;
+// 로그인 중인 claude. 브라우저에서 받은 코드를 stdin으로 넘겨야 끝난다
+let pendingLogin: ChildProcessWithoutNullStreams | null = null;
+
+/** claude auth login을 띄우고 로그인 주소를 돌려준다. 주소는 편집기가 새 탭으로 연다 */
+function startLogin(): Promise<Response> {
+	pendingLogin?.kill();
+	// BROWSER=echo: claude가 서버 쪽 기본 브라우저를 따로 열지 않게 한다
+	const child = spawn(CLAUDE_BIN, ["auth", "login", "--claudeai"], { env: { ...ENV, BROWSER: "echo" } });
+	pendingLogin = child;
+	setTimeout(() => child.kill(), LOGIN_TIMEOUT_MS).unref();
+	return new Promise((resolve) => {
+		let output = "";
+		const fail = () => {
+			child.kill();
+			resolve(Response.json({ error: LOGIN_FAILED }, { status: 500 }));
+		};
+		const timer = setTimeout(fail, 15_000);
+		child.stdout.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+			// 주소는 터미널 링크 제어 문자에 싸여 온다. 주소 뒤 문자가 올 때까지 기다려 잘린 주소를 피한다
+			const url = /(https:\/\/[!-~]+)[^!-~]/.exec(output)?.[1];
+			if (!url) return;
+			clearTimeout(timer);
+			resolve(Response.json({ url }));
+		});
+		child.on("error", () => {
+			clearTimeout(timer);
+			resolve(Response.json({ error: NOT_INSTALLED }, { status: 503 }));
+		});
+		child.on("close", () => {
+			clearTimeout(timer);
+			fail();
+		});
+	});
+}
+
+/** 브라우저 로그인 끝에 나온 코드를 기다리는 claude에 넘긴다 */
+async function finishLogin(request: NextRequest): Promise<Response> {
+	const code = record(await request.json().catch(() => null)).code;
+	const child = pendingLogin;
+	if (!child || child.exitCode !== null || child.killed) {
+		return Response.json({ error: "연결을 다시 눌러 처음부터 진행하세요." }, { status: 409 });
+	}
+	if (typeof code !== "string" || !/^\S{1,2000}$/.test(code.trim())) {
+		return Response.json({ error: "코드를 붙여 넣으세요." }, { status: 400 });
+	}
+	const ok = await new Promise<boolean>((resolve) => {
+		const timer = setTimeout(() => resolve(false), CODE_TIMEOUT_MS);
+		const refused = (chunk: Buffer) => {
+			if (chunk.toString().includes("Invalid code")) resolve(false);
+		};
+		child.stdout.on("data", refused);
+		child.stderr.on("data", refused);
+		child.on("close", (exit) => {
+			clearTimeout(timer);
+			resolve(exit === 0);
+		});
+		child.stdin.write(`${code.trim()}\n`);
+	});
+	child.kill();
+	pendingLogin = null;
+	return ok
+		? new Response(null, { status: 204 })
+		: Response.json({ error: "연결하지 못했습니다. 연결을 다시 눌러 새 코드를 받으세요." }, { status: 400 });
 }
 
 interface RunBody {
@@ -108,7 +160,9 @@ function describe(block: Record<string, unknown>): string | null {
 export async function POST(request: NextRequest) {
 	const denied = forbidden(request);
 	if (denied) return denied;
-	if (request.nextUrl.searchParams.get("action") === "login") return login();
+	const action = request.nextUrl.searchParams.get("action");
+	if (action === "login") return startLogin();
+	if (action === "code") return finishLogin(request);
 
 	const body = parseBody(await request.json().catch(() => null));
 	if (!body) return Response.json({ error: "잘못된 요청입니다." }, { status: 400 });
