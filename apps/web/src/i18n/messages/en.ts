@@ -222,6 +222,8 @@ export const en = {
 			ascending: boolean;
 		}) =>
 			`Sort by ${field.toLowerCase()} (${ascending ? "ascending" : "descending"})`,
+		addAll: "Add all to the timeline by file name",
+		addAllEmpty: "No videos or images to add",
 		import: "Import",
 	},
 	sounds: {
