@@ -28,18 +28,21 @@ export function getClipFrameThumbnail({
 	mediaId,
 	file,
 	time,
+	height = CLIP_FRAME_HEIGHT,
 }: {
 	mediaId: string;
 	file: File;
 	time: number;
+	/** 프레임 높이(px). 타임라인 썸네일보다 크게 볼 때만 준다 */
+	height?: number;
 }): Promise<string | null> {
 	// 시각을 반올림해 묶으면 장면이 바뀌는 자리에서 한두 프레임 옮겨 다시 자른 클립이 이전 장면을 받는다
-	const key = `${mediaId}:${time}`;
+	const key = `${mediaId}:${time}${height === CLIP_FRAME_HEIGHT ? "" : `@${height}`}`;
 	let frame = frames.get(key);
 	if (frame) {
 		frames.delete(key);
 	} else {
-		frame = decodeFrame({ mediaId, file, time }).catch(() => null);
+		frame = decodeFrame({ mediaId, file, time, height }).catch(() => null);
 	}
 	frames.set(key, frame);
 
@@ -103,10 +106,12 @@ async function decodeFrame({
 	mediaId,
 	file,
 	time,
+	height,
 }: {
 	mediaId: string;
 	file: File;
 	time: number;
+	height: number;
 }): Promise<string | null> {
 	const source = await getSource({ mediaId, file });
 	if (!source) return null;
@@ -115,10 +120,10 @@ async function decodeFrame({
 		const sample = await source.sink.getSample(time);
 		if (!sample) return null;
 		try {
-			const scale = CLIP_FRAME_HEIGHT / source.track.displayHeight;
+			const scale = height / source.track.displayHeight;
 			return renderThumbnailDataUrl({
 				width: Math.round(source.track.displayWidth * scale),
-				height: CLIP_FRAME_HEIGHT,
+				height,
 				draw: ({ context, width, height }) => {
 					sample.draw(context, 0, 0, width, height);
 				},
