@@ -63,7 +63,7 @@ export interface PromptClip {
 	id: string;
 	name: string;
 	duration: number;
-	/** 스틸 시트에 왼쪽부터 놓인 프레임의 시각(초) */
+	/** 스틸 시트에 왼쪽 위부터 오른쪽으로 놓인 프레임의 시각(초) */
 	times: number[];
 	sheetFile: string;
 }
@@ -94,7 +94,7 @@ ${CHANNEL_STYLE}
 ${recent.length > 0 ? `- 최근 영상에서 이미 쓴 훅이다. 같은 문장 틀을 피한다:\n${recent.map((hook) => `  - ${hook}`).join("\n")}` : ""}
 
 # 촬영 원본
-클립마다 스틸 시트(가로로 이어 붙인 프레임, 왼쪽부터 아래 시각) 파일이 현재 폴더에 있다. Read로 전부 열어 본다.
+클립마다 스틸 시트(프레임을 격자로 붙인 그림. 왼쪽 위부터 오른쪽으로 아래 시각 순서이고, 프레임마다 밑에 시각이 적혀 있다) 파일이 현재 폴더에 있다. Read로 전부 열어 본다.
 ${clips.map((clip) => `- ${clip.id} "${clip.name}" ${clip.duration.toFixed(1)}초 → ${clip.sheetFile} (프레임 시각: ${clip.times.map((time) => time.toFixed(1)).join(", ")}초)`).join("\n")}
 
 # 작업 순서
