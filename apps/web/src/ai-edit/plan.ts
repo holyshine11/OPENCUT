@@ -1,13 +1,40 @@
 import { ADJUST_PRESETS } from "@/effects/definitions/adjust-presets";
 import { isTransitionType, type TransitionType } from "@/transitions";
 
+/** 쇼츠(세로)·롱폼(가로). 화면 크기는 여기서만 정한다 */
+export const FORMATS = {
+	short: { width: 1080, height: 1920 },
+	long: { width: 1920, height: 1080 },
+} as const;
+export type EditFormat = keyof typeof FORMATS;
+export const FORMAT_IDS: EditFormat[] = ["short", "long"];
+
+/** 강조 컷에 줄 화면 효과. zoom은 화면을 당겨 잡고, 나머지는 effects 레지스트리의 효과 id다 */
+export const IMPACTS = ["zoom", "zoom-blur", "rgb-split", "glitch", "glow", "old-film"] as const;
+export type Impact = (typeof IMPACTS)[number];
+
+/** 프레임 왼쪽 위가 (0,0), 오른쪽 아래가 (1,1)인 영역 */
+export interface Box {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
 export interface EditBeat {
 	clip: string;
 	start: number;
 	end: number;
 	narration: string;
+	/** 내레이션을 읽을 목소리. 기본은 아내 */
+	voice: "wife" | "husband";
 	caption: string;
 	transition: TransitionType | null;
+	/** 컷 시작에 깔 효과음 파일 이름 */
+	sfx: string | null;
+	impact: Impact | null;
+	/** 모자이크로 가릴 영역(얼굴·속옷) */
+	mosaic: Box[];
 }
 
 export interface EditPlan {
@@ -21,6 +48,25 @@ export interface EditPlan {
 }
 
 const MIN_BEAT_SECONDS = 0.5;
+// Claude는 3초에 한 장꼴인 스틸로 위치를 어림한다. 컷 안에서 움직여도 덮이게 넉넉히 키운다
+const MOSAIC_PADDING = 1.6;
+const MOSAIC_MIN_SIDE = 0.12;
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+/** 모델이 준 영역을 넉넉히 키워 프레임 안으로 자른다. 숫자가 아니면 버린다 */
+function parseBox(item: unknown): Box[] {
+	const { x, y, w, h } = record(item);
+	const [left, top, width, height] = [x, y, w, h].map(Number);
+	if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return [];
+	const paddedW = Math.max(width * MOSAIC_PADDING, MOSAIC_MIN_SIDE);
+	const paddedH = Math.max(height * MOSAIC_PADDING, MOSAIC_MIN_SIDE);
+	const x0 = clamp01(left + width / 2 - paddedW / 2);
+	const y0 = clamp01(top + height / 2 - paddedH / 2);
+	const x1 = clamp01(left + width / 2 + paddedW / 2);
+	const y1 = clamp01(top + height / 2 + paddedH / 2);
+	return x1 > x0 && y1 > y0 ? [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }] : [];
+}
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const texts = (value: unknown) => (Array.isArray(value) ? value.map(text).filter(Boolean) : []);
@@ -36,10 +82,13 @@ export const record = (value: unknown): Record<string, unknown> =>
 export function parsePlan({
 	output,
 	durations,
+	sounds = [],
 }: {
 	output: string;
 	/** 클립 번호 → 길이(초) */
 	durations: Record<string, number>;
+	/** 쓸 수 있는 효과음 파일 이름 */
+	sounds?: string[];
 }): EditPlan {
 	const start = output.indexOf("{");
 	const end = output.lastIndexOf("}");
@@ -55,14 +104,20 @@ export function parsePlan({
 		const to = Math.min(duration, Number(beat.end));
 		if (!(to - from >= MIN_BEAT_SECONDS)) return [];
 		const transition = text(beat.transition);
+		const sfx = text(beat.sfx);
+		const impact = IMPACTS.find((item) => item === text(beat.impact));
 		return [
 			{
 				clip,
 				start: from,
 				end: to,
 				narration: text(beat.narration),
+				voice: beat.voice === "husband" ? "husband" : "wife",
 				caption: text(beat.caption),
 				transition: isTransitionType(transition) ? transition : null,
+				sfx: sounds.includes(sfx) ? sfx : null,
+				impact: impact ?? null,
+				mosaic: (Array.isArray(beat.mosaic) ? beat.mosaic : []).flatMap(parseBox),
 			},
 		];
 	});
@@ -103,7 +158,7 @@ export function placeBeats({
 	durations,
 	pause,
 }: {
-	beats: EditBeat[];
+	beats: Pick<EditBeat, "clip" | "start" | "end">[];
 	/** 컷마다 내레이션 음성 길이(초). 없으면 null */
 	voices: (number | null)[];
 	durations: Record<string, number>;
@@ -124,4 +179,51 @@ export function placeBeats({
 		cursor += length;
 		return placed;
 	});
+}
+
+/** 화면을 꽉 채우려면 원본을 몇 배로 키워야 하는지. 렌더러는 기본으로 화면 안에 다 들어오게(contain) 맞춘다 */
+export function coverScale({
+	source,
+	canvas,
+}: {
+	source: { width: number; height: number };
+	canvas: { width: number; height: number };
+}): number {
+	const x = canvas.width / source.width;
+	const y = canvas.height / source.height;
+	return Math.max(x, y) / Math.min(x, y);
+}
+
+// 믹싱 기준(dB). 내레이션(TTS 서버가 -16 LUFS로 맞춰 준다)을 0으로 두고 나머지를 그 아래에 깐다
+export const MIX = {
+	/** 내레이션이 깔리는 컷의 현장음. 조리 소리는 남기되 목소리를 가리지 않는다 */
+	sourceUnderVoice: -14,
+	/** 내레이션이 없는 컷의 현장음. 목소리 컷과 번갈아 나와도 튀지 않게 한다 */
+	source: -6,
+	/** 효과음이 실제로 들려야 하는 크기(소리 나는 구간의 RMS, dBFS) */
+	sfxTarget: -22,
+	/** 내레이션과 겹치는 효과음은 이만큼 더 낮춘다 */
+	sfxUnderVoice: -4,
+	sfxMin: -24,
+	sfxMax: 6,
+	/** 컷 경계에서 딱 소리가 나지 않게 하는 짧은 페이드(초) */
+	fade: 0.03,
+} as const;
+
+/** 효과음 파일마다 녹음 크기가 다르다. 잰 크기(loudness, dBFS)를 기준 크기로 맞추는 볼륨(dB) */
+export function sfxVolume({ loudness, underVoice }: { loudness: number | null; underVoice: boolean }): number {
+	const gain = loudness === null ? MIX.sfxMin / 2 : MIX.sfxTarget - loudness;
+	return Math.min(MIX.sfxMax, Math.max(MIX.sfxMin, gain + (underVoice ? MIX.sfxUnderVoice : 0)));
+}
+
+/** 소리가 나는 구간만 잰 RMS(dBFS). 앞뒤 무음이 긴 효과음도 실제 크기대로 나온다. 전부 무음이면 null */
+export function activeLoudness(samples: Float32Array): number | null {
+	let sum = 0;
+	let count = 0;
+	for (const sample of samples) {
+		if (Math.abs(sample) < 0.01) continue;
+		sum += sample * sample;
+		count++;
+	}
+	return count === 0 ? null : 10 * Math.log10(sum / count);
 }

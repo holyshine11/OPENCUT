@@ -4,16 +4,19 @@ import { compareFileNames } from "@/media/filename-order";
 import type { MediaAsset } from "@/media/types";
 import { fetchTtsServer } from "@/tts/client";
 import { initialForm, useTtsStore } from "@/tts/components/tts-view";
-import { toVoiceSettings } from "@/tts/components/voice-fields";
-import { applyPlan } from "./apply";
+import { styleFor, toVoiceSettings } from "@/tts/components/voice-fields";
+import { useSoundLibraryStore } from "@/sounds/sound-library";
+import { applyPlan, type EditVoice } from "./apply";
 import { buildClipSheet } from "./frames";
-import { parsePlan } from "./plan";
+import { FORMATS, parsePlan } from "./plan";
 import { AI_EDIT_STEPS, useAiEditStore } from "./store";
 import { buildPrompt, type PromptClip } from "./style";
 
 const MAX_LOG_LINES = 200;
 // Claude가 단계를 넘어갈 때 내는 "[2/5] …" 줄
 const STEP_LINE = /^\[(\d)\/5\]/m;
+// 이보다 긴 소리는 효과음이 아니라 배경음이라 컷에 붙이지 않는다
+const MAX_SFX_SECONDS = 6;
 
 function log({ text, step }: { text: string; step?: number }) {
 	useAiEditStore.setState(({ job }) =>
@@ -29,13 +32,27 @@ function log({ text, step }: { text: string; step?: number }) {
 	);
 }
 
-/** 내레이션을 읽을 목소리. 대본 읽기 탭에서 고른 값이 있으면 그대로, 없으면 첫 목소리. 합성 서버가 꺼져 있으면 null */
-async function loadVoice() {
+/**
+ * 내레이션을 읽을 목소리. 아내는 대본 읽기 탭에서 고른 값(없으면 첫 목소리), 남편은 설정 → AI에서 고른 목소리(없으면 아내와 다른 첫 목소리).
+ * 목소리가 하나뿐이면 둘 다 그 목소리다. 합성 서버가 꺼져 있으면 null
+ */
+async function loadVoices(): Promise<Record<"wife" | "husband", EditVoice> | null> {
 	try {
 		const { voices, config } = await fetchTtsServer();
 		if (voices.length === 0) return null;
 		const server = { status: "ready" as const, voices, config };
-		return toVoiceSettings({ form: useTtsStore.getState().form ?? initialForm({ server }), server });
+		const form = useTtsStore.getState().form ?? initialForm({ server });
+		const wife = toVoiceSettings({ form, server });
+		const chosen = useAiEditStore.getState().husbandVoice;
+		const other =
+			voices.find((voice) => voice.name === chosen) ?? voices.find((voice) => voice.name !== form.voice);
+		const husband = other
+			? toVoiceSettings({
+					form: { ...form, voice: other.name, style: styleFor({ voice: other, style: form.style }) },
+					server,
+				})
+			: wife;
+		return { wife, husband };
 	} catch {
 		return null;
 	}
@@ -95,8 +112,13 @@ export async function runAiEdit(): Promise<void> {
 		}
 		if (sheets.length === 0) throw new Error(m.aiEdit.noVideos);
 
-		const voice = await loadVoice();
-		if (!voice) log({ text: m.aiEdit.noVoice });
+		const voices = await loadVoices();
+		if (!voices) log({ text: m.aiEdit.noVoice });
+		const format = store.getState().format;
+		await useSoundLibraryStore.getState().load();
+		const sounds = useSoundLibraryStore
+			.getState()
+			.sounds.filter((sound) => sound.duration > 0 && sound.duration <= MAX_SFX_SECONDS);
 
 		log({ text: m.aiEdit.asking });
 		const response = await fetch("/api/ai-edit", {
@@ -108,12 +130,11 @@ export async function runAiEdit(): Promise<void> {
 				sheets,
 				prompt: buildPrompt({
 					clips: promptClips,
-					// 적용할 때 화면 크기가 촬영본에 맞춰지니(applyPlan) 쇼츠·롱폼도 촬영본 방향으로 정한다
-					canvas:
-						videos[0].width && videos[0].height
-							? { width: videos[0].width, height: videos[0].height }
-							: editor.project.getActive().settings.canvasSize,
-					hasVoice: voice !== null,
+					canvas: FORMATS[format],
+					hasVoice: voices !== null,
+					hasHusbandVoice:
+						voices !== null && voices.husband.voiceSettings.voice !== voices.wife.voiceSettings.voice,
+					sounds: sounds.map((sound) => sound.fileName),
 					recent: store.getState().recentHooks,
 				}),
 			}),
@@ -147,13 +168,16 @@ export async function runAiEdit(): Promise<void> {
 		const plan = parsePlan({
 			output,
 			durations: Object.fromEntries(promptClips.map((clip) => [clip.id, clip.duration])),
+			sounds: sounds.map((sound) => sound.fileName),
 		});
 		log({ text: m.aiEdit.applying({ count: plan.beats.length }), step: AI_EDIT_STEPS });
 		await applyPlan({
 			editor,
 			plan,
 			clips,
-			voice,
+			voices,
+			format,
+			sounds,
 			signal: abort.signal,
 			onProgress: ({ current, total }) => log({ text: m.aiEdit.voicing({ current, total }) }),
 		});

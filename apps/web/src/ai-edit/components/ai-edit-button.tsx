@@ -5,9 +5,11 @@ import { createPortal } from "react-dom";
 import { Check, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useMessages } from "@/i18n";
 import { cn } from "@/utils/ui";
+import { FORMAT_IDS } from "../plan";
 import { runAiEdit } from "../run";
 import { AiModelSelect } from "./ai-model-select";
 import { AI_EDIT_STEPS, useAiEditStore } from "../store";
@@ -15,8 +17,22 @@ import { AI_EDIT_STEPS, useAiEditStore } from "../store";
 export function AiEditButton() {
 	const m = useMessages();
 	const status = useAiEditStore((state) => state.job.status);
+	const format = useAiEditStore((state) => state.format);
+	const setFormat = useAiEditStore((state) => state.setFormat);
 	return (
 		<>
+			<Select value={format} onValueChange={setFormat} disabled={status === "running"}>
+				<SelectTrigger aria-label={m.aiEdit.format} className="w-auto">
+					<SelectValue>{m.aiEdit.formats[format]}</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					{FORMAT_IDS.map((id) => (
+						<SelectItem key={id} value={id}>
+							{m.aiEdit.formats[id]}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
 			<AiModelSelect className="w-auto" disabled={status === "running"} />
 			<Button variant="outline" disabled={status === "running"} onClick={() => void runAiEdit()}>
 				<Sparkles />
