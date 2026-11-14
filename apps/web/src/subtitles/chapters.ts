@@ -87,7 +87,7 @@ export function formatChapters({
 	return { text, valid };
 }
 
-function timestamp({ seconds }: { seconds: number }): string {
+export function timestamp({ seconds }: { seconds: number }): string {
 	const total = Math.floor(seconds);
 	const h = Math.floor(total / 3600);
 	const m = Math.floor((total % 3600) / 60);

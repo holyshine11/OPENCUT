@@ -6,6 +6,7 @@ import {
 	Download01Icon,
 	GitMergeIcon,
 	ListViewIcon,
+	SmartPhone01Icon,
 	ScissorIcon,
 	Search01Icon,
 } from "@hugeicons/core-free-icons";
@@ -26,6 +27,7 @@ import { listSubtitleGroups, type SubtitleEntry } from "@/subtitles/groups";
 import { formatCueTime, parseCueTime } from "@/subtitles/edit";
 import { formatSrt } from "@/subtitles/srt";
 import { formatChapters, proposeChapters } from "@/subtitles/chapters";
+import { formatShorts, proposeShorts } from "@/subtitles/shorts";
 import { toast } from "sonner";
 import { mediaTimeToSeconds } from "@/wasm";
 import { downloadBuffer } from "@/export";
@@ -124,6 +126,24 @@ export function SubtitleListView() {
 							}}
 						>
 							<HugeiconsIcon icon={ListViewIcon} size={16} />
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label={m.subtitleList.copyShorts}
+							title={m.subtitleList.copyShorts}
+							onClick={async () => {
+								const shorts = proposeShorts({ cues: group.entries.map((entry) => cueOf({ entry })) });
+								if (shorts.length === 0) {
+									toast.error(m.subtitleList.shortsNone);
+									return;
+								}
+								await navigator.clipboard.writeText(formatShorts({ shorts }));
+								toast.success(m.subtitleList.shortsCopied);
+							}}
+						>
+							<HugeiconsIcon icon={SmartPhone01Icon} size={16} />
 						</Button>
 						<Button
 							type="button"
