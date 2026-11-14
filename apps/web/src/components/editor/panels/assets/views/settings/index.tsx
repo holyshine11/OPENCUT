@@ -33,11 +33,12 @@ import { OcSquarePlusIcon } from "@/components/icons";
 import type { TCanvasSize } from "@/project/types";
 import { useMessages } from "@/i18n";
 import { LanguageSelect } from "@/i18n/language-select";
+import { AiSettings } from "@/ai-edit/components/ai-settings";
 
-type SettingsView = "project-info" | "background" | "youtube";
+type SettingsView = "project-info" | "background" | "youtube" | "ai";
 
 function isSettingsView(value: string): value is SettingsView {
-	return value === "project-info" || value === "background" || value === "youtube";
+	return value === "project-info" || value === "background" || value === "youtube" || value === "ai";
 }
 
 const PRESET_LABELS: Record<string, string> = {
@@ -232,6 +233,7 @@ export function SettingsView() {
 							{m.settings.background}
 						</TabsTrigger>
 						<TabsTrigger value="youtube">{m.settings.youtube}</TabsTrigger>
+						<TabsTrigger value="ai">{m.aiEdit.tab}</TabsTrigger>
 					</TabsList>
 				</Tabs>
 			}
@@ -331,6 +333,7 @@ export function SettingsView() {
 				</div>
 			)}
 			{view === "background" && <BackgroundContent />}
+			{view === "ai" && <AiSettings />}
 			{view === "youtube" && (
 				<div className="flex flex-col gap-3 px-3 py-3 text-sm">
 					<p className="text-muted-foreground">{m.settings.ytIntro}</p>

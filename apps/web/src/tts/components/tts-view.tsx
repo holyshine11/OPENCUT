@@ -57,14 +57,14 @@ interface TtsStore {
 }
 
 // 탭을 옮겨도 대본과 진행 중인 작업이 남도록 패널 밖에 둔다
-const useTtsStore = create<TtsStore>()(() => ({
+export const useTtsStore = create<TtsStore>()(() => ({
 	form: null,
 	job: { status: "idle", error: null },
 	abort: null,
 }));
 
 /** 처음 연결되면 첫 목소리·첫 프리셋으로 채운다 */
-function initialForm({ server }: { server: ReadyTtsServer }): TtsForm {
+export function initialForm({ server }: { server: ReadyTtsServer }): TtsForm {
 	const firstVoice = server.voices[0];
 	const form: TtsForm = {
 		voice: firstVoice?.name ?? "",
