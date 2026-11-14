@@ -75,6 +75,11 @@ describe("UI strings", () => {
 const LABEL_ALLOWED = new Set([
 	// 브랜드
 	"site/brand.ts: OpenCut",
+	// Claude 모델 이름. 번역하지 않는다
+	"ai-edit/models.ts: Sonnet 5.5",
+	"ai-edit/models.ts: Opus 5.5",
+	"ai-edit/models.ts: Fable 5.2",
+	"ai-edit/models.ts: Haiku 5.5",
 	// 코드 안에서만 쓰는 언어 이름. 화면에는 m.language를 쓴다
 	"transcription/languages.ts: Korean",
 	"transcription/languages.ts: English",

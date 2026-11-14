@@ -12,6 +12,7 @@ import { RenameProjectDialog } from "@/project/components/rename-project-dialog"
 import { DeleteProjectDialog } from "@/project/components/delete-project-dialog";
 import { useRouter } from "next/navigation";
 import { ExportButton } from "./export-button";
+import { AiEditButton } from "@/ai-edit/components/ai-edit-button";
 import { ThemeToggle } from "../theme-toggle";
 import { DEFAULT_LOGO_URL } from "@/site/brand";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ export function EditorHeader() {
 				<EditableProjectName />
 			</div>
 			<nav className="flex items-center gap-2">
+				<AiEditButton />
 				<ExportButton />
 				<ThemeToggle />
 			</nav>
