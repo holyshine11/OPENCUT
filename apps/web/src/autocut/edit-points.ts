@@ -110,14 +110,14 @@ export function findRetakes({
 	sentences.slice(1).forEach((next, index) => {
 		const previous = sentences[index];
 		if (previous.text.length < retakes.minChars || next.start - previous.end > retakes.maxGapSeconds) return;
-		const distance = editDistance(previous.text, next.text.slice(0, previous.text.length));
+		const distance = editDistance({ a: previous.text, b: next.text.slice(0, previous.text.length) });
 		if (1 - distance / previous.text.length >= retakes.minSimilarity) found.push({ start: previous.start, end: next.start });
 	});
 	return found;
 }
 
 /** 두 문자열의 레벤슈타인 거리(글자 단위) */
-function editDistance(a: string, b: string): number {
+function editDistance({ a, b }: { a: string; b: string }): number {
 	const x = [...a];
 	const y = [...b];
 	let row = Array.from({ length: y.length + 1 }, (_, j) => j);

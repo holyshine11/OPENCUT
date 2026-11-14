@@ -71,11 +71,15 @@ const isHook = ({ sentence, options }: { sentence: Sentence; options: ShortsSett
 
 /** 자막 큐는 문장 중간에서 끊기므로 문장 단위로 다시 묶는다. 큐 안의 시간은 글자 수에 비례해 나눈다 */
 function toSentences({ cues }: { cues: readonly ChapterCue[] }): Sentence[] {
+	// 자동 자막처럼 문장부호가 아예 없으면 전체가 한 문장이 되므로 자막 하나를 문장 하나로 본다
+	if (!cues.some((cue) => SENTENCE_END.test(cue.text)))
+		return cues.map((cue) => ({ start: cue.start, end: cue.end, text: cue.text.replace(/\s+/g, " ").trim() }));
 	const sentences: Sentence[] = [];
 	let current: Sentence | null = null;
 	for (const cue of cues) {
 		const text = cue.text.replace(/\s+/g, " ").trim();
-		const pieces = text.match(/[^.?!…]+[.?!…]+["']?|[^.?!…]+$/gu) ?? [];
+		// "1.5큰술"처럼 숫자 사이 점은 문장 끝이 아니다
+		const pieces = text.match(/(?:[^.?!…]|\.(?=\d))+(?:[?!…]|\.(?!\d))+["']?|(?:[^.?!…]|\.(?=\d))+$/gu) ?? [];
 		let offset = 0;
 		for (const piece of pieces) {
 			const at = (chars: number) => cue.start + ((cue.end - cue.start) * chars) / Math.max(1, text.length);
@@ -95,3 +99,5 @@ function toSentences({ cues }: { cues: readonly ChapterCue[] }): Sentence[] {
 	if (current) sentences.push(current);
 	return sentences;
 }
+
+const SENTENCE_END = /[?!…]|\.(?!\d)/u;

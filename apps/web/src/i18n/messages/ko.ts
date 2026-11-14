@@ -623,6 +623,7 @@ export const ko: Messages = {
 		Diamond: "다이아몬드",
 		Heart: "하트",
 		Rectangle: "사각형",
+		Path: "경로",
 		Star: "별",
 		"Cinematic Bars": "시네마틱 바",
 		Polygon: "다각형",

@@ -26,7 +26,7 @@ export function proposeChapters({
 	if (cues.length < options.minCues) return [];
 	const duration = cues.at(-1)?.end ?? 0;
 	const words = cues.map((cue) => keywords({ text: cue.text, options }));
-	const union = (from: number, to: number) => new Set(words.slice(Math.max(0, from), to).flat());
+	const union = ({ from, to }: { from: number; to: number }) => new Set(words.slice(Math.max(0, from), to).flat());
 
 	// 문장부호가 있는 자막이면 앞 자막이 문장으로 끝난 곳에서만 나눈다. 문장 중간에서 끊긴 제목을 막는다
 	const endsSentence = (i: number) => /[.?!…"]$/u.test(cues[i].text.trim());
@@ -37,8 +37,8 @@ export function proposeChapters({
 		// 앞뒤 창 크기를 같게 해야 영상 끝처럼 한쪽이 짧은 곳의 낱말 변화가 부풀지 않는다
 		const size = Math.min(options.window, i, cues.length - i);
 		if (size < options.window / 2) return [];
-		const before = union(i - size, i);
-		const after = union(i, i + size);
+		const before = union({ from: i - size, to: i });
+		const after = union({ from: i, to: i + size });
 		const all = new Set([...before, ...after]);
 		const shared = [...before].filter((word) => after.has(word)).length;
 		const shift = all.size ? 1 - shared / all.size : 0;
