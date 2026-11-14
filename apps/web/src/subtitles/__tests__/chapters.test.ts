@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { type ChapterCue, formatChapters, proposeChapters } from "../chapters";
 
 /** 주제마다 다른 낱말로 문장을 만든다. 한 자막은 5초, 문장으로 끝난다 */
-function talk(topics: string[][], perTopic = 8): ChapterCue[] {
+function talk({ topics, perTopic = 8 }: { topics: string[][]; perTopic?: number }): ChapterCue[] {
 	return topics.flatMap((words, t) =>
 		Array.from({ length: perTopic }, (_, k) => {
 			const start = (t * perTopic + k) * 5;
@@ -21,13 +21,13 @@ describe("proposeChapters", () => {
 	];
 
 	test("낱말이 바뀌는 곳을 챕터 경계로 잡고 첫 챕터는 0:00", () => {
-		const chapters = proposeChapters({ cues: talk(topics) });
+		const chapters = proposeChapters({ cues: talk({ topics }) });
 		expect(chapters.map((c) => c.start)).toEqual([0, 40, 80, 120]);
 		expect(chapters[1].title).toBe("이제 콩물을 믹서에 넣어요");
 	});
 
 	test("자막이 너무 적으면 만들지 않는다", () => {
-		expect(proposeChapters({ cues: talk([["등뼈", "핏물"]], 5) })).toEqual([]);
+		expect(proposeChapters({ cues: talk({ topics: [["등뼈", "핏물"]], perTopic: 5 }) })).toEqual([]);
 	});
 });
 

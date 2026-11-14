@@ -200,7 +200,7 @@ describe("필러 지점", () => {
 
 describe("findRetakes", () => {
 	/** 자막 하나(큐)를 공백 단어로 나눠 구간 안에 고르게 놓는다 */
-	const cue = (id: string, start: number, end: number, text: string) => {
+	const cue = ({ id, start, end, text }: { id: string; start: number; end: number; text: string }) => {
 		const texts = text.split(" ");
 		const step = (end - start) / texts.length;
 		return texts.map((t, i) => ({ start: start + i * step, end: start + (i + 1) * step, text: t, cue: id }));
@@ -208,27 +208,27 @@ describe("findRetakes", () => {
 
 	test("필러 큐를 사이에 두고 같은 문장을 다시 말하면 앞 테이크부터 다시 말한 곳까지", () => {
 		const words = [
-			...cue("a", 1, 3, "오늘은 마술을 보여드릴게요"),
-			...cue("b", 3.5, 3.8, "어"),
-			...cue("c", 4, 6, "오늘은 마술을 보여드릴게요."),
+			...cue({ id: "a", start: 1, end: 3, text: "오늘은 마술을 보여드릴게요" }),
+			...cue({ id: "b", start: 3.5, end: 3.8, text: "어" }),
+			...cue({ id: "c", start: 4, end: 6, text: "오늘은 마술을 보여드릴게요." }),
 		];
 		expect(findRetakes({ words, settings })).toEqual([{ start: 1, end: 4 }]);
 	});
 
 	test("앞 테이크가 중간에 끊겨도 뒤 문장 앞부분과 같으면 찾는다", () => {
-		const words = [...cue("a", 1, 2, "오늘은 마술을"), ...cue("b", 2.5, 5, "오늘은 마술을 보여드릴게요")];
+		const words = [...cue({ id: "a", start: 1, end: 2, text: "오늘은 마술을" }), ...cue({ id: "b", start: 2.5, end: 5, text: "오늘은 마술을 보여드릴게요" })];
 		expect(findRetakes({ words, settings })).toEqual([{ start: 1, end: 2.5 }]);
 	});
 
 	test("받아쓰기 글자 하나 차이는 봐준다", () => {
-		const words = [...cue("a", 1, 3, "오늘은 매술을 보여드릴게요"), ...cue("b", 3.5, 5, "오늘은 마술을 보여드릴게요")];
+		const words = [...cue({ id: "a", start: 1, end: 3, text: "오늘은 매술을 보여드릴게요" }), ...cue({ id: "b", start: 3.5, end: 5, text: "오늘은 마술을 보여드릴게요" })];
 		expect(findRetakes({ words, settings })).toEqual([{ start: 1, end: 3.5 }]);
 	});
 
 	test("앞부분만 같은 다른 문장, 너무 짧은 문장, 멀리 떨어진 문장은 리테이크가 아니다", () => {
-		const prefix = [...cue("a", 1, 3, "그래서 이제 마늘을 넣을게요"), ...cue("b", 3.5, 5, "그래서 이제 간장을 넣을게요")];
-		const short = [...cue("a", 1, 2, "자 그러면"), ...cue("b", 2.5, 4, "자 그러면 시작할게요")];
-		const far = [...cue("a", 1, 3, "오늘은 마술을 보여드릴게요"), ...cue("b", 30, 32, "오늘은 마술을 보여드릴게요")];
+		const prefix = [...cue({ id: "a", start: 1, end: 3, text: "그래서 이제 마늘을 넣을게요" }), ...cue({ id: "b", start: 3.5, end: 5, text: "그래서 이제 간장을 넣을게요" })];
+		const short = [...cue({ id: "a", start: 1, end: 2, text: "자 그러면" }), ...cue({ id: "b", start: 2.5, end: 4, text: "자 그러면 시작할게요" })];
+		const far = [...cue({ id: "a", start: 1, end: 3, text: "오늘은 마술을 보여드릴게요" }), ...cue({ id: "b", start: 30, end: 32, text: "오늘은 마술을 보여드릴게요" })];
 		for (const words of [prefix, short, far]) expect(findRetakes({ words, settings })).toEqual([]);
 	});
 });

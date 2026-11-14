@@ -645,6 +645,7 @@ export const en = {
 		Diamond: "Diamond",
 		Heart: "Heart",
 		Rectangle: "Rectangle",
+		Path: "Path",
 		Star: "Star",
 		"Cinematic Bars": "Cinematic Bars",
 		Polygon: "Polygon",
