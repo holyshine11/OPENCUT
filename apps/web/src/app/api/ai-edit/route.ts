@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
 				void rm(folder, { recursive: true, force: true });
 			};
 
-			// 촬영본을 읽고 검색·스킬만 쓴다. 명령 실행이나 파일 쓰기는 허용하지 않는다
+			// 촬영본을 읽고 검색만 쓴다. 스킬은 한도만 크게 먹고 효과가 적어 막는다. 명령 실행이나 파일 쓰기는 허용하지 않는다
 			const child = spawn(
 				CLAUDE_BIN,
 				[
@@ -205,8 +205,8 @@ export async function POST(request: NextRequest) {
 					"--output-format", "stream-json",
 					"--verbose",
 					"--no-session-persistence",
-					"--allowedTools", "Read", "Skill", "WebSearch",
-					"--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "Agent",
+					"--allowedTools", "Read", "WebSearch",
+					"--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "Agent", "Skill",
 				],
 				{ cwd: folder, env: ENV, stdio: ["pipe", "pipe", "pipe"] },
 			);
@@ -216,6 +216,9 @@ export async function POST(request: NextRequest) {
 			let buffer = "";
 			let stderr = "";
 			let result: string | null = null;
+			// 사용 한도 같은 실패 사유는 결과 이벤트나 마지막 문장으로 온다. 종료 코드 메시지가 그걸 덮지 않게 한다
+			let errored = false;
+			let lastText = "";
 			child.stdout.on("data", (chunk: Buffer) => {
 				buffer += chunk.toString();
 				const lines = buffer.split("\n");
@@ -227,10 +230,13 @@ export async function POST(request: NextRequest) {
 						const { content } = record(message.message);
 						for (const block of Array.isArray(content) ? content : []) {
 							const text = describe(record(block));
-							if (text) send({ type: "log", text });
+							if (!text) continue;
+							send({ type: "log", text });
+							if (record(block).type === "text") lastText = text;
 						}
 					} else if (message.type === "result") {
 						if (message.is_error === true || typeof message.result !== "string") {
+							errored = true;
 							send({ type: "error", message: String(message.result ?? message.subtype ?? "실패") });
 						} else {
 							result = message.result;
@@ -247,8 +253,11 @@ export async function POST(request: NextRequest) {
 			});
 			child.on("close", (code) => {
 				if (result !== null) send({ type: "result", output: result });
-				else if (code !== 0 && !request.signal.aborted) {
-					send({ type: "error", message: stderr.trim().slice(-500) || `claude가 ${code}로 끝났습니다.` });
+				else if (code !== 0 && !errored && !request.signal.aborted) {
+					send({
+						type: "error",
+						message: stderr.trim().slice(-500) || lastText.slice(-500) || `claude가 ${code}로 끝났습니다.`,
+					});
 				}
 				finish();
 			});

@@ -236,7 +236,8 @@ export async function runAiEdit(): Promise<void> {
 			store.setState({ job: { status: "idle" } });
 			return;
 		}
-		console.error("AI edit failed:", error);
+		// 실패는 진행 카드에 보여 준다. console.error는 개발 서버가 전체 화면 오류로 덮어 버린다
+		console.warn("AI edit failed:", error);
 		store.setState(({ job }) => ({
 			job: {
 				status: "failed",
