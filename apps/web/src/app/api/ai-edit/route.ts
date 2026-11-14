@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NextRequest } from "next/server";
-import { AI_EDIT_MODELS } from "@/ai-edit/models";
+import { AI_EDIT_EFFORTS, type AiEditEffort, AI_EDIT_MODELS } from "@/ai-edit/models";
 import { record } from "@/ai-edit/plan";
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN ?? "claude";
@@ -125,12 +125,15 @@ async function finishLogin(request: NextRequest): Promise<Response> {
 
 interface RunBody {
 	model: string;
+	effort: AiEditEffort;
 	prompt: string;
 	sheets: { name: string; dataUrl: string }[];
 }
 
 function parseBody(value: unknown): RunBody | null {
 	const { model, prompt, sheets } = record(value);
+	const effort = AI_EDIT_EFFORTS.find((item) => item === record(value).effort);
+	if (!effort) return null;
 	if (typeof prompt !== "string" || typeof model !== "string") return null;
 	if (!AI_EDIT_MODELS.some((item) => item.id === model)) return null;
 	if (!Array.isArray(sheets) || sheets.length === 0) return null;
@@ -143,7 +146,7 @@ function parseBody(value: unknown): RunBody | null {
 			? [{ name, dataUrl }]
 			: [];
 	});
-	return files.length === sheets.length ? { model, prompt, sheets: files } : null;
+	return files.length === sheets.length ? { model, effort, prompt, sheets: files } : null;
 }
 
 /** 진행 화면에 보여 줄 한 줄. 도구를 쓰는 중이면 무엇을 하는지 적는다 */
@@ -198,6 +201,7 @@ export async function POST(request: NextRequest) {
 				[
 					"-p",
 					"--model", body.model,
+					"--effort", body.effort,
 					"--output-format", "stream-json",
 					"--verbose",
 					"--no-session-persistence",
