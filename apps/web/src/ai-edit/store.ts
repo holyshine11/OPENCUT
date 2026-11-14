@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AI_EDIT_MODELS, DEFAULT_AI_EDIT_MODEL } from "./models";
-import type { EditPlan } from "./plan";
+import { type EditFormat, type EditPlan, FORMAT_IDS } from "./plan";
 
 export const AI_EDIT_STEPS = 5;
 const MAX_RECENT_HOOKS = 10;
@@ -14,10 +14,15 @@ export type AiEditJob =
 
 interface AiEditStore {
 	model: string;
+	format: EditFormat;
+	/** 남편 대사를 읽을 목소리 이름. null이면 아내와 다른 첫 목소리 */
+	husbandVoice: string | null;
 	/** 최근에 쓴 훅. 다음 편집이 같은 틀을 피하게 프롬프트에 넣는다 */
 	recentHooks: string[];
 	job: AiEditJob;
 	setModel: (model: string) => void;
+	setFormat: (format: string) => void;
+	setHusbandVoice: (voice: string) => void;
 	rememberHook: (hook: string) => void;
 }
 
@@ -25,11 +30,18 @@ export const useAiEditStore = create<AiEditStore>()(
 	persist(
 		(set) => ({
 			model: DEFAULT_AI_EDIT_MODEL,
+			format: "short",
+			husbandVoice: null,
 			recentHooks: [],
 			job: { status: "idle" },
 			setModel: (model) => {
 				if (AI_EDIT_MODELS.some((item) => item.id === model)) set({ model });
 			},
+			setFormat: (format) => {
+				const found = FORMAT_IDS.find((id) => id === format);
+				if (found) set({ format: found });
+			},
+			setHusbandVoice: (husbandVoice) => set({ husbandVoice }),
 			rememberHook: (hook) =>
 				set((state) => ({
 					recentHooks: hook ? [hook, ...state.recentHooks].slice(0, MAX_RECENT_HOOKS) : state.recentHooks,
@@ -37,7 +49,7 @@ export const useAiEditStore = create<AiEditStore>()(
 		}),
 		{
 			name: "ai-edit",
-			partialize: ({ model, recentHooks }) => ({ model, recentHooks }),
+			partialize: ({ model, format, husbandVoice, recentHooks }) => ({ model, format, husbandVoice, recentHooks }),
 		},
 	),
 );

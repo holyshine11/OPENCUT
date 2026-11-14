@@ -5,7 +5,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeader, SectionTitle } from "@/components/section";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { loadTtsServer, useTtsServer } from "@/tts/components/voice-fields";
 import { useMessages } from "@/i18n";
+import { useAiEditStore } from "../store";
 import { AiModelSelect } from "./ai-model-select";
 
 type Account =
@@ -29,9 +32,13 @@ export function AiSettings() {
 	const [account, setAccount] = useState<Account>({ status: "loading" });
 	/** 브라우저 로그인 끝에 나온 코드. null이면 연결을 누르기 전이다 */
 	const [code, setCode] = useState<string | null>(null);
+	const ttsServer = useTtsServer((state) => state.server);
+	const husbandVoice = useAiEditStore((state) => state.husbandVoice);
+	const setHusbandVoice = useAiEditStore((state) => state.setHusbandVoice);
 
 	useEffect(() => {
 		void fetchAccount().then(setAccount);
+		if (useTtsServer.getState().server.status !== "ready") void loadTtsServer();
 	}, []);
 
 	const refresh = () => {
@@ -83,6 +90,26 @@ export function AiSettings() {
 			</Section>
 			<div className="flex flex-col gap-3 px-3 py-3 text-sm">
 				<p className="text-muted-foreground text-xs">{m.aiEdit.modelHint}</p>
+				{ttsServer.status === "ready" && ttsServer.voices.length > 1 && (
+					<div className="flex flex-col gap-1">
+						<div className="flex items-center justify-between gap-2">
+							<span>{m.aiEdit.husbandVoice}</span>
+							<Select value={husbandVoice ?? ""} onValueChange={setHusbandVoice}>
+								<SelectTrigger aria-label={m.aiEdit.husbandVoice} className="w-auto">
+									<SelectValue placeholder="-" />
+								</SelectTrigger>
+								<SelectContent>
+									{ttsServer.voices.map((voice) => (
+										<SelectItem key={voice.name} value={voice.name}>
+											{voice.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<p className="text-muted-foreground text-xs">{m.aiEdit.husbandVoiceHint}</p>
+					</div>
+				)}
 				<div aria-live="polite">
 					{account.status === "loading" && <p className="text-muted-foreground">{m.aiEdit.accountChecking}</p>}
 					{account.status === "error" && <p className="text-destructive">{account.error}</p>}

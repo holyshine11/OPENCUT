@@ -2,6 +2,7 @@
 // 채널 색이 바뀌면 이 파일만 고친다. 프롬프트는 서버 라우트가 그대로 Claude에 넘긴다
 import { ADJUST_PRESETS } from "@/effects/definitions/adjust-presets";
 import { TRANSITION_TYPES } from "@/transitions";
+import { IMPACTS } from "./plan";
 
 const CHANNEL_STYLE = `
 # 채널: 요리드립 (Cooking Drip)
@@ -72,12 +73,18 @@ export function buildPrompt({
 	clips,
 	canvas,
 	hasVoice,
+	hasHusbandVoice,
+	sounds,
 	recent,
 }: {
 	clips: PromptClip[];
 	canvas: { width: number; height: number };
 	/** 내레이션 음성을 만들 수 있는지. 없으면 자막만으로 이야기를 끌고 간다 */
 	hasVoice: boolean;
+	/** 남편 대사를 아내와 다른 목소리로 읽을 수 있는지 */
+	hasHusbandVoice: boolean;
+	/** 쓸 수 있는 효과음 파일 이름. 이름이 곧 어떤 소리인지의 설명이다 */
+	sounds: string[];
 	/** 최근에 쓴 훅. 겹치지 않게 한다 */
 	recent: string[];
 }): string {
@@ -102,7 +109,10 @@ ${clips.map((clip) => `- ${clip.id} "${clip.name}" ${clip.duration.toFixed(1)}�
 2. 컨셉·대본: 이 영상만의 한 줄 컨셉을 정하고 컷마다 내레이션을 쓴다. 화면에 보이는 것만 말한다. 계량이 안 보이면 지어내지 말고 동작을 말한다.
 3. 자막: 컷마다 자막을 쓴다. 내레이션의 받아쓰기가 아니라 더 짧고 센 요약이다. 14자 안쪽, 훅만 줄바꿈(\\n) 한 번 허용.
 4. 효과·색감: 음식 색에 맞는 색 보정 하나와, 장면이 크게 바뀌는 자리(시간 경과, 완성)에만 전환을 넣는다. 전환은 전체에서 0~3번.
-5. 검토: 설치돼 있으면 yt-script, yt-package, yt-seo 스킬 규칙으로 훅·제목·설명·태그를 점검한다. WebSearch로 이 요리의 요즘 검색어·화제(방송, 맛집, 제철)를 한두 번 확인해 제목과 태그에 반영한다. 그다음 계획을 처음부터 다시 읽고 ①첫 컷이 1.5초 안에 궁금증을 만드는지 ②내레이션 길이가 컷 길이에 맞는지 ③같은 구간을 두 번 쓰지 않았는지(훅 제외) ④드립이 3컷에 한 번꼴로 들어갔는지 ⑤모든 start/end가 클립 길이 안인지 확인하고 고친다.
+   - 효과음(sfx): 드립·반전·킥·완성 같은 포인트 컷에만 넣는다. ${isShort ? "전체 3~6번" : "30초에 1~2번꼴"}, 연달아 두 컷에 넣지 않는다. 아래 목록의 파일 이름을 글자 그대로 쓴다. 이름이 상황 설명이니 컷의 감정에 맞는 것을 고르고, 맞는 게 없으면 null.
+   - 화면 효과(impact): 가장 센 컷 1~3개에만. "zoom"은 화면을 당겨 잡는 강조(킥·완성 클로즈업), 나머지는 순간 효과라 2초 안쪽 컷에만 쓴다. 음식이 맛없어 보이게 만드는 효과는 쓰지 않는다.
+   - 모자이크(mosaic): 사람 얼굴, 속옷이나 노출, 화면에 비친 개인정보(주소·전화번호·차 번호판·택배 송장)가 보이는 컷은 빠짐없이 가린다. 그 컷 구간의 모든 스틸을 확인해서, 대상이 컷 안에서 움직인 범위를 전부 덮는 영역을 프레임 비율(왼쪽 위가 0,0 오른쪽 아래가 1,1)로 적는다. 애매하면 가리는 쪽을 고른다. 가릴 게 없으면 빈 배열. 가린 컷은 review에 "c03 2.0~4.5초 얼굴 모자이크"처럼 적어 사용자가 확인하게 한다.
+5. 검토: 설치돼 있으면 yt-script, yt-package, yt-seo 스킬 규칙으로 훅·제목·설명·태그를 점검한다. WebSearch로 이 요리의 요즘 검색어·화제(방송, 맛집, 제철)를 한두 번 확인해 제목과 태그에 반영한다. 그다음 계획을 처음부터 다시 읽고 ①첫 컷이 1.5초 안에 궁금증을 만드는지 ②내레이션 길이가 컷 길이에 맞는지 ③같은 구간을 두 번 쓰지 않았는지(훅 제외) ④드립이 3컷에 한 번꼴로 들어갔는지 ⑤모든 start/end가 클립 길이 안인지 ⑥얼굴·속옷·개인정보가 보이는데 mosaic이 빠진 컷이 없는지 확인하고 고친다.
 
 단계를 넘어갈 때마다 "[1/5] 컷 편집: (한 줄 요약)" 형식으로 한 줄씩 말한다. 사용자가 이 줄을 진행 화면에서 본다.
 
@@ -113,12 +123,16 @@ ${clips.map((clip) => `- ${clip.id} "${clip.name}" ${clip.duration.toFixed(1)}�
   "hook": "첫 컷 내레이션 또는 자막 그대로",
   "look": ${ADJUST_PRESETS.map((preset) => `"${preset.id}"`).join(" | ")},
   "beats": [
-    { "clip": "c01", "start": 0.0, "end": 2.5, "narration": "…", "caption": "…", "transition": null | ${TRANSITION_TYPES.map((type) => `"${type}"`).join(" | ")} }
+    { "clip": "c01", "start": 0.0, "end": 2.5, "narration": "…", "voice": "wife" | "husband", "caption": "…", "transition": null | ${TRANSITION_TYPES.map((type) => `"${type}"`).join(" | ")}, "sfx": null | "효과음 파일 이름", "impact": null | ${IMPACTS.map((impact) => `"${impact}"`).join(" | ")}, "mosaic": [{ "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.25 }] }
   ],
   "youtube": { "title": "…", "description": "첫 두 줄에 핵심 검색어, 재료·계량 목록, 해시태그 3개", "tags": ["…"] },
   "review": ["검토하면서 고친 점이나 사용자가 확인할 점"]
 }
 - beats는 완성 영상의 컷 순서다. start/end는 그 클립 안의 초이고 end - start는 ${isShort ? "1.2~4" : "2~8"}초.
 - transition은 그 컷에서 다음 컷으로 넘어갈 때의 전환이다.
+- voice: ${hasHusbandVoice ? '기본은 "wife"(아내 내레이션). 남편이 직접 하는 말(변명, 자랑, 아내 드립에 대한 대꾸)만 "husband"로 하고 남편 말투("~거든?", "~라니까")로 쓴다. 남편 대사는 전체의 2할을 넘기지 않는다.' : '전부 "wife"로 둔다.'}
+
+# 효과음 목록
+${sounds.length > 0 ? sounds.join("\n") : "(없음. sfx는 전부 null)"}
 `;
 }
