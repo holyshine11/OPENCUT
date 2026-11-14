@@ -297,8 +297,17 @@ export const en = {
 		loggedOut: "Claude is signed out. Reconnect to continue.",
 		login: "Reconnect",
 		refresh: "Refresh",
-		loginOpened: "Finish signing in in Terminal, then press Refresh",
-		loginHint: "Reconnect opens Terminal and signs you in to your Claude account in the browser.",
+		loginOpened: "Sign in in the new tab, then paste the code shown there",
+		loginHint: "Reconnect signs you in to your Claude account in a new tab. Each edit uses tokens from your subscription.",
+		loginCode: "Sign-in code",
+		loginSubmit: "Finish connecting",
+		loginDone: "Connected to your Claude subscription",
+		modelHints: {
+			"claude-sonnet-5-5": "Balanced quality and speed (default)",
+			"claude-opus-5-5": "More careful · uses more",
+			"claude-fable-5-2": "Smartest · uses the most",
+			"claude-haiku-5-5": "Fastest · uses the least",
+		},
 	},
 	properties: {
 		tabs: {

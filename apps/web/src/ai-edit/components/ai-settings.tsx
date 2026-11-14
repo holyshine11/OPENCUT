@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeader, SectionTitle } from "@/components/section";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { useMessages } from "@/i18n";
-import { AI_EDIT_MODELS } from "../models";
-import { useAiEditStore } from "../store";
+import { AiModelSelect } from "./ai-model-select";
 
 type Account =
 	| { status: "loading" }
@@ -27,9 +26,9 @@ async function fetchAccount(): Promise<Account> {
 /** 설정의 AI 탭: AI 자동 편집에 쓸 Claude 모델과 구독 로그인 상태 */
 export function AiSettings() {
 	const m = useMessages();
-	const model = useAiEditStore((state) => state.model);
-	const setModel = useAiEditStore((state) => state.setModel);
 	const [account, setAccount] = useState<Account>({ status: "loading" });
+	/** 브라우저 로그인 끝에 나온 코드. null이면 연결을 누르기 전이다 */
+	const [code, setCode] = useState<string | null>(null);
 
 	useEffect(() => {
 		void fetchAccount().then(setAccount);
@@ -40,10 +39,38 @@ export function AiSettings() {
 		void fetchAccount().then(setAccount);
 	};
 
+	const errorOf = async (response: Response) =>
+		(await response.json().catch(() => null))?.error ?? m.aiEdit.failed;
+
 	const login = async () => {
+		// 눌렀을 때 바로 열어야 팝업 차단에 안 걸린다. 주소는 받은 뒤에 넣는다
+		const tab = window.open("", "_blank");
 		const response = await fetch("/api/ai-edit?action=login", { method: "POST" });
-		if (response.ok) toast(m.aiEdit.loginOpened);
-		else toast.error((await response.json().catch(() => null))?.error ?? m.aiEdit.failed);
+		if (!response.ok) {
+			tab?.close();
+			toast.error(await errorOf(response));
+			return;
+		}
+		const { url } = await response.json();
+		if (tab) tab.location.href = url;
+		else window.open(url, "_blank");
+		setCode("");
+		toast(m.aiEdit.loginOpened);
+	};
+
+	const submitCode = async () => {
+		const response = await fetch("/api/ai-edit?action=code", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ code }),
+		});
+		if (!response.ok) {
+			toast.error(await errorOf(response));
+			return;
+		}
+		setCode(null);
+		toast.success(m.aiEdit.loginDone);
+		refresh();
 	};
 
 	return (
@@ -51,18 +78,7 @@ export function AiSettings() {
 			<Section showTopBorder={false}>
 				<SectionHeader className="justify-between">
 					<SectionTitle className="flex-1">{m.aiEdit.model}</SectionTitle>
-					<Select value={model} onValueChange={setModel}>
-						<SelectTrigger aria-label={m.aiEdit.model} className="h-auto border-none bg-transparent p-1">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{AI_EDIT_MODELS.map((item) => (
-								<SelectItem key={item.id} value={item.id}>
-									{item.name}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+					<AiModelSelect className="h-auto w-auto border-none bg-transparent p-1" />
 				</SectionHeader>
 			</Section>
 			<div className="flex flex-col gap-3 px-3 py-3 text-sm">
@@ -94,6 +110,25 @@ export function AiSettings() {
 						{m.aiEdit.refresh}
 					</Button>
 				</div>
+				{code !== null && (
+					<form
+						className="flex gap-2"
+						onSubmit={(event) => {
+							event.preventDefault();
+							void submitCode();
+						}}
+					>
+						<Input
+							aria-label={m.aiEdit.loginCode}
+							placeholder={m.aiEdit.loginCode}
+							value={code}
+							onChange={(event) => setCode(event.target.value)}
+						/>
+						<Button type="submit" disabled={!code.trim()}>
+							{m.aiEdit.loginSubmit}
+						</Button>
+					</form>
+				)}
 				<p className="text-muted-foreground text-xs">{m.aiEdit.loginHint}</p>
 			</div>
 		</div>

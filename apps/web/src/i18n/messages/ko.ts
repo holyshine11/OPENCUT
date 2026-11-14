@@ -279,8 +279,17 @@ export const ko: Messages = {
 		loggedOut: "Claude 로그인이 풀렸어요. 다시 연결해 주세요.",
 		login: "다시 연결",
 		refresh: "새로 고침",
-		loginOpened: "터미널에서 로그인을 마친 뒤 새로 고침을 눌러 주세요",
-		loginHint: "다시 연결을 누르면 터미널이 열리고 브라우저에서 Claude 계정으로 로그인해요.",
+		loginOpened: "새 탭에서 로그인한 뒤 나온 코드를 붙여 넣어 주세요",
+		loginHint: "다시 연결을 누르면 새 탭에서 Claude 계정으로 로그인해요. 편집할 때마다 구독 사용량에서 토큰이 차감돼요.",
+		loginCode: "로그인 코드",
+		loginSubmit: "연결 완료",
+		loginDone: "Claude 구독에 연결했어요",
+		modelHints: {
+			"claude-sonnet-5-5": "품질과 속도의 균형 (기본)",
+			"claude-opus-5-5": "더 꼼꼼함 · 사용량 많음",
+			"claude-fable-5-2": "가장 똑똑함 · 사용량 가장 많음",
+			"claude-haiku-5-5": "가장 빠름 · 사용량 적음",
+		},
 	},
 	properties: {
 		tabs: {

@@ -9,6 +9,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useMessages } from "@/i18n";
 import { cn } from "@/utils/ui";
 import { runAiEdit } from "../run";
+import { AiModelSelect } from "./ai-model-select";
 import { AI_EDIT_STEPS, useAiEditStore } from "../store";
 
 export function AiEditButton() {
@@ -16,6 +17,7 @@ export function AiEditButton() {
 	const status = useAiEditStore((state) => state.job.status);
 	return (
 		<>
+			<AiModelSelect className="w-auto" disabled={status === "running"} />
 			<Button variant="outline" disabled={status === "running"} onClick={() => void runAiEdit()}>
 				<Sparkles />
 				{m.aiEdit.button}
