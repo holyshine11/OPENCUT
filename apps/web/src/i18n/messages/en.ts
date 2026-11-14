@@ -1044,6 +1044,24 @@ export const en = {
 		selectBackground: ({ value }: { value: string }) =>
 			`Select background ${value}`,
 		pickCustomColor: "Pick a custom background color",
+		youtube: "YouTube",
+		ytIntro:
+			"These YouTube helpers run in Claude Code, not in OpenCut. Type the command in the Claude Code terminal, followed by what it needs.",
+		ytCommands: [
+			{ command: "/yt-viral", what: "Find videos that broke out in your niche and name the formula", example: "/yt-viral cooking recipes" },
+			{ command: "/yt-audit", what: "Audit a channel and list what to fix first", example: "/yt-audit https://youtube.com/@channel" },
+			{ command: "/yt-retention", what: "Find where viewers leave from a retention export", example: "/yt-retention + paste the Studio CSV" },
+			{ command: "/yt-package", what: "Write the title and thumbnail text as a pair", example: "/yt-package + video topic" },
+			{ command: "/yt-seo", what: "Write the description and tags", example: "/yt-seo + video topic" },
+			{ command: "/yt-script", what: "Write a script with hook options", example: "/yt-script + raw idea" },
+			{ command: "/yt-plan", what: "Plan a week or month of uploads", example: "/yt-plan this month" },
+			{ command: "/yt-comment", what: "Draft replies to comments in your voice", example: "/yt-comment + paste comments" },
+			{ command: "/yt-chapters", what: "Write chapters from a transcript", example: "/yt-chapters + paste the copied chapters" },
+			{ command: "/yt-shorts", what: "Pick and write Shorts from a long video", example: "/yt-shorts + paste the copied candidates" },
+			{ command: "/yt-edit", what: "Turn a raw transcript into an edit list", example: "/yt-edit + paste the transcript" },
+		],
+		ytNote:
+			"Chapters and Shorts candidates copied from the Subtitles tab can be pasted straight into /yt-chapters and /yt-shorts.",
 	},
 	exportDialog: {
 		export: "Export",
