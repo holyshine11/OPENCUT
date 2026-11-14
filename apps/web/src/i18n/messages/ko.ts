@@ -1002,6 +1002,24 @@ export const ko: Messages = {
 		selectBlur: ({ name }) => `흐림 ${name} 선택`,
 		selectBackground: ({ value }) => `배경 ${value} 선택`,
 		pickCustomColor: "배경 색상 직접 고르기",
+		youtube: "유튜브",
+		ytIntro:
+			"유튜브 도우미는 오픈컷이 아니라 Claude Code에서 실행합니다. Claude Code 터미널에 명령어를 입력하고 뒤에 필요한 내용을 붙이세요.",
+		ytCommands: [
+			{ command: "/yt-viral", what: "내 분야에서 터진 영상을 찾아 공식을 정리", example: "/yt-viral 요리 레시피" },
+			{ command: "/yt-audit", what: "채널을 점검하고 먼저 고칠 것을 정리", example: "/yt-audit https://youtube.com/@채널" },
+			{ command: "/yt-retention", what: "시청 지속 데이터에서 이탈 지점 찾기", example: "/yt-retention + 스튜디오 CSV 붙여넣기" },
+			{ command: "/yt-package", what: "제목과 썸네일 문구를 한 쌍으로 작성", example: "/yt-package + 영상 주제" },
+			{ command: "/yt-seo", what: "설명과 태그 작성", example: "/yt-seo + 영상 주제" },
+			{ command: "/yt-script", what: "훅 후보와 함께 대본 작성", example: "/yt-script + 아이디어" },
+			{ command: "/yt-plan", what: "한 주·한 달 업로드 계획", example: "/yt-plan 이번 달" },
+			{ command: "/yt-comment", what: "내 말투로 댓글 답글 초안", example: "/yt-comment + 댓글 붙여넣기" },
+			{ command: "/yt-chapters", what: "자막으로 챕터 작성", example: "/yt-chapters + 복사한 챕터 붙여넣기" },
+			{ command: "/yt-shorts", what: "롱폼에서 쇼츠 구간을 골라 작성", example: "/yt-shorts + 복사한 후보 붙여넣기" },
+			{ command: "/yt-edit", what: "원본 자막으로 편집 목록 만들기", example: "/yt-edit + 자막 붙여넣기" },
+		],
+		ytNote:
+			"자막 탭에서 복사한 챕터·쇼츠 후보는 /yt-chapters, /yt-shorts에 바로 붙여 넣을 수 있습니다.",
 	},
 	exportDialog: {
 		export: "내보내기",

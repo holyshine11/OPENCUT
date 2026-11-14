@@ -34,10 +34,10 @@ import type { TCanvasSize } from "@/project/types";
 import { useMessages } from "@/i18n";
 import { LanguageSelect } from "@/i18n/language-select";
 
-type SettingsView = "project-info" | "background";
+type SettingsView = "project-info" | "background" | "youtube";
 
 function isSettingsView(value: string): value is SettingsView {
-	return value === "project-info" || value === "background";
+	return value === "project-info" || value === "background" || value === "youtube";
 }
 
 const PRESET_LABELS: Record<string, string> = {
@@ -231,6 +231,7 @@ export function SettingsView() {
 						<TabsTrigger value="background">
 							{m.settings.background}
 						</TabsTrigger>
+						<TabsTrigger value="youtube">{m.settings.youtube}</TabsTrigger>
 					</TabsList>
 				</Tabs>
 			}
@@ -330,6 +331,23 @@ export function SettingsView() {
 				</div>
 			)}
 			{view === "background" && <BackgroundContent />}
+			{view === "youtube" && (
+				<div className="flex flex-col gap-3 px-3 py-3 text-sm">
+					<p className="text-muted-foreground">{m.settings.ytIntro}</p>
+					<ul className="flex flex-col gap-2.5">
+						{m.settings.ytCommands.map((item) => (
+							<li key={item.command} className="flex flex-col gap-0.5">
+								<code className="font-mono font-medium">{item.command}</code>
+								<span>{item.what}</span>
+								<code className="text-muted-foreground font-mono text-xs select-all">
+									{item.example}
+								</code>
+							</li>
+						))}
+					</ul>
+					<p className="text-muted-foreground text-xs">{m.settings.ytNote}</p>
+				</div>
+			)}
 		</PanelView>
 	);
 }
