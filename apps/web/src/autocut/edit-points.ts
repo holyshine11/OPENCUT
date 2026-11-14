@@ -82,7 +82,7 @@ export function findFillers({
 
 /**
  * 같은 문장을 다시 말한 실패 테이크를 찾는다. 앞 테이크 시작부터 다시 말한 문장 시작까지를 준다.
- * - 자막 요소(큐) 하나를 문장 하나로 보고, 필러만 있는 큐는 건너뛰어 직전 실제 문장과 비교한다
+ * - 자막 요소(큐)마다 `maxGapSeconds` 안에 뒤따르는 큐들과 비교한다. 필러만 있는 큐는 건너뛴다
  * - 문장부호와 공백을 뺀 글자로 비교한다. 앞 테이크가 중간에 끊긴 경우도 잡도록 뒤 문장은 앞 문장 길이만큼만 본다
  * - 어절 비교는 조사·어미 때문에 빗나가서 글자 편집 거리를 쓴다
  */
@@ -107,12 +107,21 @@ export function findRetakes({
 	}
 	const sentences = [...cues.values()].filter((cue) => !cue.fillerOnly).sort((a, b) => a.start - b.start);
 	const found: TimeRange[] = [];
-	sentences.slice(1).forEach((next, index) => {
-		const previous = sentences[index];
-		if (previous.text.length < retakes.minChars || next.start - previous.end > retakes.maxGapSeconds) return;
-		const distance = editDistance({ a: previous.text, b: next.text.slice(0, previous.text.length) });
-		if (1 - distance / previous.text.length >= retakes.minSimilarity) found.push({ start: previous.start, end: next.start });
-	});
+	for (let i = 0; i < sentences.length; i++) {
+		const previous = sentences[i];
+		if (previous.text.length < retakes.minChars) continue;
+		// 한 문장이 자막 여러 줄로 나뉘면 두 테이크 사이에 다른 줄이 끼므로 바로 다음 줄만 보지 않는다
+		const j = sentences.findIndex(
+			(next, k) =>
+				k > i &&
+				next.start - previous.end <= retakes.maxGapSeconds &&
+				1 - editDistance({ a: previous.text, b: next.text.slice(0, previous.text.length) }) / previous.text.length >=
+					retakes.minSimilarity,
+		);
+		if (j === -1) continue;
+		found.push({ start: previous.start, end: sentences[j].start });
+		i = j - 1; // 다시 말한 테이크 안의 줄끼리 또 묶이지 않게 거기서부터 이어 본다
+	}
 	return found;
 }
 

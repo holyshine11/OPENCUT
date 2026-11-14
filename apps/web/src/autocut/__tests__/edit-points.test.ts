@@ -225,6 +225,15 @@ describe("findRetakes", () => {
 		expect(findRetakes({ words, settings })).toEqual([{ start: 1, end: 3.5 }]);
 	});
 
+	test("한 문장이 자막 두 줄로 나뉘고 사이에 다른 줄이 껴도 찾는다. 다시 말한 테이크는 건드리지 않는다", () => {
+		const take = (offset: number) => [
+			...cue({ id: `x${offset}`, start: offset, end: offset + 0.5, text: "끝!" }),
+			...cue({ id: `a${offset}`, start: offset + 0.5, end: offset + 3.2, text: "말로만 닭 한 마리가 아니라 진짜 닭 한" }),
+			...cue({ id: `b${offset}`, start: offset + 3.2, end: offset + 5, text: "마리가 통째로 들어갑니다." }),
+		];
+		expect(findRetakes({ words: [...take(0), ...take(5)], settings })).toEqual([{ start: 0.5, end: 5.5 }]);
+	});
+
 	test("앞부분만 같은 다른 문장, 너무 짧은 문장, 멀리 떨어진 문장은 리테이크가 아니다", () => {
 		const prefix = [...cue({ id: "a", start: 1, end: 3, text: "그래서 이제 마늘을 넣을게요" }), ...cue({ id: "b", start: 3.5, end: 5, text: "그래서 이제 간장을 넣을게요" })];
 		const short = [...cue({ id: "a", start: 1, end: 2, text: "자 그러면" }), ...cue({ id: "b", start: 2.5, end: 4, text: "자 그러면 시작할게요" })];
