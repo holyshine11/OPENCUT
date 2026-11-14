@@ -5,6 +5,7 @@ import {
 	ArrowUp01Icon,
 	Download01Icon,
 	GitMergeIcon,
+	ListViewIcon,
 	ScissorIcon,
 	Search01Icon,
 } from "@hugeicons/core-free-icons";
@@ -24,6 +25,9 @@ import { cn } from "@/utils/ui";
 import { listSubtitleGroups, type SubtitleEntry } from "@/subtitles/groups";
 import { formatCueTime, parseCueTime } from "@/subtitles/edit";
 import { formatSrt } from "@/subtitles/srt";
+import { formatChapters, proposeChapters } from "@/subtitles/chapters";
+import { toast } from "sonner";
+import { mediaTimeToSeconds } from "@/wasm";
 import { downloadBuffer } from "@/export";
 import {
 	cueOf,
@@ -99,6 +103,28 @@ export function SubtitleListView() {
 			actions={
 				group && (
 					<div className="flex items-center gap-1">
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							aria-label={m.subtitleList.copyChapters}
+							title={m.subtitleList.copyChapters}
+							onClick={async () => {
+								const cues = group.entries.map((entry) => cueOf({ entry }));
+								const { text, valid } = formatChapters({
+									chapters: proposeChapters({ cues }),
+									duration: mediaTimeToSeconds({ time: editor.timeline.getTotalDuration() }),
+								});
+								if (!valid) {
+									toast.error(m.subtitleList.chaptersInvalid);
+									return;
+								}
+								await navigator.clipboard.writeText(text);
+								toast.success(m.subtitleList.chaptersCopied);
+							}}
+						>
+							<HugeiconsIcon icon={ListViewIcon} size={16} />
+						</Button>
 						<Button
 							type="button"
 							variant="ghost"
