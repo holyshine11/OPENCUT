@@ -72,7 +72,7 @@ function parseBox(item: unknown): Box[] {
 	return x1 > x0 && y1 > y0 ? [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }] : [];
 }
 
-const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+export const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const texts = (value: unknown) => (Array.isArray(value) ? value.map(text).filter(Boolean) : []);
 /** 객체가 아니면 빈 객체. 밖에서 온 JSON을 읽을 때 쓴다 */
 export const record = (value: unknown): Record<string, unknown> =>
@@ -80,7 +80,7 @@ export const record = (value: unknown): Record<string, unknown> =>
 	value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
 /** 모델 메시지에 섞인 설명을 떼고 JSON 객체만 읽는다. 없으면 던진다 */
-function parseObject(output: string): Record<string, unknown> {
+export function parseObject(output: string): Record<string, unknown> {
 	const start = output.indexOf("{");
 	const end = output.lastIndexOf("}");
 	if (start < 0 || end <= start) throw new Error("no plan");
