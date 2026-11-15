@@ -123,15 +123,24 @@ async function finishLogin(request: NextRequest): Promise<Response> {
 		: Response.json({ error: "연결하지 못했습니다. 연결을 다시 눌러 새 코드를 받으세요." }, { status: 400 });
 }
 
+// 기획안 대화를 본 편집이 이어 받을 때까지 스틸 시트 폴더를 둔다(대화 id → 폴더). 사용자가 확정하지 않고 떠나면 이 시간 뒤 지운다
+const kept = new Map<string, string>();
+const KEEP_MS = 2 * 60 * 60_000;
+const SESSION_ID = /^[0-9a-f-]{36}$/;
+
 interface RunBody {
 	model: string;
 	effort: AiEditEffort;
 	prompt: string;
 	sheets: { name: string; dataUrl: string }[];
+	/** 기획안처럼 다음 요청이 이어 받을 대화면 true */
+	keep: boolean;
+	/** 이어 받을 기획안 대화 id */
+	resume: string | null;
 }
 
 function parseBody(value: unknown): RunBody | null {
-	const { model, prompt, sheets } = record(value);
+	const { model, prompt, sheets, keep, resume } = record(value);
 	const effort = AI_EDIT_EFFORTS.find((item) => item === record(value).effort);
 	if (!effort) return null;
 	if (typeof prompt !== "string" || typeof model !== "string") return null;
@@ -147,7 +156,16 @@ function parseBody(value: unknown): RunBody | null {
 			? [{ name, dataUrl }]
 			: [];
 	});
-	return files.length === sheets.length ? { model, effort, prompt, sheets: files } : null;
+	return files.length === sheets.length
+		? {
+				model,
+				effort,
+				prompt,
+				sheets: files,
+				keep: keep === true,
+				resume: typeof resume === "string" && SESSION_ID.test(resume) ? resume : null,
+			}
+		: null;
 }
 
 /** 진행 화면에 보여 줄 한 줄. 도구를 쓰는 중이면 무엇을 하는지 적는다 */
@@ -177,10 +195,16 @@ export async function POST(request: NextRequest) {
 		return Response.json({ error: "Claude 로그인이 풀렸습니다. 설정 → AI에서 다시 연결하세요." }, { status: 401 });
 	}
 
-	const folder = await mkdtemp(join(tmpdir(), "opencut-ai-edit-"));
-	for (const sheet of body.sheets) {
-		await writeFile(join(folder, sheet.name), Buffer.from(sheet.dataUrl.slice(sheet.dataUrl.indexOf(",") + 1), "base64"));
+	// 서버가 다시 켜져 기획안 대화를 잃었으면 처음 대화로 돌고, 프롬프트에 든 확정 기획으로 충분하다
+	const resumed = body.resume ? (kept.get(body.resume) ?? null) : null;
+	if (body.resume) kept.delete(body.resume);
+	const folder = resumed ?? (await mkdtemp(join(tmpdir(), "opencut-ai-edit-")));
+	if (!resumed) {
+		for (const sheet of body.sheets) {
+			await writeFile(join(folder, sheet.name), Buffer.from(sheet.dataUrl.slice(sheet.dataUrl.indexOf(",") + 1), "base64"));
+		}
 	}
+	let keepFolder = false;
 
 	const encoder = new TextEncoder();
 	const stream = new ReadableStream<Uint8Array>({
@@ -193,7 +217,7 @@ export async function POST(request: NextRequest) {
 				if (closed) return;
 				closed = true;
 				controller.close();
-				void rm(folder, { recursive: true, force: true });
+				if (!keepFolder) void rm(folder, { recursive: true, force: true });
 			};
 
 			// 촬영본을 읽고 검색만 쓴다. 스킬은 한도만 크게 먹고 효과가 적어 막는다. 명령 실행이나 파일 쓰기는 허용하지 않는다
@@ -205,7 +229,8 @@ export async function POST(request: NextRequest) {
 					"--effort", body.effort,
 					"--output-format", "stream-json",
 					"--verbose",
-					"--no-session-persistence",
+					// 기획안 대화만 남겨서 본 편집이 촬영본을 다시 보지 않고 이어 받는다
+					...(resumed && body.resume ? ["--resume", body.resume] : body.keep ? [] : ["--no-session-persistence"]),
 					"--allowedTools", "Read", "WebSearch",
 					"--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "Agent", "Skill",
 				],
@@ -241,6 +266,17 @@ export async function POST(request: NextRequest) {
 							send({ type: "error", message: String(message.result ?? message.subtype ?? "실패") });
 						} else {
 							result = message.result;
+							const sessionId = message.session_id;
+							if (body.keep && typeof sessionId === "string" && SESSION_ID.test(sessionId)) {
+								keepFolder = true;
+								kept.set(sessionId, folder);
+								setTimeout(() => {
+									if (kept.get(sessionId) !== folder) return;
+									kept.delete(sessionId);
+									void rm(folder, { recursive: true, force: true });
+								}, KEEP_MS).unref();
+								send({ type: "session", id: sessionId });
+							}
 						}
 					}
 				}

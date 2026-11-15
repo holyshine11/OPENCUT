@@ -7,11 +7,12 @@ import { initialForm, useTtsStore } from "@/tts/components/tts-view";
 import { styleFor, toVoiceSettings } from "@/tts/components/voice-fields";
 import { useBgmLibraryStore, useSoundLibraryStore } from "@/sounds/sound-library";
 import { applyPlan, type EditVoice } from "./apply";
+import { briefText, type EditBrief, parseBrief } from "./brief";
 import { buildClipSheet, type ClipSheet } from "./frames";
 import { FORMATS, parsePlan, type ReviseScope, revisePlan } from "./plan";
 import { isChannelSfx } from "./sfx-palette";
 import { AI_EDIT_STEPS, type LastAiEdit, useAiEditStore } from "./store";
-import { buildPrompt, buildRevisePrompt, type PromptClip } from "./style";
+import { buildBriefPrompt, buildPrompt, buildRevisePrompt, type PromptClip } from "./style";
 
 const MAX_LOG_LINES = 200;
 // Claude가 단계를 넘어갈 때 내는 "[2/5] …" 줄
@@ -67,7 +68,7 @@ async function readEvents({
 	onEvent,
 }: {
 	response: Response;
-	onEvent: (event: { type: string; text?: string; output?: string; message?: string }) => void;
+	onEvent: (event: { type: string; text?: string; output?: string; message?: string; id?: string }) => void;
 }) {
 	if (!response.body) return;
 	const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -102,6 +103,58 @@ function previousAiEdit(): LastAiEdit | null {
 		: null;
 }
 
+/** Claude에게 프롬프트를 보내고 진행 줄을 기록에 쌓는다. 마지막 메시지와, keep이면 이어 받을 대화 id를 돌려준다 */
+async function askClaude({
+	prompt,
+	sheets,
+	signal,
+	keep = false,
+	resume = null,
+}: {
+	prompt: string;
+	sheets: { name: string; dataUrl: string }[];
+	signal: AbortSignal;
+	keep?: boolean;
+	resume?: string | null;
+}): Promise<{ output: string; sessionId: string | null }> {
+	const m = getMessages();
+	const store = useAiEditStore.getState();
+	const response = await fetch("/api/ai-edit", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		signal,
+		body: JSON.stringify({ model: store.model, effort: store.effort, sheets, prompt, keep, resume }),
+	});
+	if (!response.ok) {
+		const body: unknown = await response.json().catch(() => null);
+		throw new Error(
+			body && typeof body === "object" && "error" in body && typeof body.error === "string"
+				? body.error
+				: `${response.status}`,
+		);
+	}
+
+	let output: string | null = null;
+	let sessionId: string | null = null;
+	let failure: string | null = null;
+	await readEvents({
+		response,
+		onEvent: (event) => {
+			if (event.type === "log" && event.text) {
+				// 마지막 메시지에 붙은 JSON은 결과 화면에서 보여 주니 진행 기록에서는 뗀다
+				const text = event.text.split(/(^|\n)\s*\{/)[0].trim();
+				const step = Number(STEP_LINE.exec(text)?.[1]);
+				if (text) log({ text, step: step >= 1 && step <= AI_EDIT_STEPS ? step : undefined });
+			} else if (event.type === "result" && event.output) output = event.output;
+			else if (event.type === "session" && event.id) sessionId = event.id;
+			else if (event.type === "error") failure = event.message ?? m.aiEdit.failed;
+		},
+	});
+	if (failure) throw new Error(failure);
+	if (output === null) throw new Error(m.aiEdit.failed);
+	return { output, sessionId };
+}
+
 /** AI Auto 편집 버튼. 지난 AI 편집이 타임라인에 있으면 무엇을 다듬을지 먼저 묻고, 없으면 바로 처음부터 편집한다 */
 export function startAiEdit() {
 	if (previousAiEdit()) useAiEditStore.setState({ job: { status: "choosing" } });
@@ -113,7 +166,14 @@ export function startAiEdit() {
  * 지난 AI 편집이 타임라인에 남아 있으면 처음부터 하지 않고 그 계획에서 고른 범위(scope)의 고칠 곳만 받아 얹는다.
  * 진행 상황은 useAiEditStore.job에 쌓이고, 화면은 그동안 AiEditOverlay가 막는다
  */
-export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope } = {}): Promise<void> {
+export async function runAiEdit({
+	scope: wanted = "all",
+	brief,
+}: {
+	scope?: ReviseScope;
+	/** 사용자가 확정한 기획안. 처음 편집인데 이게 없으면 기획안부터 받아 사용자에게 보여 주고 멈춘다 */
+	brief?: EditBrief;
+} = {}): Promise<void> {
 	const m = getMessages();
 	const editor = EditorCore.getInstance();
 	const store = useAiEditStore;
@@ -123,7 +183,17 @@ export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope
 	const scope = previous ? wanted : null;
 	// 촬영본 스틸은 처음 편집할 때와, 컷을 다시 볼 수 있는 범위에만 만든다
 	const needsSheets = scope === null || scope === "all" || scope === "cuts";
-	store.setState({ job: { status: "running", step: 1, log: previous ? [m.aiEdit.revising] : [], abort, scope } });
+	const briefing = !previous && !brief;
+	store.setState({
+		job: {
+			status: "running",
+			step: 1,
+			log: previous ? [m.aiEdit.revising] : brief ? [m.aiEdit.briefConfirmed] : [],
+			abort,
+			scope,
+			briefing,
+		},
+	});
 
 	try {
 		const videos = editor.media
@@ -164,6 +234,27 @@ export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope
 		}
 		if (promptClips.length === 0) throw new Error(m.aiEdit.noVideos);
 
+		if (briefing) {
+			log({ text: m.aiEdit.askingBrief });
+			const asked = await askClaude({
+				prompt: buildBriefPrompt({
+					clips: promptClips,
+					canvas: FORMATS[format],
+					recipe: store.getState().recipes[projectId] ?? "",
+				}),
+				sheets,
+				signal: abort.signal,
+				keep: true,
+			});
+			const drafted = parseBrief(asked);
+			store.setState(({ job }) => ({
+				job: { status: "reviewing", brief: drafted, log: "log" in job ? job.log : [] },
+			}));
+			return;
+		}
+		// 확정한 기획은 다음에 다듬을 때도 기준이 되게 레시피 메모로 남긴다
+		if (brief) store.getState().setRecipe({ projectId, recipe: briefText(brief) });
+
 		const voices = await loadVoices();
 		if (!voices) log({ text: m.aiEdit.noVoice });
 		await useSoundLibraryStore.getState().load();
@@ -187,51 +278,25 @@ export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope
 			recipe: store.getState().recipes[projectId] ?? "",
 		};
 		log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
-		const response = await fetch("/api/ai-edit", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
+		const { output } = await askClaude({
 			signal: abort.signal,
-			body: JSON.stringify({
-				model: store.getState().model,
-				effort: store.getState().effort,
-				sheets,
-				prompt:
-					previous && scope
-						? buildRevisePrompt({
-								...promptBase,
-								scope,
-								plan: previous.plan,
-								timing: previous.timing,
-								seen: Object.keys(previous.clips),
-							})
-						: buildPrompt({ ...promptBase, recent: store.getState().recentHooks }),
-			}),
+			sheets,
+			resume: brief?.sessionId ?? null,
+			prompt:
+				previous && scope
+					? buildRevisePrompt({
+							...promptBase,
+							scope,
+							plan: previous.plan,
+							timing: previous.timing,
+							seen: Object.keys(previous.clips),
+						})
+					: buildPrompt({
+							...promptBase,
+							recent: store.getState().recentHooks,
+							brief: brief ? briefText(brief) : undefined,
+						}),
 		});
-		if (!response.ok) {
-			const body: unknown = await response.json().catch(() => null);
-			throw new Error(
-				body && typeof body === "object" && "error" in body && typeof body.error === "string"
-					? body.error
-					: `${response.status}`,
-			);
-		}
-
-		let output: string | null = null;
-		let failure: string | null = null;
-		await readEvents({
-			response,
-			onEvent: (event) => {
-				if (event.type === "log" && event.text) {
-					// 마지막 메시지에 붙은 계획 JSON은 결과 화면에서 보여 주니 진행 기록에서는 뗀다
-					const text = event.text.split(/(^|\n)\s*\{/)[0].trim();
-					const step = Number(STEP_LINE.exec(text)?.[1]);
-					if (text) log({ text, step: step >= 1 && step <= AI_EDIT_STEPS ? step : undefined });
-				} else if (event.type === "result" && event.output) output = event.output;
-				else if (event.type === "error") failure = event.message ?? m.aiEdit.failed;
-			},
-		});
-		if (failure) throw new Error(failure);
-		if (output === null) throw new Error(m.aiEdit.failed);
 
 		const limits = {
 			output,

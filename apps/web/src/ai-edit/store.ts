@@ -7,6 +7,7 @@ import {
 	DEFAULT_AI_EDIT_EFFORT,
 	DEFAULT_AI_EDIT_MODEL,
 } from "./models";
+import type { EditBrief } from "./brief";
 import { type BeatTiming, type EditFormat, type EditPlan, FORMAT_IDS, type ReviseScope } from "./plan";
 
 export const AI_EDIT_STEPS = 5;
@@ -17,7 +18,17 @@ export type AiEditJob =
 	// 지난 AI 편집이 타임라인에 있어서, 무엇을 다듬을지 고르는 중
 	| { status: "choosing" }
 	// scope: 지난 AI 편집에서 다듬는 범위. 처음부터 편집하면 null이다. 진행 화면이 이걸로 단계 이름을 고른다
-	| { status: "running"; step: number; log: string[]; abort: AbortController; scope: ReviseScope | null }
+	// briefing: 본 편집 전에 기획안을 받는 중
+	| {
+			status: "running";
+			step: number;
+			log: string[];
+			abort: AbortController;
+			scope: ReviseScope | null;
+			briefing?: boolean;
+		}
+	// 기획안을 사용자가 읽고 고치는 중. 확정하면 본 편집을 이어 간다
+	| { status: "reviewing"; brief: EditBrief; log: string[] }
 	| { status: "done"; plan: EditPlan; log: string[]; scope: ReviseScope | null }
 	| { status: "failed"; error: string; log: string[] };
 

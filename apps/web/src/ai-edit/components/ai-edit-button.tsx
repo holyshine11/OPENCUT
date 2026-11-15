@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useMessages } from "@/i18n";
 import { cn } from "@/utils/ui";
+import type { EditBrief } from "../brief";
 import { FORMAT_IDS, REVISE_SCOPE_IDS } from "../plan";
 import { runAiEdit, startAiEdit } from "../run";
 import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
@@ -75,8 +78,10 @@ function AiEditOverlay() {
 	if (job.status === "idle") return null;
 	const close = () => useAiEditStore.setState({ job: { status: "idle" } });
 	const scope = "scope" in job ? job.scope : null;
-	const steps =
-		scope === "all"
+	const briefing = job.status === "running" && job.briefing === true;
+	const steps = briefing
+		? [m.aiEdit.briefStep]
+		: scope === "all"
 			? m.aiEdit.reviseSteps
 			: scope
 				? [m.aiEdit.scopes[scope]]
@@ -91,12 +96,17 @@ function AiEditOverlay() {
 				aria-modal="true"
 				aria-label={m.aiEdit.button}
 				tabIndex={-1}
-				className="bg-background flex max-h-[85vh] w-[26rem] max-w-full flex-col gap-3 rounded-lg border p-4 shadow-xl outline-none"
+				className={cn(
+					"bg-background flex max-h-[85vh] max-w-full flex-col gap-3 rounded-lg border p-4 shadow-xl outline-none",
+					job.status === "reviewing" ? "w-[40rem]" : "w-[26rem]",
+				)}
 			>
 				<div className="flex items-center gap-2 text-sm font-medium">
 					{job.status === "running" && <Spinner />}
 					{choosing && m.aiEdit.chooseScope}
-					{job.status === "running" && (scope ? m.aiEdit.runningRevise : m.aiEdit.running)}
+					{job.status === "running" &&
+						(briefing ? m.aiEdit.runningBrief : scope ? m.aiEdit.runningRevise : m.aiEdit.running)}
+					{job.status === "reviewing" && m.aiEdit.reviewTitle}
 					{job.status === "done" && m.aiEdit.done}
 					{job.status === "failed" && <span className="text-destructive">{m.aiEdit.failed}</span>}
 				</div>
@@ -147,6 +157,8 @@ function AiEditOverlay() {
 					</ol>
 				)}
 
+				{job.status === "reviewing" && <BriefReview brief={job.brief} onCancel={close} />}
+
 				{job.status === "failed" && <p className="text-destructive text-sm">{job.error}</p>}
 
 				{job.status === "done" && (
@@ -184,11 +196,69 @@ function AiEditOverlay() {
 						</Button>
 					</>
 				) : (
-					!choosing && <Button onClick={close}>{m.aiEdit.close}</Button>
+					!choosing && job.status !== "reviewing" && <Button onClick={close}>{m.aiEdit.close}</Button>
 				)}
 			</div>
 		</div>,
 		document.body,
+	);
+}
+
+/** AI가 낸 기획안을 사용자가 고치고 인터뷰에 답한다. 확정하면 이 내용대로 본 편집을 이어 간다 */
+function BriefReview({ brief, onCancel }: { brief: EditBrief; onCancel: () => void }) {
+	const m = useMessages();
+	const [draft, setDraft] = useState(brief);
+	const fields = (["recipe", "flow", "points", "funny"] as const).map((key) => ({ key, label: m.aiEdit.briefFields[key] }));
+	return (
+		<>
+			<p className="text-muted-foreground text-xs">{m.aiEdit.reviewHint}</p>
+			<div className="flex flex-col gap-3 overflow-y-auto pr-1 text-sm">
+				<label className="flex flex-col gap-1">
+					<span className="text-muted-foreground text-xs">{m.aiEdit.briefFields.title}</span>
+					<Textarea
+						rows={2}
+						value={draft.title}
+						onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+					/>
+				</label>
+				{fields.map(({ key, label }) => (
+					<label key={key} className="flex flex-col gap-1">
+						<span className="text-muted-foreground text-xs">{label}</span>
+						<Textarea
+							rows={key === "recipe" ? 8 : 4}
+							value={draft[key]}
+							onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
+						/>
+					</label>
+				))}
+				{draft.questions.length > 0 && (
+					<div className="flex flex-col gap-2">
+						<span className="text-xs font-medium">{m.aiEdit.interview}</span>
+						{draft.questions.map((item, index) => (
+							<label key={item.question} className="flex flex-col gap-1">
+								<span className="text-xs">{item.question}</span>
+								<Input
+									value={item.answer}
+									placeholder={m.aiEdit.answerPlaceholder}
+									onChange={(event) =>
+										setDraft({
+											...draft,
+											questions: draft.questions.map((question, at) =>
+												at === index ? { ...question, answer: event.target.value } : question,
+											),
+										})
+									}
+								/>
+							</label>
+						))}
+					</div>
+				)}
+			</div>
+			<Button onClick={() => void runAiEdit({ brief: draft })}>{m.aiEdit.confirmBrief}</Button>
+			<Button variant="ghost" onClick={onCancel}>
+				{m.aiEdit.cancel}
+			</Button>
+		</>
 	);
 }
 
