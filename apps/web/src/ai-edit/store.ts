@@ -43,12 +43,15 @@ interface AiEditStore {
 	/** 최근에 쓴 훅. 다음 편집이 같은 틀을 피하게 프롬프트에 넣는다 */
 	recentHooks: string[];
 	last: LastAiEdit | null;
+	/** 프로젝트 id → 사용자가 적은 레시피 메모. AI가 계량·불·시간을 그대로 쓴다 */
+	recipes: Record<string, string>;
 	job: AiEditJob;
 	setModel: (model: string) => void;
 	setEffort: (effort: string) => void;
 	setFormat: (format: string) => void;
 	setHusbandVoice: (voice: string) => void;
 	rememberHook: (hook: string) => void;
+	setRecipe: (args: { projectId: string; recipe: string }) => void;
 }
 
 export const useAiEditStore = create<AiEditStore>()(
@@ -60,6 +63,7 @@ export const useAiEditStore = create<AiEditStore>()(
 			husbandVoice: null,
 			recentHooks: [],
 			last: null,
+			recipes: {},
 			job: { status: "idle" },
 			setModel: (model) => {
 				if (AI_EDIT_MODELS.some((item) => item.id === model)) set({ model });
@@ -77,16 +81,19 @@ export const useAiEditStore = create<AiEditStore>()(
 				set((state) => ({
 					recentHooks: hook ? [hook, ...state.recentHooks].slice(0, MAX_RECENT_HOOKS) : state.recentHooks,
 				})),
+			setRecipe: ({ projectId, recipe }) =>
+				set((state) => ({ recipes: { ...state.recipes, [projectId]: recipe } })),
 		}),
 		{
 			name: "ai-edit",
-			partialize: ({ model, effort, format, husbandVoice, recentHooks, last }) => ({
+			partialize: ({ model, effort, format, husbandVoice, recentHooks, last, recipes }) => ({
 				model,
 				effort,
 				format,
 				husbandVoice,
 				recentHooks,
 				last,
+				recipes,
 			}),
 		},
 	),

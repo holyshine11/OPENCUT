@@ -13,13 +13,14 @@ import { buildDefaultMaskInstance } from "@/masks";
 import type { Mask } from "@/masks/types";
 import { decodeAudioToFloat32 } from "@/media/audio";
 import type { MediaAsset } from "@/media/types";
+import { buildConstantRetime, getTimelineDurationForSourceSpan } from "@/retime";
 import { importSoundAsMedia, type SoundItem } from "@/sounds/sound-library";
 import { buildCaptionTrackCommands } from "@/subtitles/insert";
 import type { AudioElement } from "@/timeline";
 import { buildElementFromMedia } from "@/timeline/element-utils";
 import { synthesizeAssets, type TtsVoiceSettings } from "@/tts/insert";
 import { generateUUID } from "@/utils/id";
-import { mediaTimeFromSeconds, subMediaTime } from "@/wasm";
+import { mediaTimeFromSeconds, roundMediaTime, subMediaTime } from "@/wasm";
 import {
 	activeLoudness,
 	type BeatTiming,
@@ -29,6 +30,7 @@ import {
 	type EditPlan,
 	FORMATS,
 	MIX,
+	NARRATION_RATE,
 	placeBeats,
 	sfxTime,
 	sfxVolume,
@@ -179,12 +181,17 @@ export async function applyPlan({
 		: null;
 	signal.throwIfAborted();
 
+	// 내레이션은 NARRATION_RATE배속으로 트니 타임라인에서 차지하는 길이는 파일 길이보다 짧다
+	const playedOf = (index: number) => {
+		const seconds = voiceOf.get(index)?.duration;
+		return seconds ? seconds / NARRATION_RATE : null;
+	};
 	const durations = Object.fromEntries(
 		Object.entries(clips).map(([id, asset]) => [id, asset.duration ?? 0]),
 	);
 	const placed = placeBeats({
 		beats: plan.beats,
-		voices: plan.beats.map((_, index) => voiceOf.get(index)?.duration ?? null),
+		voices: plan.beats.map((_, index) => playedOf(index)),
 		durations,
 		pause: voices?.wife.voiceSettings.pause ?? 0,
 	});
@@ -268,17 +275,24 @@ export async function applyPlan({
 			const asset = voiceOf.get(index);
 			const voiceAt = placed[index].voiceAt;
 			if (!asset || voiceAt === null) continue;
+			const sourceDuration = mediaTimeFromSeconds({ seconds: asset.duration ?? 0 });
 			const element = buildElementFromMedia({
 				mediaId: asset.id,
 				mediaType: asset.type,
 				name: asset.name,
-				duration: mediaTimeFromSeconds({ seconds: asset.duration ?? 0 }),
+				duration: sourceDuration,
 				startTime: mediaTimeFromSeconds({ seconds: voiceAt }),
+			});
+			// 속도 탭에서 "속도 1.2x, 음높이 변경 꺼짐"으로 건 것과 같다
+			const retime = buildConstantRetime({ rate: NARRATION_RATE, maintainPitch: true });
+			const duration = roundMediaTime({
+				time: getTimelineDurationForSourceSpan({ sourceSpan: sourceDuration, retime }),
 			});
 			commands.push(
 				new InsertElementCommand({
 					placement: { mode: "explicit", trackId: audioTrack.getTrackId() },
-					element: element.type === "audio" ? { ...element, tts } : element,
+					element:
+						element.type === "audio" ? { ...element, sourceDuration, duration, retime, tts } : element,
 				}),
 			);
 		}
@@ -288,7 +302,7 @@ export async function applyPlan({
 	const sfxCuts = plan.beats
 		.flatMap((beat, index) => {
 			const sfx = beat.sfx ? sfxOf.get(beat.sfx) : undefined;
-			const at = sfxTime({ beat, placed: placed[index], voice: voiceOf.get(index)?.duration ?? null });
+			const at = sfxTime({ beat, placed: placed[index], voice: playedOf(index) });
 			return sfx ? [{ ...sfx, at, underVoice: voiceOf.has(index) }] : [];
 		})
 		.sort((a, b) => a.at - b.at);
@@ -363,7 +377,7 @@ export async function applyPlan({
 	const captions = plan.beats.flatMap((beat, index) => {
 		if (!beat.caption) return [];
 		const { at, length, voiceAt } = placed[index];
-		const voiceLength = voiceOf.get(index)?.duration;
+		const voiceLength = playedOf(index);
 		const from = voiceAt !== null && voiceLength ? voiceAt : at;
 		const startTime = Math.max(from, captionEnd);
 		const duration = from + (voiceAt !== null && voiceLength ? voiceLength : length) - startTime;
@@ -378,5 +392,5 @@ export async function applyPlan({
 	editor.command.execute({ command: new BatchCommand(commands) });
 	// 빈 타임라인에 첫 영상을 넣으면 InsertElementCommand가 화면 크기를 그 영상에 맞춘다. 고른 형식으로 되돌린다
 	setCanvas();
-	return placed.map(({ length }, index) => ({ length, voice: voiceOf.get(index)?.duration ?? null }));
+	return placed.map(({ length }, index) => ({ length, voice: playedOf(index) }));
 }
