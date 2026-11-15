@@ -184,6 +184,7 @@ export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope
 			hasHusbandVoice: voices !== null && voices.husband.voiceSettings.voice !== voices.wife.voiceSettings.voice,
 			sounds: sounds.map((sound) => sound.fileName),
 			bgms: bgms.map((sound) => sound.fileName),
+			recipe: store.getState().recipes[projectId] ?? "",
 		};
 		log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
 		const response = await fetch("/api/ai-edit", {

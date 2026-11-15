@@ -5,8 +5,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeader, SectionTitle } from "@/components/section";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loadTtsServer, useTtsServer } from "@/tts/components/voice-fields";
+import { useEditor } from "@/editor/use-editor";
 import { useMessages } from "@/i18n";
 import { useAiEditStore } from "../store";
 import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
@@ -35,6 +37,9 @@ export function AiSettings() {
 	const ttsServer = useTtsServer((state) => state.server);
 	const husbandVoice = useAiEditStore((state) => state.husbandVoice);
 	const setHusbandVoice = useAiEditStore((state) => state.setHusbandVoice);
+	const projectId = useEditor((e) => e.project.getActiveOrNull()?.metadata.id ?? null);
+	const recipe = useAiEditStore((state) => (projectId ? (state.recipes[projectId] ?? "") : ""));
+	const setRecipe = useAiEditStore((state) => state.setRecipe);
 
 	useEffect(() => {
 		void fetchAccount().then(setAccount);
@@ -96,6 +101,20 @@ export function AiSettings() {
 			</Section>
 			<div className="flex flex-col gap-3 px-3 py-3 text-sm">
 				<p className="text-muted-foreground text-xs">{m.aiEdit.modelHint}</p>
+				{projectId && (
+					<div className="flex flex-col gap-1">
+						<label htmlFor="ai-edit-recipe">{m.aiEdit.recipe}</label>
+						<Textarea
+							id="ai-edit-recipe"
+							rows={4}
+							maxLength={2000}
+							placeholder={m.aiEdit.recipePlaceholder}
+							value={recipe}
+							onChange={(event) => setRecipe({ projectId, recipe: event.target.value })}
+						/>
+						<p className="text-muted-foreground text-xs">{m.aiEdit.recipeHint}</p>
+					</div>
+				)}
 				{ttsServer.status === "ready" && ttsServer.voices.length > 1 && (
 					<div className="flex flex-col gap-1">
 						<div className="flex items-center justify-between gap-2">

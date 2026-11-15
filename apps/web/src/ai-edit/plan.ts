@@ -321,6 +321,9 @@ export function coverScale({
 	return Math.max(x, y) / Math.min(x, y);
 }
 
+// 내레이션 클립을 트는 속도. 음높이는 그대로 둔다
+export const NARRATION_RATE = 1.2;
+
 // 믹싱 기준(dB). 내레이션(TTS 서버가 -16 LUFS로 맞춰 준다)을 0으로 두고 나머지를 그 아래에 깐다
 export const MIX = {
 	/** 내레이션이 깔리는 컷의 현장음. 조리 소리는 남기되 목소리를 가리지 않는다 */
