@@ -281,7 +281,7 @@ export const ko: Messages = {
 		runningRevise: "지난 AI 편집을 다듬고 있어요 (처음부터 다시 하지 않아요)",
 		chooseScope: "지난 AI 편집을 다듬어요. 무엇을 다듬을까요?",
 		chooseScopeHint: "고른 부분만 Claude에게 맡겨 사용량을 아껴요. 처음부터 다시 하려면 취소하고 ⌘Z로 되돌린 뒤 눌러 주세요.",
-		scopes: { script: "대본", sfx: "효과음", cuts: "컷편집", captions: "자막", narration: "내레이션", bgm: "BGM", all: "전체" },
+		scopes: { script: "대본", sfx: "효과음", cuts: "컷편집", captions: "자막", narration: "내레이션", bgm: "BGM", all: "전체", revoice: "음성만 다시" },
 		scopeHints: {
 			script: "내레이션 문장(훅·드립·엔딩)만 다시 써요",
 			sfx: "효과음만 넣고, 빼고, 바꿔요",
@@ -290,6 +290,7 @@ export const ko: Messages = {
 			narration: "음성이 컷보다 긴 곳을 맞추고 원음만 들려줄 컷을 골라요",
 			bgm: "배경음악만 고르거나 다른 곡으로 바꿔요",
 			all: "전부 점검해요. 사용량이 가장 많아요",
+			revoice: "문장은 그대로 두고 바뀐 목소리 설정으로 음성만 새로 만들어요. Claude 사용량 없음",
 		},
 		reviseSteps: ["컷 점검", "대본 점검", "자막 점검", "효과·효과음 점검", "마무리"],
 		done: "AI 편집이 끝났어요",

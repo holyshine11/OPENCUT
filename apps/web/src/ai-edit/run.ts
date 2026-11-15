@@ -9,9 +9,9 @@ import { useBgmLibraryStore, useSoundLibraryStore } from "@/sounds/sound-library
 import { applyPlan, type EditVoice } from "./apply";
 import { briefText, type EditBrief, parseBrief } from "./brief";
 import { buildClipSheet, type ClipSheet } from "./frames";
-import { FORMATS, parsePlan, type ReviseScope, revisePlan } from "./plan";
+import { type EditPlan, FORMATS, parsePlan, revisePlan } from "./plan";
 import { isChannelSfx } from "./sfx-palette";
-import { AI_EDIT_STEPS, type LastAiEdit, useAiEditStore } from "./store";
+import { AI_EDIT_STEPS, type AiEditScope, type LastAiEdit, useAiEditStore } from "./store";
 import { buildBriefPrompt, buildPrompt, buildRevisePrompt, type PromptClip } from "./style";
 
 const MAX_LOG_LINES = 200;
@@ -170,7 +170,7 @@ export async function runAiEdit({
 	scope: wanted = "all",
 	brief,
 }: {
-	scope?: ReviseScope;
+	scope?: AiEditScope;
 	/** 사용자가 확정한 기획안. 처음 편집인데 이게 없으면 기획안부터 받아 사용자에게 보여 주고 멈춘다 */
 	brief?: EditBrief;
 } = {}): Promise<void> {
@@ -277,46 +277,53 @@ export async function runAiEdit({
 			bgms: bgms.map((sound) => sound.fileName),
 			recipe: store.getState().recipes[projectId] ?? "",
 		};
-		log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
-		const { output } = await askClaude({
-			signal: abort.signal,
-			sheets,
-			resume: brief?.sessionId ?? null,
-			prompt:
-				previous && scope
-					? buildRevisePrompt({
-							...promptBase,
-							scope,
-							plan: previous.plan,
-							timing: previous.timing,
-							seen: Object.keys(previous.clips),
-						})
-					: buildPrompt({
-							...promptBase,
-							recent: store.getState().recentHooks,
-							brief: brief ? briefText(brief) : undefined,
-						}),
-		});
+		let plan: EditPlan;
+		if (scope === "revoice" && previous) {
+			// 지난 계획 그대로. 문장·목소리 설정이 그대로인 컷은 applyPlan이 지난 음성을 다시 쓴다
+			plan = previous.plan;
+		} else {
+			log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
+			const { output } = await askClaude({
+				signal: abort.signal,
+				sheets,
+				resume: brief?.sessionId ?? null,
+				prompt:
+					previous && scope && scope !== "revoice"
+						? buildRevisePrompt({
+								...promptBase,
+								scope,
+								plan: previous.plan,
+								timing: previous.timing,
+								seen: Object.keys(previous.clips),
+							})
+						: buildPrompt({
+								...promptBase,
+								recent: store.getState().recentHooks,
+								brief: brief ? briefText(brief) : undefined,
+							}),
+			});
 
-		const limits = {
-			output,
-			durations: Object.fromEntries(promptClips.map((clip) => [clip.id, clip.duration])),
-			sounds: promptBase.sounds,
-			bgms: promptBase.bgms,
-		};
-		const revised = previous && scope ? revisePlan({ ...limits, previous: previous.plan, scope }) : null;
-		const plan = revised?.plan ?? parsePlan(limits);
-		if (revised && !revised.changed) {
-			// 고칠 게 없으면 타임라인은 건드리지 않는다
-			store.setState(({ job }) => ({
-				job: {
-					status: "done",
-					plan: { ...plan, review: [m.aiEdit.noChanges, ...plan.review] },
-					log: "log" in job ? job.log : [],
-					scope,
-				},
-			}));
-			return;
+			const limits = {
+				output,
+				durations: Object.fromEntries(promptClips.map((clip) => [clip.id, clip.duration])),
+				sounds: promptBase.sounds,
+				bgms: promptBase.bgms,
+			};
+			const revised =
+				previous && scope && scope !== "revoice" ? revisePlan({ ...limits, previous: previous.plan, scope }) : null;
+			plan = revised?.plan ?? parsePlan(limits);
+			if (revised && !revised.changed) {
+				// 고칠 게 없으면 타임라인은 건드리지 않는다
+				store.setState(({ job }) => ({
+					job: {
+						status: "done",
+						plan: { ...plan, review: [m.aiEdit.noChanges, ...plan.review] },
+						log: "log" in job ? job.log : [],
+						scope,
+					},
+				}));
+				return;
+			}
 		}
 		log({ text: m.aiEdit.applying({ count: plan.beats.length }), step: AI_EDIT_STEPS });
 		const timing = await applyPlan({

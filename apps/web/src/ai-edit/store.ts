@@ -8,7 +8,7 @@ import {
 	DEFAULT_AI_EDIT_MODEL,
 } from "./models";
 import type { EditBrief } from "./brief";
-import { type BeatTiming, type EditFormat, type EditPlan, FORMAT_IDS, type ReviseScope } from "./plan";
+import { type BeatTiming, type EditFormat, type EditPlan, FORMAT_IDS, REVISE_SCOPE_IDS, type ReviseScope } from "./plan";
 
 export const AI_EDIT_STEPS = 5;
 const MAX_RECENT_HOOKS = 10;
@@ -17,20 +17,24 @@ export type AiEditJob =
 	| { status: "idle" }
 	// 지난 AI 편집이 타임라인에 있어서, 무엇을 다듬을지 고르는 중
 	| { status: "choosing" }
-	// scope: 지난 AI 편집에서 다듬는 범위. 처음부터 편집하면 null이다. 진행 화면이 이걸로 단계 이름을 고른다
+	// scope: 지난 AI 편집에서 다듬는 범위(revoice = Claude 없이 음성만 다시). 처음부터 편집하면 null이다. 진행 화면이 이걸로 단계 이름을 고른다
 	// briefing: 본 편집 전에 기획안을 받는 중
 	| {
 			status: "running";
 			step: number;
 			log: string[];
 			abort: AbortController;
-			scope: ReviseScope | null;
+			scope: AiEditScope | null;
 			briefing?: boolean;
 		}
 	// 기획안을 사용자가 읽고 고치는 중. 확정하면 본 편집을 이어 간다
 	| { status: "reviewing"; brief: EditBrief; log: string[] }
-	| { status: "done"; plan: EditPlan; log: string[]; scope: ReviseScope | null }
+	| { status: "done"; plan: EditPlan; log: string[]; scope: AiEditScope | null }
 	| { status: "failed"; error: string; log: string[] };
+
+/** 다듬기 범위. revoice는 Claude를 부르지 않고 지난 계획을 다시 적용해 바뀐 목소리 설정으로 음성만 새로 만든다 */
+export type AiEditScope = ReviseScope | "revoice";
+export const AI_EDIT_SCOPE_IDS: AiEditScope[] = [...REVISE_SCOPE_IDS, "revoice"];
 
 /** 마지막으로 타임라인에 넣은 AI 편집. 버튼을 다시 누르면 처음부터 하지 않고 이걸 다듬는다 */
 export interface LastAiEdit {
