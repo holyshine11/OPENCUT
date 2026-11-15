@@ -12,10 +12,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { useMessages } from "@/i18n";
 import { cn } from "@/utils/ui";
 import type { EditBrief } from "../brief";
-import { FORMAT_IDS, REVISE_SCOPE_IDS } from "../plan";
+import { FORMAT_IDS } from "../plan";
 import { runAiEdit, startAiEdit } from "../run";
 import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
-import { AI_EDIT_STEPS, useAiEditStore } from "../store";
+import { AI_EDIT_SCOPE_IDS, AI_EDIT_STEPS, useAiEditStore } from "../store";
 
 export function AiEditButton() {
 	const m = useMessages();
@@ -115,7 +115,7 @@ function AiEditOverlay() {
 					<>
 						<p className="text-muted-foreground text-xs">{m.aiEdit.chooseScopeHint}</p>
 						<div className="flex flex-col gap-1.5">
-							{REVISE_SCOPE_IDS.map((id) => (
+							{AI_EDIT_SCOPE_IDS.map((id) => (
 								<Button
 									key={id}
 									variant="outline"

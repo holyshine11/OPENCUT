@@ -299,7 +299,7 @@ export const en = {
 		runningRevise: "Refining the last AI edit (not starting over)",
 		chooseScope: "Refining the last AI edit. What should be refined?",
 		chooseScopeHint: "Only the part you pick goes to Claude, which saves usage. To start over, cancel, undo with ⌘Z, then press again.",
-		scopes: { script: "Script", sfx: "Sound effects", cuts: "Cuts", captions: "Subtitles", narration: "Narration", bgm: "BGM", all: "Everything" },
+		scopes: { script: "Script", sfx: "Sound effects", cuts: "Cuts", captions: "Subtitles", narration: "Narration", bgm: "BGM", all: "Everything", revoice: "Voice only" },
 		scopeHints: {
 			script: "Rewrites narration lines only (hook, jokes, ending)",
 			sfx: "Adds, removes, or swaps sound effects only",
@@ -308,6 +308,7 @@ export const en = {
 			narration: "Fits voice lines that run past their cut and picks cuts for original sound",
 			bgm: "Picks the background music or swaps it for another track",
 			all: "Checks everything. Uses the most",
+			revoice: "Keeps the lines and remakes only the voice with the current voice settings. No Claude usage",
 		},
 		reviseSteps: ["Check cuts", "Check script", "Check subtitles", "Check effects and sounds", "Wrap up"],
 		done: "AI edit finished",

@@ -37,6 +37,7 @@ ASR_MODEL = env["TTS_WEB_ASR_MODEL"]
 ASR_MAX_CER = float(env.get("TTS_WEB_ASR_MAX_CER", 0.3))
 RATE_LO, RATE_HI = map(float, env.get("TTS_WEB_RATE_RANGE", "2.0 9.0").split())
 RETRIES = int(env.get("TTS_WEB_RETRIES", 2))
+RISE_MAX = float(env.get("TTS_WEB_END_RISE_MAX", 0))  # 0 이면 끝 올림 검사를 끈다 (반음)
 SYNTH_TIMEOUT = float(env.get("TTS_WEB_SYNTH_TIMEOUT", 180))
 PING_TIMEOUT = float(env["TTS_WEB_PING_TIMEOUT"])
 SENT_END = ".!?…。！？"
@@ -376,6 +377,19 @@ def transcribe(y, sr):
         return "".join(s.text for s in segs)
 
 
+def end_rise(y, sr):
+    """문장 끝 0.25초의 음높이 중앙값 - 문장 전체 중앙값 (반음). 소리가 너무 짧으면 0"""
+    import librosa
+    from scipy.signal import resample_poly
+    y16 = resample_poly(y, 16000, sr).astype(np.float32) if sr != 16000 else y
+    f0, voiced, _ = librosa.pyin(y16, fmin=70, fmax=500, sr=16000, frame_length=1024, hop_length=256)
+    t = np.flatnonzero(voiced & ~np.isnan(f0))
+    if len(t) < 10:
+        return 0.0
+    tail = t[t >= t[-1] - int(0.25 * 16000 / 256)]
+    return float(np.median(12 * np.log2(f0[tail] / np.median(f0[t]))))
+
+
 def cer(ref, hyp):
     d = list(range(len(hyp) + 1))
     for i, rc in enumerate(ref, 1):
@@ -403,13 +417,16 @@ def synth_segment(voice, body, text):
         rate_ok = RATE_LO <= rate <= RATE_HI
         # 받아 적은 글도 같은 규칙으로 다듬어 비교한다 (Whisper 는 '세 시' 를 '3시' 로 적는다)
         c = cer(ref, syllables(normalize(transcribe(y, sr)))) if ASR_CHECK and ref else 0.0
-        ok = rate_ok and c * len(ref) <= tolerance
-        score = c + (0 if rate_ok else 1)
+        # 물음표(끝음 문자로 바뀜)·느낌표·말줄임표는 끝이 올라가도 된다
+        rise = end_rise(y, sr) if RISE_MAX and text.rstrip()[-1:] not in "…!?" else 0.0
+        rise_ok = rise <= RISE_MAX if RISE_MAX else True
+        ok = rate_ok and rise_ok and c * len(ref) <= tolerance
+        score = c + (0 if rate_ok else 1) + (0 if rise_ok else 0.2)
         if best is None or score < best[0]:
             best = (score, y, sr, c)
         if ok:
             break
-        log(f"  다시 생성 ({attempt + 1}): 조음 {rate:.1f}음절/초, CER {c:.2f} — {text[:30]}")
+        log(f"  다시 생성 ({attempt + 1}): 조음 {rate:.1f}음절/초, CER {c:.2f}, 끝 {rise:+.1f}반음 — {text[:30]}")
     if best is None:
         raise Bad(502, f"합성 서버가 소리 없는 결과만 돌려줬습니다 ({text[:20]}…). 서버 로그를 확인하세요: tts-server.log")
     return best[1], best[2], attempts - 1, best[3]

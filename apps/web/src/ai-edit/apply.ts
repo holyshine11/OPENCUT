@@ -13,14 +13,13 @@ import { buildDefaultMaskInstance } from "@/masks";
 import type { Mask } from "@/masks/types";
 import { decodeAudioToFloat32 } from "@/media/audio";
 import type { MediaAsset } from "@/media/types";
-import { buildConstantRetime, getTimelineDurationForSourceSpan } from "@/retime";
 import { importSoundAsMedia, type SoundItem } from "@/sounds/sound-library";
 import { buildCaptionTrackCommands } from "@/subtitles/insert";
 import type { AudioElement } from "@/timeline";
 import { buildElementFromMedia } from "@/timeline/element-utils";
 import { synthesizeAssets, type TtsVoiceSettings } from "@/tts/insert";
 import { generateUUID } from "@/utils/id";
-import { mediaTimeFromSeconds, roundMediaTime, subMediaTime } from "@/wasm";
+import { mediaTimeFromSeconds, subMediaTime } from "@/wasm";
 import {
 	activeLoudness,
 	type BeatTiming,
@@ -110,7 +109,7 @@ export async function applyPlan({
 			text: beat.narration,
 			voice: voice.voiceSettings.voice,
 			style: voice.voiceSettings.style,
-			speed: voice.voiceSettings.speed,
+			speed: NARRATION_RATE,
 			strength: voice.voiceSettings.strength,
 			expressiveness: voice.voiceSettings.expressiveness,
 			model: voice.model,
@@ -144,7 +143,7 @@ export async function applyPlan({
 		const assets = await synthesizeAssets({
 			editor,
 			sentences: lines.map((line) => line.tts.text),
-			voiceSettings: voices[who].voiceSettings,
+			voiceSettings: { ...voices[who].voiceSettings, speed: NARRATION_RATE },
 			signal,
 			onProgress: ({ current }) => onProgress({ current: before + current, total: missing.length }),
 		});
@@ -181,11 +180,8 @@ export async function applyPlan({
 		: null;
 	signal.throwIfAborted();
 
-	// 내레이션은 NARRATION_RATE배속으로 트니 타임라인에서 차지하는 길이는 파일 길이보다 짧다
-	const playedOf = (index: number) => {
-		const seconds = voiceOf.get(index)?.duration;
-		return seconds ? seconds / NARRATION_RATE : null;
-	};
+	// TTS가 NARRATION_RATE 속도로 직접 읽으니 1배속으로 튼다. 편집기에서 음높이를 지키며 줄이면(soundtouch) 발음이 뭉개진다
+	const playedOf = (index: number) => voiceOf.get(index)?.duration ?? null;
 	const durations = Object.fromEntries(
 		Object.entries(clips).map(([id, asset]) => [id, asset.duration ?? 0]),
 	);
@@ -275,24 +271,17 @@ export async function applyPlan({
 			const asset = voiceOf.get(index);
 			const voiceAt = placed[index].voiceAt;
 			if (!asset || voiceAt === null) continue;
-			const sourceDuration = mediaTimeFromSeconds({ seconds: asset.duration ?? 0 });
 			const element = buildElementFromMedia({
 				mediaId: asset.id,
 				mediaType: asset.type,
 				name: asset.name,
-				duration: sourceDuration,
+				duration: mediaTimeFromSeconds({ seconds: asset.duration ?? 0 }),
 				startTime: mediaTimeFromSeconds({ seconds: voiceAt }),
-			});
-			// 속도 탭에서 "속도 1.2x, 음높이 변경 꺼짐"으로 건 것과 같다
-			const retime = buildConstantRetime({ rate: NARRATION_RATE, maintainPitch: true });
-			const duration = roundMediaTime({
-				time: getTimelineDurationForSourceSpan({ sourceSpan: sourceDuration, retime }),
 			});
 			commands.push(
 				new InsertElementCommand({
 					placement: { mode: "explicit", trackId: audioTrack.getTrackId() },
-					element:
-						element.type === "audio" ? { ...element, sourceDuration, duration, retime, tts } : element,
+					element: element.type === "audio" ? { ...element, tts } : element,
 				}),
 			);
 		}
