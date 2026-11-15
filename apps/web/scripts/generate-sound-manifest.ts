@@ -1,8 +1,8 @@
 /**
- * Builds public/sounds/manifest.json from the audio files in public/sounds.
- * Re-run after adding or removing bundled sound effects.
+ * Builds manifest.json from the audio files in public/sounds (default) or public/bgm.
+ * Re-run after adding or removing bundled sound effects or background music.
  *
- * Run: bun scripts/generate-sound-manifest.ts
+ * Run: bun scripts/generate-sound-manifest.ts [sounds|bgm]
  * Deps: ffprobe on PATH
  */
 
@@ -12,7 +12,7 @@ import { dirname, extname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SOUNDS_DIR = join(__dirname, "..", "public", "sounds");
+const SOUNDS_DIR = join(__dirname, "..", "public", process.argv[2] === "bgm" ? "bgm" : "sounds");
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".m4a", ".ogg", ".aac"]);
 
 function probeDuration(path: string): number {

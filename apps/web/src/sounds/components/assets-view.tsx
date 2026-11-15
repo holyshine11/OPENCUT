@@ -32,6 +32,7 @@ import type { MediaTime } from "@/wasm";
 import {
 	importSoundAsMedia,
 	type SoundItem,
+	useBgmLibraryStore,
 	useSoundLibraryStore,
 } from "@/sounds/sound-library";
 import { useMessages } from "@/i18n";
@@ -75,9 +76,15 @@ function usePreviewPlayer() {
 	return { playingId, toggle };
 }
 
-export function SoundsView() {
-	const m = useMessages();
-	const { sounds, status, load, addFiles, remove } = useSoundLibraryStore();
+export const BgmView = () => <SoundsView kind="bgm" />;
+
+/** 효과음 탭과 BGM 탭. 보여 주는 라이브러리와 문구만 다르다 */
+export function SoundsView({ kind = "sounds" }: { kind?: "sounds" | "bgm" }) {
+	const messages = useMessages();
+	const m = { ...messages, sounds: messages[kind] };
+	const effects = useSoundLibraryStore();
+	const music = useBgmLibraryStore();
+	const { sounds, status, load, addFiles, remove } = kind === "bgm" ? music : effects;
 	const {
 		soundViewMode,
 		setSoundViewMode,

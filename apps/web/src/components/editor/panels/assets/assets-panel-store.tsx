@@ -13,6 +13,7 @@ import {
 	ColorsIcon,
 	LeftToRightListDashIcon,
 	MusicNote03Icon,
+	HeadphonesIcon,
 	AiVoiceIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
@@ -28,6 +29,7 @@ export const TAB_KEYS = [
 	"subtitles",
 	"adjustment",
 	"sounds",
+	"bgm",
 	"tts",
 	"settings",
 ] as const;
@@ -67,6 +69,9 @@ export const tabs = {
 	},
 	sounds: {
 		icon: createHugeiconsIcon({ icon: MusicNote03Icon }),
+	},
+	bgm: {
+		icon: createHugeiconsIcon({ icon: HeadphonesIcon }),
 	},
 	tts: {
 		icon: createHugeiconsIcon({ icon: AiVoiceIcon }),

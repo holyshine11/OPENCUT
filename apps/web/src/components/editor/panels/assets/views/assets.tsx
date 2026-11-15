@@ -51,7 +51,7 @@ import {
 } from "@/components/editor/panels/assets/assets-panel-store";
 import { MASKABLE_ELEMENT_TYPES } from "@/timeline";
 import type { MediaAsset, MediaType } from "@/media/types";
-import { useSoundLibraryStore } from "@/sounds/sound-library";
+import { useBgmLibraryStore, useSoundLibraryStore } from "@/sounds/sound-library";
 import { cn } from "@/utils/ui";
 import {
 	CloudUploadIcon,
@@ -74,9 +74,12 @@ export function MediaView() {
 	const mediaFiles = useEditor((e) => e.media.getAssets());
 	const activeProject = useEditor((e) => e.project.getActive());
 
-	const sounds = useSoundLibraryStore((state) => state.sounds);
+	const effects = useSoundLibraryStore((state) => state.sounds);
+	const bgms = useBgmLibraryStore((state) => state.sounds);
+	const sounds = useMemo(() => [...effects, ...bgms], [effects, bgms]);
 	useEffect(() => {
 		void useSoundLibraryStore.getState().load();
+		void useBgmLibraryStore.getState().load();
 	}, []);
 
 	const {
@@ -204,7 +207,7 @@ export function MediaView() {
 	}, [highlightMediaId, mediaFiles, setMediaTab]);
 
 	const filteredMediaItems = useMemo(() => {
-		// 효과음 탭에서 넣은 소리는 효과음 탭에서만 보인다 (importSoundAsMedia와 같은 이름·크기 기준)
+		// 효과음·BGM 탭에서 넣은 소리는 그 탭에서만 보인다 (importSoundAsMedia와 같은 이름·크기 기준)
 		const soundKeys = new Set(
 			sounds.map((sound) => `${sound.fileName}:${sound.size}`),
 		);
