@@ -1,4 +1,4 @@
-import { PitchShifter } from "soundtouchjs";
+import { SimpleFilter, SoundTouch } from "soundtouchjs";
 import { clampRetimeRate, shouldMaintainPitch } from "@/retime/rate";
 import type { RetimeConfig } from "@/timeline";
 import { getSourceTimeAtClipTime } from "./resolve";
@@ -128,16 +128,76 @@ async function buildPitchPreservedBuffer({
 		1,
 		Math.ceil(clipDuration * targetSampleRate),
 	);
-	const stretchCtx = new OfflineAudioContext(
-		numChannels,
-		outputSamples,
-		targetSampleRate,
-	);
-	const shifter = new PitchShifter(stretchCtx, resampledBuffer, 4096);
-	shifter.tempo = rate;
-	shifter.pitch = 1;
-	shifter.connect(stretchCtx.destination);
-	return stretchCtx.startRendering();
+	const stretched = stretchKeepingPitch({
+		channels: Array.from({ length: numChannels }, (_, ch) =>
+			resampledBuffer.getChannelData(ch),
+		),
+		rate,
+		sampleRate: targetSampleRate,
+		length: outputSamples,
+	});
+	const output = new AudioBuffer({
+		numberOfChannels: numChannels,
+		length: outputSamples,
+		sampleRate: targetSampleRate,
+	});
+	stretched.forEach((data, ch) => output.copyToChannel(data, ch));
+	return output;
+}
+
+// soundtouch는 남은 입력이 16384프레임 미만이면 처리하지 않으니, 뒤에 무음을 붙여 끝소리까지 밀어낸다
+const FLUSH_PAD_SECONDS = 1;
+const CHUNK_FRAMES = 4096;
+
+/**
+ * 음높이를 지키며 rate배 빠르게 한다. ScriptProcessor(PitchShifter)를 거치면
+ * 출력이 버퍼 하나만큼 밀리고 끝이 잘려서, soundtouch에서 직접 뽑는다
+ */
+export function stretchKeepingPitch({
+	channels,
+	rate,
+	sampleRate,
+	length,
+}: {
+	channels: Float32Array[];
+	rate: number;
+	sampleRate: number;
+	length: number;
+}): Float32Array<ArrayBuffer>[] {
+	const left = channels[0];
+	const right = channels[1] ?? left;
+	const end = left.length + Math.ceil(FLUSH_PAD_SECONDS * sampleRate);
+	const source = {
+		// soundtouch가 부르는 모양이라 위치 인자를 그대로 받는다
+		// eslint-disable-next-line opencut/prefer-object-params
+		extract(target: Float32Array, numFrames: number, position: number) {
+			const frames = Math.max(0, Math.min(numFrames, end - position));
+			for (let i = 0; i < frames; i++) {
+				target[i * 2] = left[position + i] ?? 0;
+				target[i * 2 + 1] = right[position + i] ?? 0;
+			}
+			return frames;
+		},
+	};
+	const soundtouch = new SoundTouch();
+	soundtouch.tempo = rate;
+	const filter = new SimpleFilter(source, soundtouch);
+	const output = channels.map(() => new Float32Array(length));
+	const chunk = new Float32Array(CHUNK_FRAMES * 2);
+	let written = 0;
+	while (written < length) {
+		const frames = filter.extract(
+			chunk,
+			Math.min(CHUNK_FRAMES, length - written),
+		);
+		if (frames === 0) break;
+		for (let i = 0; i < frames; i++) {
+			output[0][written + i] = chunk[i * 2];
+			if (output[1]) output[1][written + i] = chunk[i * 2 + 1];
+		}
+		written += frames;
+	}
+	return output;
 }
 
 export async function renderRetimedBuffer({
