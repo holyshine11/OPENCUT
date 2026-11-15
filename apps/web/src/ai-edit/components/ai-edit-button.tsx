@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { useMessages } from "@/i18n";
 import { cn } from "@/utils/ui";
-import { FORMAT_IDS } from "../plan";
-import { runAiEdit } from "../run";
+import { FORMAT_IDS, REVISE_SCOPE_IDS } from "../plan";
+import { runAiEdit, startAiEdit } from "../run";
 import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
 import { AI_EDIT_STEPS, useAiEditStore } from "../store";
 
@@ -35,7 +35,7 @@ export function AiEditButton() {
 			</Select>
 			<AiModelSelect className="w-auto" disabled={status === "running"} />
 			<AiEffortSelect className="w-auto" disabled={status === "running"} />
-			<Button variant="outline" disabled={status === "running"} onClick={() => void runAiEdit()}>
+			<Button variant="outline" disabled={status === "running"} onClick={startAiEdit}>
 				<Sparkles />
 				{m.aiEdit.button}
 			</Button>
@@ -54,6 +54,7 @@ function AiEditOverlay() {
 	const cardRef = useRef<HTMLDivElement>(null);
 	const logRef = useRef<HTMLDivElement>(null);
 	const logLength = "log" in job ? job.log.length : 0;
+	const choosing = job.status === "choosing";
 
 	useEffect(() => {
 		// 편집기 단축키는 window에서 듣는다. 캡처 단계에서 먼저 잡아 카드 밖의 키 입력을 버린다
@@ -73,7 +74,13 @@ function AiEditOverlay() {
 
 	if (job.status === "idle") return null;
 	const close = () => useAiEditStore.setState({ job: { status: "idle" } });
-	const steps = [m.aiEdit.step1, m.aiEdit.step2, m.aiEdit.step3, m.aiEdit.step4, m.aiEdit.step5];
+	const scope = "scope" in job ? job.scope : null;
+	const steps =
+		scope === "all"
+			? m.aiEdit.reviseSteps
+			: scope
+				? [m.aiEdit.scopes[scope]]
+				: [m.aiEdit.step1, m.aiEdit.step2, m.aiEdit.step3, m.aiEdit.step4, m.aiEdit.step5];
 	const currentStep = job.status === "running" ? job.step : job.status === "done" ? AI_EDIT_STEPS + 1 : 0;
 
 	return createPortal(
@@ -88,12 +95,35 @@ function AiEditOverlay() {
 			>
 				<div className="flex items-center gap-2 text-sm font-medium">
 					{job.status === "running" && <Spinner />}
-					{job.status === "running" && m.aiEdit.running}
+					{choosing && m.aiEdit.chooseScope}
+					{job.status === "running" && (scope ? m.aiEdit.runningRevise : m.aiEdit.running)}
 					{job.status === "done" && m.aiEdit.done}
 					{job.status === "failed" && <span className="text-destructive">{m.aiEdit.failed}</span>}
 				</div>
 
-				{job.status !== "failed" && (
+				{choosing && (
+					<>
+						<p className="text-muted-foreground text-xs">{m.aiEdit.chooseScopeHint}</p>
+						<div className="flex flex-col gap-1.5">
+							{REVISE_SCOPE_IDS.map((id) => (
+								<Button
+									key={id}
+									variant="outline"
+									className="h-auto flex-col items-start gap-0.5 py-2 text-left whitespace-normal"
+									onClick={() => void runAiEdit({ scope: id })}
+								>
+									{m.aiEdit.scopes[id]}
+									<span className="text-muted-foreground text-xs font-normal">{m.aiEdit.scopeHints[id]}</span>
+								</Button>
+							))}
+						</div>
+						<Button variant="ghost" onClick={close}>
+							{m.aiEdit.cancel}
+						</Button>
+					</>
+				)}
+
+				{(job.status === "running" || job.status === "done") && (
 					<ol className="flex flex-col gap-1 text-sm">
 						{steps.map((label, index) => {
 							const step = index + 1;
@@ -136,7 +166,7 @@ function AiEditOverlay() {
 					</div>
 				)}
 
-				{job.status !== "done" && (
+				{(job.status === "running" || job.status === "failed") && (
 					<div
 						ref={logRef}
 						aria-live="polite"
@@ -154,7 +184,7 @@ function AiEditOverlay() {
 						</Button>
 					</>
 				) : (
-					<Button onClick={close}>{m.aiEdit.close}</Button>
+					!choosing && <Button onClick={close}>{m.aiEdit.close}</Button>
 				)}
 			</div>
 		</div>,

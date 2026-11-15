@@ -2,7 +2,8 @@
 // 채널 색이 바뀌면 이 파일만 고친다. 프롬프트는 서버 라우트가 그대로 Claude에 넘긴다
 import { ADJUST_PRESETS } from "@/effects/definitions/adjust-presets";
 import { TRANSITION_TYPES } from "@/transitions";
-import { type BeatTiming, type EditPlan, IMPACTS } from "./plan";
+import { type BeatTiming, type EditPlan, IMPACTS, REVISE_SCOPES, type ReviseScope } from "./plan";
+import { sfxGuide } from "./sfx-palette";
 
 const CHANNEL_STYLE = `
 # 채널: 요리드립 (Cooking Drip)
@@ -99,6 +100,7 @@ export function buildPrompt({
 	hasVoice,
 	hasHusbandVoice,
 	sounds,
+	bgms,
 	recent,
 }: {
 	clips: PromptClip[];
@@ -109,6 +111,8 @@ export function buildPrompt({
 	hasHusbandVoice: boolean;
 	/** 쓸 수 있는 효과음 파일 이름. 이름이 곧 어떤 소리인지의 설명이다 */
 	sounds: string[];
+	/** 깔 수 있는 배경음악 파일 이름. 이름 앞이 장르다 */
+	bgms: string[];
 	/** 최근에 쓴 훅. 겹치지 않게 한다 */
 	recent: string[];
 }): string {
@@ -133,7 +137,8 @@ ${clips.map(clipLine).join("\n")}
 2. 컨셉·대본: 이 영상만의 한 줄 컨셉을 정하고 컷마다 내레이션을 쓴다. 화면에 보이는 것만 말한다. 계량이 안 보이면 지어내지 말고 동작을 말한다.
 3. 자막: 컷마다 자막을 쓴다. 내레이션의 받아쓰기가 아니라 더 짧고 센 요약이다. 14자 안쪽, 훅만 줄바꿈(\\n) 한 번 허용.
 4. 효과·색감: 음식 색에 맞는 색 보정 하나와, 장면이 크게 바뀌는 자리(시간 경과, 완성)에만 전환을 넣는다. 전환은 전체에서 0~3번.
-   - 효과음(sfx): 드립·반전·킥·완성 같은 포인트 컷에만 넣는다. ${isShort ? "전체 3~6번" : "30초에 1~2번꼴"}, 연달아 두 컷에 넣지 않는다. 아래 목록의 파일 이름을 글자 그대로 쓴다. 이름이 상황 설명이니 컷의 감정에 맞는 것을 고르고, 맞는 게 없으면 null.
+   - ${sfxRule(isShort)}
+   - ${BGM_RULE}
    - 화면 효과(impact): 가장 센 컷 1~3개에만. "zoom"은 화면을 당겨 잡는 강조(킥·완성 클로즈업), 나머지는 순간 효과라 2초 안쪽 컷에만 쓴다. 음식이 맛없어 보이게 만드는 효과는 쓰지 않는다.
    - 모자이크(mosaic): 사람 얼굴, 속옷이나 노출, 화면에 비친 개인정보(주소·전화번호·차 번호판·택배 송장)가 보이는 컷은 빠짐없이 가린다. 그 컷 구간의 모든 스틸을 확인해서, 대상이 컷 안에서 움직인 범위를 전부 덮는 영역을 프레임 비율(왼쪽 위가 0,0 오른쪽 아래가 1,1)로 적는다. 애매하면 가리는 쪽을 고른다. 가릴 게 없으면 빈 배열. 가린 컷은 review에 "c03 2.0~4.5초 얼굴 모자이크"처럼 적어 사용자가 확인하게 한다.
 5. 검토: 스킬은 쓰지 않는다. WebSearch는 딱 한 번만 써서 이 요리의 요즘 검색어·화제(방송, 맛집, 제철)를 확인해 제목과 태그에 반영한다. 그다음 계획을 처음부터 다시 읽고 ①첫 컷이 1.5초 안에 궁금증을 만드는지 ②내레이션 길이가 컷 길이에 맞고 원음만 들려주는 컷이 있는지, 컷 길이가 단조롭지 않은지 ③같은 구간을 두 번 쓰지 않았는지(훅 제외) ④드립이 3컷에 한 번꼴로 들어갔는지 ⑤모든 start/end가 클립 길이 안인지 ⑥얼굴·속옷·개인정보가 보이는데 mosaic이 빠진 컷이 없는지 확인하고 고친다.
@@ -146,6 +151,7 @@ ${clips.map(clipLine).join("\n")}
   "concept": "한 줄 컨셉",
   "hook": "첫 컷 내레이션 또는 자막 그대로",
   "look": ${LOOKS},
+  "bgm": null | "BGM 파일 이름",
   "beats": [
     ${BEAT_SHAPE}
   ],
@@ -156,23 +162,53 @@ ${clips.map(clipLine).join("\n")}
 - transition은 그 컷에서 다음 컷으로 넘어갈 때의 전환이다.
 ${voiceRule(hasHusbandVoice)}
 
-${soundList(sounds)}
+${sfxGuide(sounds)}
+
+${bgmList(bgms)}
 `;
 }
 
 const LOOKS = ADJUST_PRESETS.map((preset) => `"${preset.id}"`).join(" | ");
-const BEAT_SHAPE = `{ "clip": "c01", "start": 0.0, "end": 2.5, "narration": "…", "voice": "wife" | "husband", "caption": "…", "transition": null | ${TRANSITION_TYPES.map((type) => `"${type}"`).join(" | ")}, "sfx": null | "효과음 파일 이름", "impact": null | ${IMPACTS.map((impact) => `"${impact}"`).join(" | ")}, "mosaic": [{ "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.25 }] }`;
+const BEAT_SHAPE = `{ "clip": "c01", "start": 0.0, "end": 2.5, "narration": "…", "voice": "wife" | "husband", "caption": "…", "transition": null | ${TRANSITION_TYPES.map((type) => `"${type}"`).join(" | ")}, "sfx": null | "효과음 파일 이름", "sfxOn": "효과음이 떨어질 내레이션 속 낱말", "impact": null | ${IMPACTS.map((impact) => `"${impact}"`).join(" | ")}, "mosaic": [{ "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.25 }] }`;
 const voiceRule = (hasHusbandVoice: boolean) =>
 	`- voice: ${hasHusbandVoice ? '기본은 "wife"(아내 내레이션). 남편이 직접 하는 말(변명, 자랑, 아내 드립에 대한 대꾸)만 "husband"로 하고 남편 말투("~거든?", "~라니까")로 쓴다. 남편 대사는 전체의 2할을 넘기지 않는다.' : '전부 "wife"로 둔다.'}`;
-const soundList = (sounds: string[]) =>
-	`# 효과음 목록\n${sounds.length > 0 ? sounds.join("\n") : "(없음. sfx는 전부 null)"}`;
+const bgmList = (bgms: string[]) =>
+	`# BGM 목록\n${bgms.length > 0 ? bgms.map((name) => name.normalize("NFC")).join("\n") : "(없음. bgm은 null)"}`;
 const seconds = (value: number) => value.toFixed(1);
 const clipLine = (clip: PromptClip) =>
 	`- ${clip.id} "${clip.name}" ${seconds(clip.duration)}초 → ${clip.sheetFile} (프레임 시각: ${clip.times.map(seconds).join(", ")}초)`;
 
+// 횟수와 종류는 채널 영상 54편에서 잰 값이다(sfx-palette.ts): 쇼츠 30초에 3.5번·4가지, 롱폼 30초에 2.4번·18가지. 컷 전환과는 거의 겹치지 않고 말에 붙어 있었다
+const sfxRule = (isShort: boolean) =>
+	`효과음(sfx): 화면 전환이 아니라 말에 붙인다. 새 문장이 시작되는 자리, 재료·계량을 부르는 낱말, 반전·킥·실패·시식 같은 포인트에 넣는다. ${isShort ? "30초에 3~5번, 한 편에 3~5가지 소리만 돌려 쓴다" : "30초에 2~3번, 소리 종류는 1분에 4~5가지꼴로 돌려 쓴다(5분이면 10~18가지)"}. 재료·계량을 줄줄이 부르는 컷은 컷마다 같은 소리를 반복해도 되고, 그 밖에는 연달아 두 컷에 넣지 않는다. 효과음 목록의 '주로 쓰는 소리'에서 쓰임새가 맞는 것을 고르고 파일 이름을 글자 그대로 쓴다. 맞는 게 없으면 null. sfxOn에는 소리가 떨어질 내레이션 속 낱말을 그대로 적는다(비우면 내레이션 시작에 떨어진다).`;
+const BGM_RULE =
+	"배경음악(bgm): 영상 전체에 깔 연주곡 하나를 BGM 목록에서 고른다. 이름 앞이 장르다. 내레이션 밑에 작게 깔리니 말을 방해하지 않는 곡으로 고른다: 차분한 조리 과정은 잔잔한·재즈·힙합, 빠르고 신나는 영상은 댄스·테크노, 정갈한 한식·디저트는 클래식. 맞는 게 없으면 null.";
+
+// 다듬을 때 범위마다 시키는 일. "전체"는 이걸 차례로 다 한다
+const CHECKS = {
+	cuts: "컷은 다시 고르지 않는다. 새 클립에 빠진 과정(재료 투입, 킥, 완성, 시식)이 있으면 맞는 자리에 컷을 넣는다. 완성 길이보다 짧으면 안 쓴 구간에서 채우고, 길면 늘어지는 컷을 줄이거나 뺀다. 같은 구간을 두 번 쓴 컷(훅 제외)은 하나만 남긴다. 비슷한 길이의 컷이 길게 이어지면 짧은 컷을 섞는다.",
+	narration: "⚠ 표시가 있는 컷은 내레이션을 줄이거나 컷을 늘린다(end). 원음만 들려주는 컷이 없으면 소리가 좋은 컷의 내레이션을 비운다.",
+	script: "첫 컷이 1.5초 안에 궁금증을 만드는지, 드립이 3컷에 한 번꼴인지, 엔딩이 끊기지 않는지 보고 약한 문장만 다시 쓴다.",
+	captions: "내레이션을 그대로 받아 적었거나 14자를 넘는 자막, 내레이션은 있는데 자막이 빈 컷을 고친다.",
+	sfx: (isShort: boolean) => `${sfxRule(isShort)} 모자라면 넣고, 넘치거나 쓰임새가 안 맞는 소리는 빼거나 바꾼다.`,
+	// 사용자가 BGM만 골라 돌렸다는 건 지금 곡을 바꾸고 싶다는 뜻이다
+	bgm: "BGM이 없으면 영상 분위기에 맞는 곡을 고르고, 있으면 지금 곡이 아닌 다른 곡으로 바꾼다. 분위기에 맞되 지금 곡과 장르나 빠르기가 다른 곡을 고른다.",
+};
+
+// 범위 하나만 다듬을 때: 프롬프트에서 부르는 이름과 set 예시
+const SCOPED: Record<Exclude<ReviseScope, "all">, { name: string; example: string }> = {
+	script: { name: "내레이션 문장(대본)", example: '"narration": "…"' },
+	sfx: { name: "효과음", example: '"sfx": "효과음 파일 이름", "sfxOn": "낱말"' },
+	bgm: { name: "배경음악", example: "" },
+	cuts: { name: "컷 구성", example: '"end": 4.2' },
+	captions: { name: "자막", example: '"caption": "…"' },
+	narration: { name: "내레이션 길이와 원음 컷", example: '"narration": "…", "end": 4.2' },
+};
+
 /**
  * 이미 AI 편집을 해 둔 타임라인을 다시 다듬게 하는 프롬프트. 처음부터 다시 만들면 촬영본을 전부 다시 보느라
- * 사용량만 드니, 지난 계획을 글로 보여 주고 고칠 컷만 changes로 받는다(받은 건 revisePlan이 얹는다)
+ * 사용량만 드니, 지난 계획을 글로 보여 주고 고칠 컷만 changes로 받는다(받은 건 revisePlan이 얹는다).
+ * scope가 all이 아니면 그 범위의 일만 시킨다. 촬영본은 all·cuts에만, 효과음 목록은 all·sfx에만, BGM 목록은 all·bgm에만 넣는다
  */
 export function buildRevisePrompt({
 	clips,
@@ -180,31 +216,44 @@ export function buildRevisePrompt({
 	hasVoice,
 	hasHusbandVoice,
 	sounds,
+	bgms,
 	plan,
 	timing,
+	seen,
+	scope,
 }: {
 	clips: PromptClip[];
 	canvas: { width: number; height: number };
 	hasVoice: boolean;
 	hasHusbandVoice: boolean;
 	sounds: string[];
+	bgms: string[];
 	/** 지금 타임라인에 들어가 있는 계획 */
 	plan: EditPlan;
 	/** plan.beats와 같은 순서. 실제로 놓인 길이를 모르는 컷은 비어 있다 */
 	timing: (BeatTiming | undefined)[];
+	/** 지난 편집 때 이미 본 클립 번호. 여기 없는 클립만 새로 들어온 것이다 */
+	seen: string[];
+	scope: ReviseScope;
 }): string {
 	const isShort = canvas.height > canvas.width;
+	const all = scope === "all";
+	const reshapes = all || scope === "cuts";
+	// 내레이션을 쓰지 않는 범위에는 말투 규칙을 보내지 않는다
+	const silent = scope === "captions" || scope === "sfx" || scope === "bgm";
 	const total = plan.beats.reduce((sum, beat, index) => sum + (timing[index]?.length ?? beat.end - beat.start), 0);
 	const beatLines = plan.beats.map((beat, index) => {
 		const placed = timing[index];
 		const voice = placed?.voice;
 		const late = placed && voice && voice > placed.length ? ` ⚠ 음성 ${seconds(voice)}초가 컷 ${seconds(placed.length)}초보다 길다` : "";
+		// 곡을 고르는 데는 영상의 분위기(말)만 있으면 된다
+		if (scope === "bgm") return `${index + 1}. ${beat.narration || beat.caption || "(원음)"}`;
 		return [
 			`${index + 1}. ${beat.clip} ${seconds(beat.start)}~${seconds(beat.end)}초`,
 			`내레이션(${beat.voice}): ${beat.narration ? `"${beat.narration}"` : "없음"}${late}`,
 			`자막: ${beat.caption ? `"${beat.caption.replace("\n", "\\n")}"` : "없음"}`,
 			`전환: ${beat.transition ?? "-"}`,
-			`효과음: ${beat.sfx ?? "-"}`,
+			`효과음: ${beat.sfx?.normalize("NFC") ?? "-"}${beat.sfx && beat.sfxOn ? `("${beat.sfxOn}"에)` : ""}`,
 			`효과: ${beat.impact ?? "-"}`,
 			`모자이크: ${beat.mosaic.length}곳`,
 		].join(" | ");
@@ -213,58 +262,89 @@ export function buildRevisePrompt({
 		const used = plan.beats.filter((beat) => beat.clip === clip.id);
 		return used.length > 0
 			? `쓴 구간: ${used.map((beat) => `${seconds(beat.start)}~${seconds(beat.end)}`).join(", ")}`
-			: "아직 안 쓴 클립";
+			: seen.includes(clip.id)
+				? "지난번에 보고 안 쓴 클립"
+				: "새 클립";
 	};
+
+	const footage = `
+# 촬영 원본
+클립마다 스틸 시트(프레임을 격자로 붙인 그림. 프레임마다 밑에 시각이 적혀 있다) 파일이 현재 폴더에 있다. 시트는 한 장만 열어도 사용량이 크게 든다. 지난번에 이미 다 보고 고른 것이니 기본은 한 장도 열지 않고 위 컷 목록(글)만으로 점검한다.
+Read로 여는 건 이 셋뿐이다: ① "새 클립"(지난 편집 뒤에 들어와 아직 본 적이 없다) ② 지금 편집본이 완성 길이보다 짧아 컷을 더 넣어야 할 때, 안 쓴 구간이 가장 길게 남은 클립 한두 개 ③ 화면을 봐야만 고칠 수 있는 컷의 클립.
+"지난번에 보고 안 쓴 클립"은 보고 나서 뺀 것이니 다시 열지 않는다.
+${clips.map((clip) => `${clipLine(clip)} [${usage(clip)}]`).join("\n")}
+`;
+
+	const work = all
+		? `# 작업 순서
+1. 컷 점검: ${CHECKS.cuts}
+2. 대본 점검: ${CHECKS.narration} ${CHECKS.script}
+3. 자막 점검: ${CHECKS.captions}
+4. 효과 점검: ${CHECKS.sfx(isShort)} BGM이 없거나 분위기와 안 맞으면 고른다. 화면 효과는 가장 센 컷 1~3개, 전환은 0~3번으로 맞춘다. 시트를 연 컷에 얼굴·속옷·개인정보가 보이는데 모자이크가 없으면 넣는다(프레임 비율, 왼쪽 위가 0,0).
+5. 마무리: 제목·설명·태그는 비어 있거나 채널 규칙에 어긋날 때만 고친다. WebSearch와 스킬은 쓰지 않는다. 고친 내용을 review에 "3번 컷: 자막을 줄임"처럼 적는다. 고칠 게 없으면 changes를 비우고 review에 그렇게 적는다. 억지로 고치지 않는다.
+
+단계를 넘어갈 때마다 "[1/5] 컷 점검: (한 줄 요약)" 형식으로 한 줄씩 말한다. 사용자가 이 줄을 진행 화면에서 본다.`
+		: `# 할 일
+${scope === "sfx" ? CHECKS.sfx(isShort) : CHECKS[scope]}${scope === "cuts" ? " 새로 넣는 컷에는 내레이션과 자막도 채운다(sfx와 impact는 null). 원래 있던 컷은 구간과 전환만 고친다." : ""}
+WebSearch와 스킬은 쓰지 않는다. ${scope === "bgm" ? "고른 곡과 이유를 review에 한 줄로 적는다." : '고친 내용을 review에 "3번 컷: (무엇을 고쳤는지)"처럼 적는다. 고칠 게 없으면 changes를 비우고 review에 그렇게 적는다. 억지로 고치지 않는다.'}
+작업 중간에는 아무 말도 하지 않는다.`;
+
+	const picksBgm = all || scope === "bgm";
+	const shape = `{${
+		scope === "bgm"
+			? ""
+			: `
+  "changes": [
+    { "beat": 3, "set": { ${all ? '"caption": "…", "end": 4.2' : SCOPED[scope].example} } }${
+			reshapes ? `,\n    { "beat": 5, "remove": true },\n    { "after": 5, "add": ${BEAT_SHAPE} }` : ""
+		}
+  ],`
+	}${all ? `\n  "look": ${LOOKS},\n  "youtube": { "title": "…", "description": "…", "tags": ["…"] },` : ""}${picksBgm ? '\n  "bgm": "BGM 파일 이름",' : ""}
+  "review": ["고친 점과 사용자가 확인할 점"]
+}`;
+	const rules = [
+		...(scope === "bgm"
+			? []
+			: [
+					`- changes의 beat${reshapes ? "와 after" : ""}는 위 컷 목록의 번호다${reshapes ? "(고치는 중에 번호가 밀려도 원래 번호를 쓴다). after: 0은 맨 앞에 넣는다" : ""}.`,
+					all
+						? "- set에는 그 컷에서 바꿀 항목만 적는다. 항목은 add의 컷과 같다. mosaic을 적으면 그 컷의 영역 전체를 바꾼다."
+						: `- set에 적을 수 있는 항목은 ${REVISE_SCOPES[scope].join(", ")}뿐이다. 다른 항목은 적어도 반영되지 않는다. 비우려면 ${scope === "sfx" ? "null" : '""'}을 적는다.`,
+				]),
+		...(reshapes || scope === "narration"
+			? [`- start/end는 그 클립 안의 초이고 end - start는 ${isShort ? "1.2~4" : "2~8"}초.${reshapes ? " transition은 그 컷에서 다음 컷으로 넘어갈 때의 전환이다." : ""}`]
+			: []),
+		...(all ? ["- look, youtube와 그 안의 항목은 바꿀 때만 적는다."] : []),
+		...(silent ? [] : [voiceRule(hasHusbandVoice)]),
+		...(picksBgm ? ["- bgm은 바꿀 때만 적는다. 아래 BGM 목록의 파일 이름을 글자 그대로 쓰고, 빼려면 null."] : []),
+		...(all || scope === "sfx" ? ["", sfxGuide(sounds)] : []),
+		...(picksBgm ? ["", bgmList(bgms)] : []),
+	];
+
 	return `너는 이 유튜브 채널의 전담 편집자다. 지난번에 네가 편집해 타임라인에 올려 둔 영상을 다시 열었다.
-처음부터 다시 만들지 않는다. 사람 편집자가 가편집본을 돌려 보듯, 아래 편집본을 읽고 고칠 곳·빠진 곳·더 좋아질 곳만 찾아 그 컷만 고친다. 멀쩡한 컷은 건드리지 않는다.
+처음부터 다시 만들지 않는다. ${all ? "사람 편집자가 가편집본을 돌려 보듯, 아래 편집본을 읽고 고칠 곳·빠진 곳·더 좋아질 곳만 찾아 그 컷만 고친다." : `이번에는 ${SCOPED[scope].name}만 손본다.`} 멀쩡한 컷은 건드리지 않는다.
 ${CHANNEL_STYLE}
 # 이번 영상
 - 화면: ${canvas.width}x${canvas.height} → ${isShort ? "쇼츠. 완성 길이 20~45초" : "롱폼. 완성 길이 2.5~5분(원본이 짧으면 그만큼만)"}. 지금 편집본은 ${seconds(total)}초다.
-- ${narrationRule({ hasVoice, isShort })}
-
+${silent ? "" : `- ${narrationRule({ hasVoice, isShort })}\n`}
 # 지금 편집본
 - 컨셉: ${plan.concept}
-- 색 보정: ${plan.look ?? "없음"}
+${picksBgm ? `- BGM: ${plan.bgm?.normalize("NFC") ?? "없음"}\n` : ""}${
+	all
+		? `- 색 보정: ${plan.look ?? "없음"}
 - 제목: ${plan.youtube.title}
 - 설명: ${plan.youtube.description.replaceAll("\n", " / ")}
 - 태그: ${plan.youtube.tags.join(", ")}
-${plan.review.length > 0 ? `- 지난번 검토 메모: ${plan.review.join(" / ")}\n` : ""}
-컷 목록(번호가 완성 영상의 순서다):
+${plan.review.length > 0 ? `- 지난번 검토 메모: ${plan.review.join(" / ")}\n` : ""}`
+		: ""
+}컷 목록(번호가 완성 영상의 순서다):
 ${beatLines.join("\n")}
-
-# 촬영 원본
-클립마다 스틸 시트(프레임을 격자로 붙인 그림. 프레임마다 밑에 시각이 적혀 있다) 파일이 현재 폴더에 있다. 지난번에 이미 다 본 것이니 전부 다시 열지 않는다.
-"아직 안 쓴 클립", 빠진 과정을 찾아야 하는데 안 쓴 구간이 길게 남은 클립, 고치려는 컷의 화면을 확인해야 하는 클립의 시트만 Read로 연다.
-${clips.map((clip) => `${clipLine(clip)} [${usage(clip)}]`).join("\n")}
-
-# 작업 순서
-1. 컷 점검: 아직 안 쓴 클립과 안 쓴 구간에서 빠진 과정(재료 투입, 킥, 완성, 시식)이 있으면 맞는 자리에 컷을 넣는다. 완성 길이보다 짧으면 그런 컷으로 채우고, 길면 늘어지는 컷을 줄이거나 뺀다. 같은 구간을 두 번 쓴 컷(훅 제외)은 하나만 남긴다.
-2. 대본 점검: ⚠ 표시가 있는 컷은 내레이션을 줄이거나 컷을 늘린다. 원음만 들려주는 컷이 없으면 소리가 좋은 컷의 내레이션을 비우고, 비슷한 길이의 컷이 길게 이어지면 짧은 컷을 섞는다. 첫 컷이 1.5초 안에 궁금증을 만드는지, 드립이 3컷에 한 번꼴인지, 엔딩이 끊기지 않는지 보고 약한 문장만 다시 쓴다.
-3. 자막 점검: 내레이션을 그대로 받아 적었거나 14자를 넘는 자막, 내레이션은 있는데 자막이 빈 컷을 고친다.
-4. 효과 점검: 효과음은 ${isShort ? "전체 3~6번" : "30초에 1~2번꼴"}이고 연달아 두 컷에 없어야 한다. 화면 효과는 가장 센 컷 1~3개, 전환은 0~3번. 모자라면 포인트 컷에 넣고 넘치면 뺀다. 시트를 연 컷에 얼굴·속옷·개인정보가 보이는데 모자이크가 없으면 넣는다(프레임 비율, 왼쪽 위가 0,0).
-5. 마무리: 제목·설명·태그는 비어 있거나 채널 규칙에 어긋날 때만 고친다. WebSearch와 스킬은 쓰지 않는다. 고친 내용을 review에 "3번 컷: 자막을 줄임"처럼 적는다. 고칠 게 없으면 changes를 비우고 review에 그렇게 적는다. 억지로 고치지 않는다.
-
-단계를 넘어갈 때마다 "[1/5] 컷 점검: (한 줄 요약)" 형식으로 한 줄씩 말한다. 사용자가 이 줄을 진행 화면에서 본다.
+${reshapes ? footage : ""}
+${work}
 
 # 출력
 마지막 메시지는 아래 JSON 하나만 낸다(설명·코드 펜스 없이). 바뀐 것만 적는다.
-{
-  "changes": [
-    { "beat": 3, "set": { "caption": "…", "end": 4.2 } },
-    { "beat": 5, "remove": true },
-    { "after": 5, "add": ${BEAT_SHAPE} }
-  ],
-  "look": ${LOOKS},
-  "youtube": { "title": "…", "description": "…", "tags": ["…"] },
-  "review": ["고친 점과 사용자가 확인할 점"]
-}
-- changes의 beat와 after는 위 컷 목록의 번호다(고치는 중에 번호가 밀려도 원래 번호를 쓴다). after: 0은 맨 앞에 넣는다.
-- set에는 그 컷에서 바꿀 항목만 적는다. 항목은 add의 컷과 같다. mosaic을 적으면 그 컷의 영역 전체를 바꾼다.
-- start/end는 그 클립 안의 초이고 end - start는 ${isShort ? "1.2~4" : "2~8"}초. transition은 그 컷에서 다음 컷으로 넘어갈 때의 전환이다.
-- look, youtube와 그 안의 항목은 바꿀 때만 적는다.
-${voiceRule(hasHusbandVoice)}
-- sfx는 아래 목록의 파일 이름을 글자 그대로 쓴다.
-
-${soundList(sounds)}
+${shape}
+${rules.join("\n")}
 `;
 }

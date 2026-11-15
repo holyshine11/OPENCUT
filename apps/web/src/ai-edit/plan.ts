@@ -30,8 +30,10 @@ export interface EditBeat {
 	voice: "wife" | "husband";
 	caption: string;
 	transition: TransitionType | null;
-	/** 컷 시작에 깔 효과음 파일 이름 */
+	/** 효과음 파일 이름 */
 	sfx: string | null;
+	/** 효과음이 떨어질 내레이션 속 낱말. 비었거나 내레이션에 없으면 내레이션(없으면 컷) 시작이다 */
+	sfxOn: string;
 	impact: Impact | null;
 	/** 모자이크로 가릴 영역(얼굴·속옷) */
 	mosaic: Box[];
@@ -42,6 +44,8 @@ export interface EditPlan {
 	hook: string;
 	/** ADJUST_PRESETS의 id. 모르는 값이면 null */
 	look: string | null;
+	/** 영상 전체에 깔 배경음악 파일 이름 */
+	bgm: string | null;
 	beats: EditBeat[];
 	youtube: { title: string; description: string; tags: string[] };
 	review: string[];
@@ -88,10 +92,16 @@ type Limits = {
 	durations: Record<string, number>;
 	/** 쓸 수 있는 효과음 파일 이름 */
 	sounds?: string[];
+	/** 쓸 수 있는 배경음악 파일 이름 */
+	bgms?: string[];
 };
 
+// macOS 파일 이름은 한글 자모가 풀려(NFD) 있는데 모델은 붙여서(NFC) 돌려준다. 같은 이름으로 보고 목록의 이름을 쓴다
+const findFile = ({ name, files = [] }: { name: unknown; files?: string[] }) =>
+	files.find((file) => file.normalize("NFC") === text(name).normalize("NFC")) ?? null;
+
 /** 모델이 준 컷 하나. 모르는 클립이거나 너무 짧으면 버리고, 구간은 클립 안으로 자른다 */
-function parseBeat({ item, durations, sounds = [] }: Limits & { item: unknown }): EditBeat[] {
+function parseBeat({ item, durations, sounds }: Limits & { item: unknown }): EditBeat[] {
 	const beat = record(item);
 	const clip = text(beat.clip);
 	const duration = durations[clip];
@@ -100,7 +110,6 @@ function parseBeat({ item, durations, sounds = [] }: Limits & { item: unknown })
 	const to = Math.min(duration, Number(beat.end));
 	if (!(to - from >= MIN_BEAT_SECONDS)) return [];
 	const transition = text(beat.transition);
-	const sfx = text(beat.sfx);
 	const impact = IMPACTS.find((item) => item === text(beat.impact));
 	return [
 		{
@@ -111,7 +120,8 @@ function parseBeat({ item, durations, sounds = [] }: Limits & { item: unknown })
 			voice: beat.voice === "husband" ? "husband" : "wife",
 			caption: text(beat.caption),
 			transition: isTransitionType(transition) ? transition : null,
-			sfx: sounds.includes(sfx) ? sfx : null,
+			sfx: findFile({ name: beat.sfx, files: sounds }),
+			sfxOn: text(beat.sfxOn),
 			impact: impact ?? null,
 			mosaic: (Array.isArray(beat.mosaic) ? beat.mosaic : []).flatMap(parseBox),
 		},
@@ -122,7 +132,7 @@ function parseBeat({ item, durations, sounds = [] }: Limits & { item: unknown })
  * Claude가 낸 마지막 메시지에서 계획을 꺼낸다. 모델 출력은 믿지 않는다:
  * 모르는 클립·길이를 벗어난 구간은 버리거나 클립 안으로 자른다. 쓸 컷이 하나도 없으면 던진다
  */
-export function parsePlan({ output, durations, sounds }: Limits & { output: string }): EditPlan {
+export function parsePlan({ output, durations, sounds, bgms }: Limits & { output: string }): EditPlan {
 	const raw = parseObject(output);
 	const beats = (Array.isArray(raw.beats) ? raw.beats : []).flatMap((item) =>
 		parseBeat({ item, durations, sounds }),
@@ -135,6 +145,7 @@ export function parsePlan({ output, durations, sounds }: Limits & { output: stri
 		concept: text(raw.concept),
 		hook: text(raw.hook),
 		look: ADJUST_PRESETS.some((preset) => preset.id === look) ? look : null,
+		bgm: findFile({ name: raw.bgm, files: bgms }),
 		beats,
 		youtube: {
 			title: text(youtube.title),
@@ -146,6 +157,23 @@ export function parsePlan({ output, durations, sounds }: Limits & { output: stri
 }
 
 /**
+ * 다듬을 범위와, 그 범위에서 Claude가 고칠 수 있는 컷 항목. 범위 밖의 수정은 받지 않는다.
+ * all은 전부 고칠 수 있다(색 보정·제목 포함). 컷을 넣고 빼는 건 all과 cuts만 하고, 배경음악은 all과 bgm만 바꾼다
+ */
+export const REVISE_SCOPES = {
+	script: ["narration", "voice"],
+	sfx: ["sfx", "sfxOn"],
+	cuts: ["clip", "start", "end", "transition"],
+	captions: ["caption"],
+	narration: ["narration", "voice", "end"],
+	bgm: [],
+	all: null,
+} as const;
+export type ReviseScope = keyof typeof REVISE_SCOPES;
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- 위 객체의 키 그대로다
+export const REVISE_SCOPE_IDS = Object.keys(REVISE_SCOPES) as ReviseScope[];
+
+/**
  * 이미 편집한 계획에 Claude가 낸 수정 사항(changes)만 얹는다. 컷 번호는 고치기 전 계획의 순서(1부터)다.
  * 손대지 않은 컷은 그대로 남고, 못 쓰는 수정(모르는 클립, 너무 짧은 구간)은 버리고 원래 컷을 둔다.
  * changed가 false면 고칠 게 없었다는 뜻이라 타임라인을 다시 짤 필요가 없다
@@ -155,20 +183,35 @@ export function revisePlan({
 	output,
 	durations,
 	sounds,
-}: Limits & { previous: EditPlan; output: string }): { plan: EditPlan; changed: boolean } {
-	const raw = parseObject(output);
+	bgms,
+	scope = "all",
+}: Limits & { previous: EditPlan; output: string; scope?: ReviseScope }): { plan: EditPlan; changed: boolean } {
+	const all = scope === "all";
+	const fields: readonly string[] | null = REVISE_SCOPES[scope];
+	const reshapes = all || scope === "cuts";
+	const parsed = parseObject(output);
+	const raw = all ? parsed : { changes: parsed.changes, review: parsed.review };
+	const oldBgm = previous.bgm ?? null;
+	// null은 빼라는 뜻이고, 목록에 없는 이름은 무시한다
+	const bgm =
+		(all || scope === "bgm") && "bgm" in parsed
+			? parsed.bgm === null
+				? null
+				: (findFile({ name: parsed.bgm, files: bgms }) ?? oldBgm)
+			: oldBgm;
 	const changes = (Array.isArray(raw.changes) ? raw.changes : []).map(record);
 	const addedAfter = (number: number) =>
 		changes
-			.filter((change) => "add" in change && Number(change.after) === number)
+			.filter((change) => reshapes && "add" in change && Number(change.after) === number)
 			.flatMap((change) => parseBeat({ item: change.add, durations, sounds }));
 
 	const beats = addedAfter(0);
 	for (const [index, old] of previous.beats.entries()) {
 		const own = changes.filter((change) => Number(change.beat) === index + 1);
 		// 그사이 미디어 패널에서 지운 클립의 컷도 뺀다
-		if (durations[old.clip] !== undefined && !own.some((change) => change.remove === true)) {
-			const set: Record<string, unknown> = Object.assign({}, ...own.map((change) => record(change.set)));
+		if (durations[old.clip] !== undefined && !own.some((change) => reshapes && change.remove === true)) {
+			const wanted: Record<string, unknown> = Object.assign({}, ...own.map((change) => record(change.set)));
+			const set = Object.fromEntries(Object.entries(wanted).filter(([key]) => !fields || fields.includes(key)));
 			const [next] = Object.keys(set).length > 0 ? parseBeat({ item: { ...old, ...set }, durations, sounds }) : [];
 			// 안 고친 모자이크는 그대로 둔다(다시 읽으면 영역을 또 키운다)
 			beats.push(next ? ("mosaic" in set ? next : { ...next, mosaic: old.mosaic }) : old);
@@ -184,6 +227,7 @@ export function revisePlan({
 		concept: text(raw.concept) || previous.concept,
 		hook: text(raw.hook) || previous.hook,
 		look: ADJUST_PRESETS.some((preset) => preset.id === look) ? look : previous.look,
+		bgm,
 		beats,
 		youtube: {
 			title: text(youtube.title) || previous.youtube.title,
@@ -193,7 +237,27 @@ export function revisePlan({
 		review: texts(raw.review),
 	};
 	const comparable = ({ review: _review, ...rest }: EditPlan) => JSON.stringify(rest);
-	return { plan, changed: comparable(plan) !== comparable(previous) };
+	// 배경음악이 생기기 전에 저장된 계획에는 bgm이 없다
+	return { plan, changed: comparable(plan) !== comparable({ ...previous, bgm: oldBgm }) };
+}
+
+/**
+ * 효과음이 떨어질 시각(초). 채널 영상의 효과음은 컷 전환이 아니라 말에 붙어 있다.
+ * sfxOn 낱말이 내레이션에 있으면 음성이 고르게 읽힌다고 보고 그 낱말 자리, 없으면 내레이션(없으면 컷) 시작이다
+ */
+export function sfxTime({
+	beat,
+	placed,
+	voice,
+}: {
+	beat: Pick<EditBeat, "narration" | "sfxOn">;
+	placed: PlacedBeat;
+	/** 그 컷 내레이션의 음성 길이(초). 없으면 null */
+	voice: number | null;
+}): number {
+	if (placed.voiceAt === null || voice === null) return placed.at;
+	const index = beat.sfxOn ? beat.narration.indexOf(beat.sfxOn) : -1;
+	return placed.voiceAt + (index > 0 ? (voice * index) / beat.narration.length : 0);
 }
 
 export interface PlacedBeat {
@@ -269,6 +333,10 @@ export const MIX = {
 	sfxUnderVoice: -4,
 	sfxMin: -24,
 	sfxMax: 6,
+	/** 배경음악(번들 곡은 -16 LUFS로 맞춰 둠). 채널 영상에서 말 사이에 깔린 소리가 목소리보다 17~20dB 낮았다 */
+	bgm: -20,
+	/** 배경음악이 시작하고 끝날 때의 페이드(초) */
+	bgmFade: 1.5,
 	/** 컷 경계에서 딱 소리가 나지 않게 하는 짧은 페이드(초) */
 	fade: 0.03,
 } as const;

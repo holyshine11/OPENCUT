@@ -5,18 +5,20 @@ import type { MediaAsset } from "@/media/types";
 import { fetchTtsServer } from "@/tts/client";
 import { initialForm, useTtsStore } from "@/tts/components/tts-view";
 import { styleFor, toVoiceSettings } from "@/tts/components/voice-fields";
-import { useSoundLibraryStore } from "@/sounds/sound-library";
+import { useBgmLibraryStore, useSoundLibraryStore } from "@/sounds/sound-library";
 import { applyPlan, type EditVoice } from "./apply";
 import { buildClipSheet, type ClipSheet } from "./frames";
-import { FORMATS, parsePlan, revisePlan } from "./plan";
-import { AI_EDIT_STEPS, useAiEditStore } from "./store";
+import { FORMATS, parsePlan, type ReviseScope, revisePlan } from "./plan";
+import { isChannelSfx } from "./sfx-palette";
+import { AI_EDIT_STEPS, type LastAiEdit, useAiEditStore } from "./store";
 import { buildPrompt, buildRevisePrompt, type PromptClip } from "./style";
 
 const MAX_LOG_LINES = 200;
 // Claude가 단계를 넘어갈 때 내는 "[2/5] …" 줄
 const STEP_LINE = /^\[(\d)\/5\]/m;
-// 이보다 긴 소리는 효과음이 아니라 배경음이라 컷에 붙이지 않는다
-const MAX_SFX_SECONDS = 6;
+// 이보다 긴 소리는 효과음이 아니라 배경음이라 컷에 붙이지 않는다. 채널에서 쓰던 소리는 길어도 앞머리만 쓰니 더 봐준다
+const MAX_SFX_SECONDS = 3;
+const MAX_CHANNEL_SFX_SECONDS = 10;
 // 다시 다듬을 때 촬영본을 또 훑지 않게, 한 번 만든 스틸 시트는 창을 닫을 때까지 둔다(미디어 id → 시트)
 const sheetCache = new Map<string, ClipSheet>();
 
@@ -80,18 +82,48 @@ async function readEvents({
 	}
 }
 
+function timelineVideoIds(): string[] {
+	return EditorCore.getInstance()
+		.scenes.getActiveScene()
+		.tracks.flatMap((track) => track.elements.map((element) => ({ type: element.type, id: element.id })))
+		.filter((element) => element.type === "video")
+		.map((element) => element.id);
+}
+
+/** 지금 타임라인에 남아 있는 지난 AI 편집. 없으면(다른 프로젝트·형식, ⌘Z, 전부 삭제) null이고 처음부터 편집한다 */
+function previousAiEdit(): LastAiEdit | null {
+	// shortcut: 지난 계획을 고쳐 타임라인을 다시 짠다. AI 편집 뒤 손으로 고친 건 반영하지 못한다. 필요해지면 타임라인에서 계획을 거꾸로 읽는다
+	const { last, format } = useAiEditStore.getState();
+	const onTimeline = timelineVideoIds();
+	return last?.projectId === EditorCore.getInstance().project.getActive().metadata.id &&
+		last.format === format &&
+		last.elementIds.some((id) => onTimeline.includes(id))
+		? last
+		: null;
+}
+
+/** AI Auto 편집 버튼. 지난 AI 편집이 타임라인에 있으면 무엇을 다듬을지 먼저 묻고, 없으면 바로 처음부터 편집한다 */
+export function startAiEdit() {
+	if (previousAiEdit()) useAiEditStore.setState({ job: { status: "choosing" } });
+	else void runAiEdit();
+}
+
 /**
  * 미디어 패널의 동영상을 Claude에게 보여 주고 받은 계획을 타임라인에 적용한다.
- * 지난 AI 편집이 타임라인에 남아 있으면 처음부터 하지 않고 그 계획에서 고칠 곳만 받아 얹는다.
+ * 지난 AI 편집이 타임라인에 남아 있으면 처음부터 하지 않고 그 계획에서 고른 범위(scope)의 고칠 곳만 받아 얹는다.
  * 진행 상황은 useAiEditStore.job에 쌓이고, 화면은 그동안 AiEditOverlay가 막는다
  */
-export async function runAiEdit(): Promise<void> {
+export async function runAiEdit({ scope: wanted = "all" }: { scope?: ReviseScope } = {}): Promise<void> {
 	const m = getMessages();
 	const editor = EditorCore.getInstance();
 	const store = useAiEditStore;
 	if (store.getState().job.status === "running") return;
 	const abort = new AbortController();
-	store.setState({ job: { status: "running", step: 1, log: [], abort } });
+	const previous = previousAiEdit();
+	const scope = previous ? wanted : null;
+	// 촬영본 스틸은 처음 편집할 때와, 컷을 다시 볼 수 있는 범위에만 만든다
+	const needsSheets = scope === null || scope === "all" || scope === "cuts";
+	store.setState({ job: { status: "running", step: 1, log: previous ? [m.aiEdit.revising] : [], abort, scope } });
 
 	try {
 		const videos = editor.media
@@ -102,20 +134,6 @@ export async function runAiEdit(): Promise<void> {
 
 		const format = store.getState().format;
 		const projectId = editor.project.getActive().metadata.id;
-		const videoIds = () =>
-			editor.scenes
-				.getActiveScene()
-				.tracks.flatMap((track) => track.elements.map((element) => ({ type: element.type, id: element.id })))
-				.filter((element) => element.type === "video")
-				.map((element) => element.id);
-		const last = store.getState().last;
-		const onTimeline = videoIds();
-		// shortcut: 지난 계획을 고쳐 타임라인을 다시 짠다. AI 편집 뒤 손으로 고친 건 반영하지 못한다. 필요해지면 타임라인에서 계획을 거꾸로 읽는다
-		const previous =
-			last?.projectId === projectId && last.format === format && last.elementIds.some((id) => onTimeline.includes(id))
-				? last
-				: null;
-		if (previous) log({ text: m.aiEdit.revising });
 
 		// 다듬을 때는 지난 계획의 클립 번호를 그대로 쓰고, 새로 넣은 영상은 그 뒤 번호를 받는다
 		const known = new Map(Object.entries(previous?.clips ?? {}).map(([id, assetId]) => [assetId, id]));
@@ -125,23 +143,39 @@ export async function runAiEdit(): Promise<void> {
 		const sheets: { name: string; dataUrl: string }[] = [];
 		for (const [index, asset] of videos.entries()) {
 			abort.signal.throwIfAborted();
-			log({ text: m.aiEdit.readingClip({ current: index + 1, total: videos.length, name: asset.name }) });
 			const id = known.get(asset.id) ?? `c${String(++lastNumber).padStart(2, "0")}`;
-			const sheet = sheetCache.get(asset.id) ?? (await buildClipSheet({ asset }));
+			if (!needsSheets) {
+				clips[id] = asset;
+				promptClips.push({ id, name: asset.name, duration: asset.duration ?? 0, times: [], sheetFile: "" });
+				continue;
+			}
+			const cached = sheetCache.get(asset.id);
+			// 다듬을 때는 Claude가 필요한 시트만 여니, 촬영본을 다시 훑는 것처럼 적지 않는다
+			if (!cached) {
+				const progress = { current: index + 1, total: videos.length, name: asset.name };
+				log({ text: previous ? m.aiEdit.preparingClip(progress) : m.aiEdit.readingClip(progress) });
+			}
+			const sheet = cached ?? (await buildClipSheet({ asset }));
 			if (!sheet) continue;
 			sheetCache.set(asset.id, sheet);
 			clips[id] = asset;
 			sheets.push({ name: `${id}.jpg`, dataUrl: sheet.sheet });
 			promptClips.push({ id, name: asset.name, duration: asset.duration ?? 0, times: sheet.times, sheetFile: `${id}.jpg` });
 		}
-		if (sheets.length === 0) throw new Error(m.aiEdit.noVideos);
+		if (promptClips.length === 0) throw new Error(m.aiEdit.noVideos);
 
 		const voices = await loadVoices();
 		if (!voices) log({ text: m.aiEdit.noVoice });
 		await useSoundLibraryStore.getState().load();
 		const sounds = useSoundLibraryStore
 			.getState()
-			.sounds.filter((sound) => sound.duration > 0 && sound.duration <= MAX_SFX_SECONDS);
+			.sounds.filter(
+				(sound) =>
+					sound.duration > 0 &&
+					sound.duration <= (isChannelSfx(sound.fileName) ? MAX_CHANNEL_SFX_SECONDS : MAX_SFX_SECONDS),
+			);
+		await useBgmLibraryStore.getState().load();
+		const bgms = useBgmLibraryStore.getState().sounds;
 
 		const promptBase = {
 			clips: promptClips,
@@ -149,8 +183,9 @@ export async function runAiEdit(): Promise<void> {
 			hasVoice: voices !== null,
 			hasHusbandVoice: voices !== null && voices.husband.voiceSettings.voice !== voices.wife.voiceSettings.voice,
 			sounds: sounds.map((sound) => sound.fileName),
+			bgms: bgms.map((sound) => sound.fileName),
 		};
-		log({ text: m.aiEdit.asking });
+		log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
 		const response = await fetch("/api/ai-edit", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -159,9 +194,16 @@ export async function runAiEdit(): Promise<void> {
 				model: store.getState().model,
 				effort: store.getState().effort,
 				sheets,
-				prompt: previous
-					? buildRevisePrompt({ ...promptBase, plan: previous.plan, timing: previous.timing })
-					: buildPrompt({ ...promptBase, recent: store.getState().recentHooks }),
+				prompt:
+					previous && scope
+						? buildRevisePrompt({
+								...promptBase,
+								scope,
+								plan: previous.plan,
+								timing: previous.timing,
+								seen: Object.keys(previous.clips),
+							})
+						: buildPrompt({ ...promptBase, recent: store.getState().recentHooks }),
 			}),
 		});
 		if (!response.ok) {
@@ -194,8 +236,9 @@ export async function runAiEdit(): Promise<void> {
 			output,
 			durations: Object.fromEntries(promptClips.map((clip) => [clip.id, clip.duration])),
 			sounds: promptBase.sounds,
+			bgms: promptBase.bgms,
 		};
-		const revised = previous ? revisePlan({ ...limits, previous: previous.plan }) : null;
+		const revised = previous && scope ? revisePlan({ ...limits, previous: previous.plan, scope }) : null;
 		const plan = revised?.plan ?? parsePlan(limits);
 		if (revised && !revised.changed) {
 			// 고칠 게 없으면 타임라인은 건드리지 않는다
@@ -204,6 +247,7 @@ export async function runAiEdit(): Promise<void> {
 					status: "done",
 					plan: { ...plan, review: [m.aiEdit.noChanges, ...plan.review] },
 					log: "log" in job ? job.log : [],
+					scope,
 				},
 			}));
 			return;
@@ -216,6 +260,7 @@ export async function runAiEdit(): Promise<void> {
 			voices,
 			format,
 			sounds,
+			bgms,
 			signal: abort.signal,
 			onProgress: ({ current, total }) => log({ text: m.aiEdit.voicing({ current, total }) }),
 		});
@@ -227,10 +272,10 @@ export async function runAiEdit(): Promise<void> {
 				plan,
 				clips: Object.fromEntries(Object.entries(clips).map(([id, asset]) => [id, asset.id])),
 				timing,
-				elementIds: videoIds(),
+				elementIds: timelineVideoIds(),
 			},
 		});
-		store.setState(({ job }) => ({ job: { status: "done", plan, log: "log" in job ? job.log : [] } }));
+		store.setState(({ job }) => ({ job: { status: "done", plan, log: "log" in job ? job.log : [], scope } }));
 	} catch (error) {
 		if (abort.signal.aborted) {
 			store.setState({ job: { status: "idle" } });

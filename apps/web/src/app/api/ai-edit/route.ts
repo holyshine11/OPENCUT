@@ -136,7 +136,8 @@ function parseBody(value: unknown): RunBody | null {
 	if (!effort) return null;
 	if (typeof prompt !== "string" || typeof model !== "string") return null;
 	if (!AI_EDIT_MODELS.some((item) => item.id === model)) return null;
-	if (!Array.isArray(sheets) || sheets.length === 0) return null;
+	// 다듬을 때 촬영본을 안 보는 범위는 시트 없이 온다
+	if (!Array.isArray(sheets)) return null;
 	const files = sheets.flatMap((item) => {
 		const { name, dataUrl } = record(item);
 		return typeof name === "string" &&

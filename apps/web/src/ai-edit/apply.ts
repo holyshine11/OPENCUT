@@ -30,6 +30,7 @@ import {
 	FORMATS,
 	MIX,
 	placeBeats,
+	sfxTime,
 	sfxVolume,
 } from "./plan";
 
@@ -38,6 +39,9 @@ const MIN_CAPTION_SECONDS = 0.3;
 // 강조 컷(impact: "zoom")은 화면을 이만큼 당겨 잡는다
 const ZOOM_SCALE = 1.2;
 const SFX_FADE_OUT_SECONDS = 0.15;
+// 채널 영상에 쓰인 효과음은 열에 아홉이 3초 안쪽이다. 긴 소리는 앞머리만 쓴다
+const MAX_SFX_SECONDS = 3;
+const MIN_SFX_SECONDS = 0.1;
 // 얼굴을 알아볼 수 없게 마스크 강도 범위(1~100)의 최대로 건다
 const MOSAIC_STRENGTH = 100;
 
@@ -80,6 +84,7 @@ export async function applyPlan({
 	voices,
 	format,
 	sounds,
+	bgms,
 	signal,
 	onProgress,
 }: {
@@ -91,6 +96,8 @@ export async function applyPlan({
 	format: EditFormat;
 	/** 계획의 sfx 이름으로 찾을 효과음 */
 	sounds: SoundItem[];
+	/** 계획의 bgm 이름으로 찾을 배경음악 */
+	bgms: SoundItem[];
 	signal: AbortSignal;
 	onProgress: (progress: { current: number; total: number }) => void;
 }): Promise<BeatTiming[]> {
@@ -161,6 +168,15 @@ export async function applyPlan({
 			.catch(() => null);
 		sfxOf.set(name, { asset, loudness });
 	}
+	const bgmSound = bgms.find((item) => item.fileName === plan.bgm);
+	const bgm = bgmSound
+		? await importSoundAsMedia({
+				sound: bgmSound,
+				projectId: editor.project.getActive().metadata.id,
+				mediaAssets: editor.media.getAssets(),
+				addMediaAsset: (args) => editor.media.addMediaAsset(args),
+			}).catch(() => null)
+		: null;
 	signal.throwIfAborted();
 
 	const durations = Object.fromEntries(
@@ -268,15 +284,20 @@ export async function applyPlan({
 		}
 	}
 
-	// 효과음은 컷 시작에 맞춘다. 한 트랙이라 다음 효과음이 오면 거기서 끊는다
-	const sfxCuts = plan.beats.flatMap((beat, index) => {
-		const sfx = beat.sfx ? sfxOf.get(beat.sfx) : undefined;
-		return sfx ? [{ ...sfx, at: placed[index].at, underVoice: voiceOf.has(index) }] : [];
-	});
+	// 효과음은 말에 맞춘다(sfxTime). 한 트랙이라 다음 효과음이 오면 거기서 끊는다
+	const sfxCuts = plan.beats
+		.flatMap((beat, index) => {
+			const sfx = beat.sfx ? sfxOf.get(beat.sfx) : undefined;
+			const at = sfxTime({ beat, placed: placed[index], voice: voiceOf.get(index)?.duration ?? null });
+			return sfx ? [{ ...sfx, at, underVoice: voiceOf.has(index) }] : [];
+		})
+		.sort((a, b) => a.at - b.at);
 	if (sfxCuts.length > 0) commands.push(sfxTrack);
 	for (const [order, { asset, loudness, at, underVoice }] of sfxCuts.entries()) {
 		const full = asset.duration ?? 0;
-		const length = Math.min(full, (sfxCuts[order + 1]?.at ?? Infinity) - at);
+		const length = Math.min(full, MAX_SFX_SECONDS, (sfxCuts[order + 1]?.at ?? Infinity) - at);
+		// 앞 컷의 음성이 밀려 같은 자리에 떨어진 효과음은 뒤의 것만 남긴다
+		if (length < MIN_SFX_SECONDS) continue;
 		const element = buildElementFromMedia({
 			mediaId: asset.id,
 			mediaType: asset.type,
@@ -299,6 +320,41 @@ export async function applyPlan({
 				},
 			}),
 		);
+	}
+
+	// 배경음악은 영상 끝까지 깐다. 곡이 짧으면 이어 붙이고, 영상의 처음과 끝에서만 천천히 넣고 뺀다
+	// shortcut: 음량은 번들 곡(-16 LUFS) 기준의 고정값이다. 직접 가져온 곡이 크거나 작으면 타임라인에서 손으로 맞춘다
+	const end = placed.reduce((latest, beat) => Math.max(latest, beat.at + beat.length), 0);
+	const bgmLength = bgm?.duration ?? 0;
+	if (bgm && bgmLength > 0) {
+		const bgmTrack = new AddTrackCommand({ type: "audio" });
+		commands.push(bgmTrack);
+		for (let at = 0; at < end; at += bgmLength) {
+			const length = Math.min(bgmLength, end - at);
+			const element = buildElementFromMedia({
+				mediaId: bgm.id,
+				mediaType: bgm.type,
+				name: bgm.name,
+				duration: mediaTimeFromSeconds({ seconds: length }),
+				startTime: mediaTimeFromSeconds({ seconds: at }),
+			});
+			commands.push(
+				new InsertElementCommand({
+					placement: { mode: "explicit", trackId: bgmTrack.getTrackId() },
+					element: {
+						...element,
+						sourceDuration: mediaTimeFromSeconds({ seconds: bgmLength }),
+						trimEnd: mediaTimeFromSeconds({ seconds: bgmLength - length }),
+						params: {
+							...element.params,
+							volume: MIX.bgm,
+							fadeIn: at === 0 ? MIX.bgmFade : MIX.fade,
+							fadeOut: at + length >= end ? Math.min(MIX.bgmFade, length / 2) : MIX.fade,
+						},
+					},
+				}),
+			);
+		}
 	}
 
 	// 자막은 내레이션의 받아쓰기가 아니라 따로 쓴 짧은 문장이라 ttsLineId로 묶지 않는다(묶으면 "음성이 낡았다"로 뜬다)
