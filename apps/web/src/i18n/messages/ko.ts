@@ -337,7 +337,7 @@ export const ko: Messages = {
 		recipeHint: "재료와 양, 불 세기, 시간을 적어 두면 AI가 내레이션과 자막에 그대로 써요. 비워 두면 화면에 보이는 만큼만 말해요. 이 프로젝트에만 적용돼요.",
 		model: "Claude 모델",
 		modelHint: "AI Auto 편집은 이 컴퓨터의 Claude Code에 로그인한 구독으로 실행돼요. 요금제에서 쓸 수 없는 모델을 고르면 실행할 때 알려 줘요.",
-		accountChecking: "로그인 상태 확인 중...",
+		signInChecking: "로그인 상태 확인 중...",
 		loggedIn: ({ plan }) => `Claude 구독에 연결됨${plan ? ` (${plan})` : ""}`,
 		loginExpires: ({ date }) => `${date}까지는 자동으로 유지돼요`,
 		loggedOut: "Claude 로그인이 풀렸어요. 다시 연결해 주세요.",

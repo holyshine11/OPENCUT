@@ -136,7 +136,7 @@ export function AiSettings() {
 					</div>
 				)}
 				<div aria-live="polite">
-					{account.status === "loading" && <p className="text-muted-foreground">{m.aiEdit.accountChecking}</p>}
+					{account.status === "loading" && <p className="text-muted-foreground">{m.aiEdit.signInChecking}</p>}
 					{account.status === "error" && <p className="text-destructive">{account.error}</p>}
 					{account.status === "ready" &&
 						(account.loggedIn ? (

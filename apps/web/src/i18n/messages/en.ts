@@ -357,7 +357,7 @@ export const en = {
 		recipePlaceholder: "e.g. 3 tbsp tsuyu, 1.5 L water, medium heat 15 min, half a cup of soju",
 		recipeHint: "Write the ingredients, amounts, heat, and times, and the AI uses them as written in the narration and captions. Leave it empty and it only says what it can see. Applies to this project only.",
 		modelHint: "AI Auto Edit runs on the subscription signed in to Claude Code on this computer. If your plan cannot use the chosen model, you are told when it runs.",
-		accountChecking: "Checking sign-in...",
+		signInChecking: "Checking sign-in...",
 		loggedIn: ({ plan }: { plan: string }) => `Connected to your Claude subscription${plan ? ` (${plan})` : ""}`,
 		loginExpires: ({ date }: { date: string }) => `Stays signed in until ${date}`,
 		loggedOut: "Claude is signed out. Reconnect to continue.",
