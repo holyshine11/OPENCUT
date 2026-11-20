@@ -2,7 +2,7 @@
 // 사용자가 claude에 로그인해 둔 구독으로 돌기 때문에 로그인 확인·다시 로그인도 여기서 맡는다.
 // GET: 로그인 상태, POST ?action=login: 로그인 주소 받기, POST ?action=code: 브라우저에서 받은 코드로 로그인 마치기, POST: 스틸 시트와 프롬프트를 받아 진행 상황을 한 줄씩(NDJSON) 흘려보낸다
 import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { NextRequest } from "next/server";
@@ -16,6 +16,7 @@ const ENV = {
 	PATH: `${process.env.PATH ?? ""}:${homedir()}/.npm-global/bin:${homedir()}/.local/bin:${homedir()}/.claude/local:/opt/homebrew/bin:/usr/local/bin`,
 };
 const NOT_INSTALLED = "Claude Code(claude 명령)를 찾지 못했습니다. 설치하거나 apps/web/.env.local에 CLAUDE_BIN을 넣으세요.";
+const MAX_TOKENS = "Claude가 계획을 끝내지 못하고 출력 한도에 걸려 멈췄습니다. 노력을 보통으로 낮추거나 영상 길이·기획을 줄여 다시 돌려 보세요.";
 const SHEET_NAME = /^c\d{2,3}\.jpg$/;
 
 // 다른 사이트가 이 주소로 요청을 보내 사용자의 구독을 쓰지 못하게 한다
@@ -123,6 +124,17 @@ async function finishLogin(request: NextRequest): Promise<Response> {
 		: Response.json({ error: "연결하지 못했습니다. 연결을 다시 눌러 새 코드를 받으세요." }, { status: 400 });
 }
 
+// claude는 대화 기록을 ~/.claude/projects/<작업 폴더 경로의 글자 아닌 것을 -로 바꾼 이름>에 남긴다.
+// 스틸이 통째로 들어 있어 한 번에 20MB쯤 되니, 다 쓴 작업 폴더를 지울 때 함께 지운다
+const CLAUDE_HOME = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+async function removeFolder(folder: string) {
+	const real = await realpath(folder).catch(() => folder);
+	await Promise.all([
+		rm(folder, { recursive: true, force: true }),
+		rm(join(CLAUDE_HOME, "projects", real.replace(/[^a-zA-Z0-9]/g, "-")), { recursive: true, force: true }),
+	]);
+}
+
 // 기획안 대화를 본 편집이 이어 받을 때까지 스틸 시트 폴더를 둔다(대화 id → 폴더). 사용자가 확정하지 않고 떠나면 이 시간 뒤 지운다
 const kept = new Map<string, string>();
 const KEEP_MS = 2 * 60 * 60_000;
@@ -217,7 +229,7 @@ export async function POST(request: NextRequest) {
 				if (closed) return;
 				closed = true;
 				controller.close();
-				if (!keepFolder) void rm(folder, { recursive: true, force: true });
+				if (!keepFolder) void removeFolder(folder);
 			};
 
 			// 촬영본을 읽고 검색만 쓴다. 스킬은 한도만 크게 먹고 효과가 적어 막는다. 명령 실행이나 파일 쓰기는 허용하지 않는다
@@ -225,6 +237,8 @@ export async function POST(request: NextRequest) {
 				CLAUDE_BIN,
 				[
 					"-p",
+					// 개발용 전역 CLAUDE.md·훅·MCP·플러그인이 편집자 대화에 섞이지 않게 끈다(로그인은 그대로)
+					"--safe-mode",
 					"--model", body.model,
 					"--effort", body.effort,
 					"--output-format", "stream-json",
@@ -253,7 +267,14 @@ export async function POST(request: NextRequest) {
 					const message = parseJson(line);
 					if (!message) continue;
 					if (message.type === "assistant") {
-						const { content } = record(message.message);
+						const { content, stop_reason } = record(message.message);
+						// 출력 한도에 걸리면 claude가 알아서 이어 쓰며 수십 분을 더 돈다. 여기서 끊고 알린다
+						if (stop_reason === "max_tokens" && !errored) {
+							errored = true;
+							send({ type: "error", message: MAX_TOKENS });
+							child.kill();
+							return;
+						}
 						for (const block of Array.isArray(content) ? content : []) {
 							const text = describe(record(block));
 							if (!text) continue;
@@ -273,7 +294,7 @@ export async function POST(request: NextRequest) {
 								setTimeout(() => {
 									if (kept.get(sessionId) !== folder) return;
 									kept.delete(sessionId);
-									void rm(folder, { recursive: true, force: true });
+									void removeFolder(folder);
 								}, KEEP_MS).unref();
 								send({ type: "session", id: sessionId });
 							}

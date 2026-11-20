@@ -2,6 +2,7 @@ import { EditorCore } from "@/core";
 import { getMessages } from "@/i18n";
 import { compareFileNames } from "@/media/filename-order";
 import type { MediaAsset } from "@/media/types";
+import type { TimelineElement } from "@/timeline";
 import { fetchTtsServer } from "@/tts/client";
 import { initialForm, useTtsStore } from "@/tts/components/tts-view";
 import { styleFor, toVoiceSettings } from "@/tts/components/voice-fields";
@@ -9,10 +10,11 @@ import { useBgmLibraryStore, useSoundLibraryStore } from "@/sounds/sound-library
 import { applyPlan, type EditVoice } from "./apply";
 import { briefText, type EditBrief, parseBrief } from "./brief";
 import { buildClipSheet, type ClipSheet } from "./frames";
+import { fitToLong, readLongCut } from "./long-cut";
 import { type EditPlan, FORMATS, parsePlan, revisePlan } from "./plan";
 import { isChannelSfx } from "./sfx-palette";
 import { AI_EDIT_STEPS, type AiEditScope, type LastAiEdit, useAiEditStore } from "./store";
-import { buildBriefPrompt, buildPrompt, buildRevisePrompt, type PromptClip } from "./style";
+import { buildBriefPrompt, buildPrompt, buildRevisePrompt, buildShortsPrompt, type PromptClip } from "./style";
 
 const MAX_LOG_LINES = 200;
 // Claude가 단계를 넘어갈 때 내는 "[2/5] …" 줄
@@ -103,6 +105,18 @@ function previousAiEdit(): LastAiEdit | null {
 		: null;
 }
 
+/** 지금 타임라인이 손본 롱폼인지(가로 화면, 영상 위에 내레이션이나 자막). 쇼츠를 고르고 누르면 이걸 줄여 쇼츠를 만든다 */
+function onLongCut(): boolean {
+	const editor = EditorCore.getInstance();
+	const { width, height } = editor.project.getActive().settings.canvasSize;
+	const elements = editor.scenes.getActiveScene().tracks.flatMap((track): TimelineElement[] => track.elements);
+	return (
+		width > height &&
+		elements.some((element) => element.type === "video") &&
+		elements.some((element) => (element.type === "audio" && element.tts) || element.type === "text")
+	);
+}
+
 /** Claude에게 프롬프트를 보내고 진행 줄을 기록에 쌓는다. 마지막 메시지와, keep이면 이어 받을 대화 id를 돌려준다 */
 async function askClaude({
 	prompt,
@@ -181,14 +195,16 @@ export async function runAiEdit({
 	const abort = new AbortController();
 	const previous = previousAiEdit();
 	const scope = previous ? wanted : null;
+	// 롱폼을 줄여 쇼츠를 만들 때는 기획안도 촬영본 스틸도 없이 롱폼 컷 목록만 보낸다
+	const fromLong = !previous && !brief && store.getState().format === "short" && onLongCut();
 	// 촬영본 스틸은 처음 편집할 때와, 컷을 다시 볼 수 있는 범위에만 만든다
-	const needsSheets = scope === null || scope === "all" || scope === "cuts";
-	const briefing = !previous && !brief;
+	const needsSheets = !fromLong && (scope === null || scope === "all" || scope === "cuts");
+	const briefing = !previous && !brief && !fromLong;
 	store.setState({
 		job: {
 			status: "running",
 			step: 1,
-			log: previous ? [m.aiEdit.revising] : brief ? [m.aiEdit.briefConfirmed] : [],
+			log: previous ? [m.aiEdit.revising] : brief ? [m.aiEdit.briefConfirmed] : fromLong ? [m.aiEdit.fromLong] : [],
 			abort,
 			scope,
 			briefing,
@@ -233,6 +249,12 @@ export async function runAiEdit({
 			promptClips.push({ id, name: asset.name, duration: asset.duration ?? 0, times: sheet.times, sheetFile: `${id}.jpg` });
 		}
 		if (promptClips.length === 0) throw new Error(m.aiEdit.noVideos);
+		const long = fromLong
+			? readLongCut({
+					tracks: editor.scenes.getActiveScene().tracks,
+					clipOf: Object.fromEntries(Object.entries(clips).map(([id, asset]) => [asset.id, id])),
+				})
+			: [];
 
 		if (briefing) {
 			log({ text: m.aiEdit.askingBrief });
@@ -282,13 +304,14 @@ export async function runAiEdit({
 			// 지난 계획 그대로. 문장·목소리 설정이 그대로인 컷은 applyPlan이 지난 음성을 다시 쓴다
 			plan = previous.plan;
 		} else {
-			log({ text: previous ? m.aiEdit.askingRevise : m.aiEdit.asking });
+			log({ text: previous ? m.aiEdit.askingRevise : fromLong ? m.aiEdit.askingShorts : m.aiEdit.asking });
 			const { output } = await askClaude({
 				signal: abort.signal,
 				sheets,
 				resume: brief?.sessionId ?? null,
-				prompt:
-					previous && scope && scope !== "revoice"
+				prompt: fromLong
+					? buildShortsPrompt({ ...promptBase, long })
+					: previous && scope && scope !== "revoice"
 						? buildRevisePrompt({
 								...promptBase,
 								scope,
@@ -312,6 +335,10 @@ export async function runAiEdit({
 			const revised =
 				previous && scope && scope !== "revoice" ? revisePlan({ ...limits, previous: previous.plan, scope }) : null;
 			plan = revised?.plan ?? parsePlan(limits);
+			if (fromLong) {
+				plan = { ...plan, beats: fitToLong({ beats: plan.beats, long }) };
+				if (plan.beats.length === 0) throw new Error("no usable beats");
+			}
 			if (revised && !revised.changed) {
 				// 고칠 게 없으면 타임라인은 건드리지 않는다
 				store.setState(({ job }) => ({
@@ -324,6 +351,18 @@ export async function runAiEdit({
 				}));
 				return;
 			}
+		}
+		let kept: string | null = null;
+		if (fromLong) {
+			// 롱폼은 복제해 남기고 이 프로젝트를 쇼츠로 바꾼다. 화면 크기 변경은 ⌘Z로 돌아가지 않아서다
+			await editor.project.saveCurrentProject();
+			const [copyId] = await editor.project.duplicateProjects({ ids: [projectId] });
+			const name = m.aiEdit.longCopyName({ name: editor.project.getActive().metadata.name });
+			await editor.project.renameProject({ id: copyId, name });
+			const recipe = store.getState().recipes[projectId];
+			if (recipe) store.getState().setRecipe({ projectId: copyId, recipe });
+			kept = m.aiEdit.longKept({ name });
+			log({ text: kept });
 		}
 		log({ text: m.aiEdit.applying({ count: plan.beats.length }), step: AI_EDIT_STEPS });
 		const timing = await applyPlan({
@@ -348,7 +387,8 @@ export async function runAiEdit({
 				elementIds: timelineVideoIds(),
 			},
 		});
-		store.setState(({ job }) => ({ job: { status: "done", plan, log: "log" in job ? job.log : [], scope } }));
+		const shown = kept ? { ...plan, review: [kept, ...plan.review] } : plan;
+		store.setState(({ job }) => ({ job: { status: "done", plan: shown, log: "log" in job ? job.log : [], scope } }));
 	} catch (error) {
 		if (abort.signal.aborted) {
 			store.setState({ job: { status: "idle" } });

@@ -331,6 +331,10 @@ export const en = {
 		preparingClip: ({ current, total, name }: { current: number; total: number; name: string }) =>
 			`Preparing stills ${current}/${total}: ${name} (no usage)`,
 		askingRevise: "Sent the last edit to Claude",
+		fromLong: "Cutting the long-form edit down to a short. Skipping the plan and the footage review",
+		askingShorts: "Sent the long-form cut list to Claude",
+		longCopyName: ({ name }: { name: string }) => `${name} (long-form)`,
+		longKept: ({ name }: { name: string }) => `Kept the long-form as a copy, '${name}', and turned this project into the short`,
 		revising: "Refining the last AI edit: only what needs fixing is changed. To start over, cancel, undo with ⌘Z, then press again",
 		noChanges: "Nothing needed fixing, so the timeline was left as is",
 		applying: ({ count }: { count: number }) => `Placing ${count} cuts on the timeline`,
