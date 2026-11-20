@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildPrompt, buildRevisePrompt, freshHooks } from "../style";
+import { buildPrompt, buildRevisePrompt, buildShortsPrompt, freshHooks } from "../style";
 
 describe("freshHooks", () => {
 	test("최근 훅과 같은 틀의 변주는 뺀다", () => {
@@ -104,5 +104,55 @@ describe("buildPrompt", () => {
 		expect(prompt).toContain("# 레시피 메모\n사용자가 적어 준 실제 레시피다.");
 		expect(prompt).toContain("물 1.5L, 중불 15분\n\n# 촬영 원본");
 		expect(build("")).not.toContain("# 레시피 메모");
+	});
+
+	// 쇼츠에 기획의 레시피·드립을 전부 담으라 하면 맞출 수 없어 출력 한도까지 생각만 한다
+	test("쇼츠는 기획을 다 담으라 하지 않고 핵심만 고르게 한다", () => {
+		const build = (canvas: { width: number; height: number }) =>
+			buildPrompt({
+				clips: [{ id: "c01", name: "c01.mp4", duration: 10, times: [0, 3], sheetFile: "c01.jpg" }],
+				canvas,
+				hasVoice: true,
+				hasHusbandVoice: false,
+				sounds: [],
+				bgms: [],
+				recent: [],
+				recipe: "",
+				brief: "제목: 어묵탕",
+			});
+		const short = build({ width: 1080, height: 1920 });
+		expect(short).not.toContain("빠짐없이 나눠");
+		expect(short).not.toContain("웃음 포인트를 전부");
+		expect(short).toContain("youtube.description에 쓴다");
+		const long = build({ width: 1920, height: 1080 });
+		expect(long).toContain("빠짐없이 나눠");
+		expect(long).toContain("웃음 포인트를 전부");
+		// 확정된 기획과 겹치는 무작위 훅·엔딩을 시키지 않고, 기획의 긴 문장은 줄이게 한다
+		expect(short).toContain("훅: 확정된 기획의 진행 방식대로");
+		expect(short).toContain("엔딩: 확정된 기획의 진행 방식대로");
+		expect(short).toContain("내레이션 길이 규칙은 기획보다 먼저다");
+	});
+});
+
+describe("buildShortsPrompt", () => {
+	test("롱폼 컷 목록만 보내고 촬영본 스틸·검색은 쓰지 않게 한다", () => {
+		const prompt = buildShortsPrompt({
+			long: [
+				{ clip: "c08", start: 63.4, end: 68, narration: "어묵은 물결로 접어 꼬치 6개", voice: "wife", caption: "어묵 꼬치 6개", mosaic: [] },
+				{ clip: "c12", start: 2, end: 5, narration: "", voice: "husband", caption: "", mosaic: [] },
+			],
+			canvas: { width: 1080, height: 1920 },
+			hasVoice: true,
+			hasHusbandVoice: true,
+			sounds: [],
+			bgms: [],
+			recipe: "물 1.5L",
+		});
+		expect(prompt).toContain('1. c08 63.4~68.0초 | 내레이션: "어묵은 물결로 접어 꼬치 6개" | 자막: "어묵 꼬치 6개"');
+		expect(prompt).toContain("2. c12 2.0~5.0초 | 내레이션(남편): (원음) | 자막: (없음)");
+		expect(prompt).toContain("# 레시피 메모");
+		expect(prompt).toContain("스킬과 검색은 쓰지 않는다");
+		expect(prompt).not.toContain("Read로 전부 열어 본다");
+		expect(prompt).toContain('"beats": [');
 	});
 });

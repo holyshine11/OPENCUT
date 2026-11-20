@@ -51,7 +51,7 @@ export interface EditPlan {
 	review: string[];
 }
 
-const MIN_BEAT_SECONDS = 0.5;
+export const MIN_BEAT_SECONDS = 0.5;
 // Claude는 3초에 한 장꼴인 스틸로 위치를 어림한다. 컷 안에서 움직여도 덮이게 넉넉히 키운다
 const MOSAIC_PADDING = 1.6;
 const MOSAIC_MIN_SIDE = 0.12;
