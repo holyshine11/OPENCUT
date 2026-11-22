@@ -299,6 +299,10 @@ export const en = {
 		runningRevise: "Refining the last AI edit (not starting over)",
 		chooseScope: "Refining the last AI edit. What should be refined?",
 		chooseScopeHint: "Only the part you pick goes to Claude, which saves usage. To start over, cancel, undo with ⌘Z, then press again.",
+		guideLabel: "Tell the AI what to change",
+		guidePlaceholder: "e.g. shorter subtitle on cut 3, a funnier ending (leave empty and the AI checks on its own)",
+		confirmScope: "Confirm and start",
+		backToScopes: "Pick another part",
 		scopes: { script: "Script", sfx: "Sound effects", cuts: "Cuts", captions: "Subtitles", narration: "Narration", bgm: "BGM", all: "Everything", revoice: "Voice only" },
 		scopeHints: {
 			script: "Rewrites narration lines only (hook, jokes, ending)",

@@ -33,6 +33,7 @@ import {
 	placeBeats,
 	sfxTime,
 	sfxVolume,
+	type SoundLevel,
 } from "./plan";
 
 const TRANSITION_SECONDS = 0.3;
@@ -152,7 +153,7 @@ export async function applyPlan({
 	}
 
 	// 효과음은 프로젝트 미디어로 들여오고, 파일마다 다른 녹음 크기를 재 둔다
-	const sfxOf = new Map<string, { asset: MediaAsset; loudness: number | null }>();
+	const sfxOf = new Map<string, { asset: MediaAsset; level: SoundLevel | null }>();
 	for (const name of new Set(plan.beats.flatMap((beat) => beat.sfx ?? []))) {
 		const sound = sounds.find((item) => item.fileName === name);
 		const asset = sound
@@ -164,10 +165,10 @@ export async function applyPlan({
 				}).catch(() => null)
 			: null;
 		if (!asset?.duration) continue;
-		const loudness = await decodeAudioToFloat32({ audioBlob: asset.file })
+		const level = await decodeAudioToFloat32({ audioBlob: asset.file })
 			.then(({ samples }) => activeLoudness(samples))
 			.catch(() => null);
-		sfxOf.set(name, { asset, loudness });
+		sfxOf.set(name, { asset, level });
 	}
 	const bgmSound = bgms.find((item) => item.fileName === plan.bgm);
 	const bgm = bgmSound
@@ -296,7 +297,7 @@ export async function applyPlan({
 		})
 		.sort((a, b) => a.at - b.at);
 	if (sfxCuts.length > 0) commands.push(sfxTrack);
-	for (const [order, { asset, loudness, at, underVoice }] of sfxCuts.entries()) {
+	for (const [order, { asset, level, at, underVoice }] of sfxCuts.entries()) {
 		const full = asset.duration ?? 0;
 		const length = Math.min(full, MAX_SFX_SECONDS, (sfxCuts[order + 1]?.at ?? Infinity) - at);
 		// 앞 컷의 음성이 밀려 같은 자리에 떨어진 효과음은 뒤의 것만 남긴다
@@ -317,7 +318,7 @@ export async function applyPlan({
 					trimEnd: mediaTimeFromSeconds({ seconds: full - length }),
 					params: {
 						...element.params,
-						volume: sfxVolume({ loudness, underVoice }),
+						volume: sfxVolume({ level, underVoice }),
 						fadeOut: Math.min(SFX_FADE_OUT_SECONDS, length / 2),
 					},
 				},

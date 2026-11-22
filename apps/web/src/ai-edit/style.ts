@@ -63,6 +63,11 @@ const recipeBlock = (recipe: string) =>
 		? `\n# 레시피 메모\n사용자가 적어 준 실제 레시피다. 재료·양·불·시간은 여기 적힌 대로 말하고, 화면과 다른 점이 보이면 review에 적는다.\n${recipe.trim()}\n`
 		: "";
 
+const guideBlock = (guide: string) =>
+	guide.trim()
+		? `\n# 사용자 요청\n사용자가 이번 다듬기에 직접 적은 요청이다. 무엇보다 먼저 반영한다. 손볼 수 있는 범위 밖이라 반영하지 못한 요청은 review에 그렇게 적는다.\n${guide.trim()}\n`
+		: "";
+
 const briefBlock = (brief: string) =>
 	`\n# 확정된 기획\n사용자가 네 기획안을 보고 고쳐서 확정했다. 제목·레시피·진행 방식·강조 포인트·놀릴 거리·인터뷰 답은 이대로 따른다. 화면과 다른 점이 보이면 기획을 따르고 review에 적는다. 단, 내레이션 길이 규칙은 기획보다 먼저다. 기획의 문장이 컷 길이에 비해 길면 뜻을 살려 줄인다.\n${brief}\n`;
 
@@ -369,6 +374,7 @@ export function buildRevisePrompt({
 	seen,
 	scope,
 	recipe,
+	guide = "",
 }: {
 	clips: PromptClip[];
 	canvas: { width: number; height: number };
@@ -384,6 +390,8 @@ export function buildRevisePrompt({
 	seen: string[];
 	scope: ReviseScope;
 	recipe: string;
+	/** 다듬기 범위를 고를 때 사용자가 적은 요청 */
+	guide?: string;
 }): string {
 	const isShort = canvas.height > canvas.width;
 	const all = scope === "all";
@@ -488,7 +496,7 @@ ${plan.review.length > 0 ? `- 지난번 검토 메모: ${plan.review.join(" / ")
 		: ""
 }컷 목록(번호가 완성 영상의 순서다):
 ${beatLines.join("\n")}
-${reshapes ? footage : ""}
+${reshapes ? footage : ""}${guideBlock(guide)}
 ${work}
 
 # 출력
