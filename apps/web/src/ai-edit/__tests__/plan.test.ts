@@ -112,11 +112,14 @@ describe("화면 맞춤과 믹싱", () => {
 	});
 
 	test("효과음은 잰 크기를 기준 크기로 맞추고, 내레이션과 겹치면 더 낮춘다", () => {
-		expect(sfxVolume({ loudness: -10, underVoice: false })).toBe(-12);
-		expect(sfxVolume({ loudness: -10, underVoice: true })).toBe(-16);
+		expect(sfxVolume({ level: { loudness: -10, peak: -10 }, underVoice: false })).toBe(-12);
+		expect(sfxVolume({ level: { loudness: -10, peak: -10 }, underVoice: true })).toBe(-16);
 		// 아주 작게 녹음된 소리도 +6dB까지만 키운다
-		expect(sfxVolume({ loudness: -50, underVoice: false })).toBe(6);
-		expect(sfxVolume({ loudness: null, underVoice: false })).toBe(-12);
+		expect(sfxVolume({ level: { loudness: -50, peak: -40 }, underVoice: false })).toBe(6);
+		expect(sfxVolume({ level: null, underVoice: false })).toBe(-12);
+		// 평균은 작아도 튀는 소리(칼질)는 순간 최대치가 -9dBFS를 넘지 않게 덜 키운다
+		expect(sfxVolume({ level: { loudness: -26, peak: 0 }, underVoice: false })).toBe(-9);
+		expect(sfxVolume({ level: { loudness: -26, peak: 0 }, underVoice: true })).toBe(-13);
 	});
 
 	test("효과음은 sfxOn 낱말이 읽히는 자리에, 없으면 내레이션(없으면 컷) 시작에 떨어진다", () => {
@@ -129,7 +132,9 @@ describe("화면 맞춤과 믹싱", () => {
 	});
 
 	test("무음 구간은 빼고 크기를 잰다", () => {
-		expect(activeLoudness(new Float32Array([0, 0, 0.5, -0.5, 0, 0]))).toBeCloseTo(-6.02, 1);
+		const level = activeLoudness(new Float32Array([0, 0, 0.5, -0.5, 0, 0]));
+		expect(level?.loudness).toBeCloseTo(-6.02, 1);
+		expect(level?.peak).toBeCloseTo(-6.02, 1);
 		expect(activeLoudness(new Float32Array([0, 0.001]))).toBeNull();
 	});
 });

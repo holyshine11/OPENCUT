@@ -337,6 +337,9 @@ export const MIX = {
 	sfxUnderVoice: -4,
 	sfxMin: -24,
 	sfxMax: 6,
+	/** 효과음 순간 최대치(dBFS, 내레이션과 겹치면 sfxUnderVoice만큼 더 낮다). 평균만 맞추면 칼질·웍질처럼 튀는 소리가
+	 *  0dB를 넘는다. 번들 효과음 412개를 내레이션에 얹어 보니 -6은 1236번 중 6번 넘고 -9는 0번이었다(2026-11-22) */
+	sfxPeak: -9,
 	/** 배경음악(번들 곡은 -16 LUFS로 맞춰 둠). 채널 영상에서 말 사이에 깔린 소리가 목소리보다 17~20dB 낮았다 */
 	bgm: -20,
 	/** 배경음악이 시작하고 끝날 때의 페이드(초) */
@@ -345,20 +348,32 @@ export const MIX = {
 	fade: 0.03,
 } as const;
 
-/** 효과음 파일마다 녹음 크기가 다르다. 잰 크기(loudness, dBFS)를 기준 크기로 맞추는 볼륨(dB) */
-export function sfxVolume({ loudness, underVoice }: { loudness: number | null; underVoice: boolean }): number {
-	const gain = loudness === null ? MIX.sfxMin / 2 : MIX.sfxTarget - loudness;
-	return Math.min(MIX.sfxMax, Math.max(MIX.sfxMin, gain + (underVoice ? MIX.sfxUnderVoice : 0)));
+export interface SoundLevel {
+	/** 소리가 나는 구간의 RMS(dBFS) */
+	loudness: number;
+	/** 순간 최대치(dBFS) */
+	peak: number;
 }
 
-/** 소리가 나는 구간만 잰 RMS(dBFS). 앞뒤 무음이 긴 효과음도 실제 크기대로 나온다. 전부 무음이면 null */
-export function activeLoudness(samples: Float32Array): number | null {
+/** 효과음 파일마다 녹음 크기가 다르다. 잰 크기를 기준 크기로 맞추되 순간 최대치가 sfxPeak를 넘지 않는 볼륨(dB) */
+export function sfxVolume({ level, underVoice }: { level: SoundLevel | null; underVoice: boolean }): number {
+	const duck = underVoice ? MIX.sfxUnderVoice : 0;
+	if (level === null) return MIX.sfxMin / 2 + duck;
+	const gain = Math.min(MIX.sfxTarget - level.loudness, MIX.sfxPeak - level.peak) + duck;
+	return Math.min(MIX.sfxMax, Math.max(MIX.sfxMin, gain));
+}
+
+/** 소리가 나는 구간만 잰 RMS와 순간 최대치(dBFS). 앞뒤 무음이 긴 효과음도 실제 크기대로 나온다. 전부 무음이면 null */
+export function activeLoudness(samples: Float32Array): SoundLevel | null {
 	let sum = 0;
 	let count = 0;
+	let peak = 0;
 	for (const sample of samples) {
-		if (Math.abs(sample) < 0.01) continue;
+		const magnitude = Math.abs(sample);
+		if (magnitude > peak) peak = magnitude;
+		if (magnitude < 0.01) continue;
 		sum += sample * sample;
 		count++;
 	}
-	return count === 0 ? null : 10 * Math.log10(sum / count);
+	return count === 0 ? null : { loudness: 10 * Math.log10(sum / count), peak: 20 * Math.log10(peak) };
 }

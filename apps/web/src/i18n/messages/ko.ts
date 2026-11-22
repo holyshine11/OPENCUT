@@ -281,6 +281,10 @@ export const ko: Messages = {
 		runningRevise: "지난 AI 편집을 다듬고 있어요 (처음부터 다시 하지 않아요)",
 		chooseScope: "지난 AI 편집을 다듬어요. 무엇을 다듬을까요?",
 		chooseScopeHint: "고른 부분만 Claude에게 맡겨 사용량을 아껴요. 처음부터 다시 하려면 취소하고 ⌘Z로 되돌린 뒤 눌러 주세요.",
+		guideLabel: "어떻게 고칠지 알려 주세요",
+		guidePlaceholder: "예: 3번 컷 자막을 더 짧게, 엔딩은 웃기게 (비우면 AI가 알아서 점검해요)",
+		confirmScope: "확인하고 시작",
+		backToScopes: "다른 범위 고르기",
 		scopes: { script: "대본", sfx: "효과음", cuts: "컷편집", captions: "자막", narration: "내레이션", bgm: "BGM", all: "전체", revoice: "음성만 다시" },
 		scopeHints: {
 			script: "내레이션 문장(훅·드립·엔딩)만 다시 써요",

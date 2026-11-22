@@ -15,7 +15,7 @@ import type { EditBrief } from "../brief";
 import { FORMAT_IDS } from "../plan";
 import { runAiEdit, startAiEdit } from "../run";
 import { AiEffortSelect, AiModelSelect } from "./ai-model-select";
-import { AI_EDIT_SCOPE_IDS, AI_EDIT_STEPS, useAiEditStore } from "../store";
+import { AI_EDIT_SCOPE_IDS, AI_EDIT_STEPS, type AiEditScope, useAiEditStore } from "../store";
 
 export function AiEditButton() {
 	const m = useMessages();
@@ -111,27 +111,7 @@ function AiEditOverlay() {
 					{job.status === "failed" && <span className="text-destructive">{m.aiEdit.failed}</span>}
 				</div>
 
-				{choosing && (
-					<>
-						<p className="text-muted-foreground text-xs">{m.aiEdit.chooseScopeHint}</p>
-						<div className="flex flex-col gap-1.5">
-							{AI_EDIT_SCOPE_IDS.map((id) => (
-								<Button
-									key={id}
-									variant="outline"
-									className="h-auto flex-col items-start gap-0.5 py-2 text-left whitespace-normal"
-									onClick={() => void runAiEdit({ scope: id })}
-								>
-									{m.aiEdit.scopes[id]}
-									<span className="text-muted-foreground text-xs font-normal">{m.aiEdit.scopeHints[id]}</span>
-								</Button>
-							))}
-						</div>
-						<Button variant="ghost" onClick={close}>
-							{m.aiEdit.cancel}
-						</Button>
-					</>
-				)}
+				{choosing && <ScopePicker onCancel={close} />}
 
 				{(job.status === "running" || job.status === "done") && (
 					<ol className="flex flex-col gap-1 text-sm">
@@ -201,6 +181,60 @@ function AiEditOverlay() {
 			</div>
 		</div>,
 		document.body,
+	);
+}
+
+/** 지난 AI 편집에서 다듬을 범위를 고르고 요청을 적는다. 확인을 눌러야 시작한다(잘못 눌러 사용량이 드는 걸 막는다) */
+function ScopePicker({ onCancel }: { onCancel: () => void }) {
+	const m = useMessages();
+	const [scope, setScope] = useState<AiEditScope | null>(null);
+	const [guide, setGuide] = useState("");
+	if (!scope) {
+		return (
+			<>
+				<p className="text-muted-foreground text-xs">{m.aiEdit.chooseScopeHint}</p>
+				<div className="flex flex-col gap-1.5 overflow-y-auto">
+					{AI_EDIT_SCOPE_IDS.map((id) => (
+						<Button
+							key={id}
+							variant="outline"
+							className="h-auto flex-col items-start gap-0.5 py-2 text-left whitespace-normal"
+							onClick={() => setScope(id)}
+						>
+							{m.aiEdit.scopes[id]}
+							<span className="text-muted-foreground text-xs font-normal">{m.aiEdit.scopeHints[id]}</span>
+						</Button>
+					))}
+				</div>
+				<Button variant="ghost" onClick={onCancel}>
+					{m.aiEdit.cancel}
+				</Button>
+			</>
+		);
+	}
+	return (
+		<>
+			<div className="flex flex-col gap-0.5 text-sm">
+				<span className="font-medium">{m.aiEdit.scopes[scope]}</span>
+				<span className="text-muted-foreground text-xs">{m.aiEdit.scopeHints[scope]}</span>
+			</div>
+			{/* 음성만 다시는 Claude를 부르지 않으니 요청을 받지 않는다 */}
+			{scope !== "revoice" && (
+				<label className="flex flex-col gap-1">
+					<span className="text-xs font-medium">{m.aiEdit.guideLabel}</span>
+					<Textarea
+						rows={5}
+						value={guide}
+						placeholder={m.aiEdit.guidePlaceholder}
+						onChange={(event) => setGuide(event.target.value)}
+					/>
+				</label>
+			)}
+			<Button onClick={() => void runAiEdit({ scope, guide })}>{m.aiEdit.confirmScope}</Button>
+			<Button variant="ghost" onClick={() => setScope(null)}>
+				{m.aiEdit.backToScopes}
+			</Button>
+		</>
 	);
 }
 

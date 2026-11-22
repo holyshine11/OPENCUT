@@ -182,9 +182,12 @@ export function startAiEdit() {
  */
 export async function runAiEdit({
 	scope: wanted = "all",
+	guide,
 	brief,
 }: {
 	scope?: AiEditScope;
+	/** 다듬을 범위를 고를 때 사용자가 적은 요청 */
+	guide?: string;
 	/** 사용자가 확정한 기획안. 처음 편집인데 이게 없으면 기획안부터 받아 사용자에게 보여 주고 멈춘다 */
 	brief?: EditBrief;
 } = {}): Promise<void> {
@@ -315,6 +318,7 @@ export async function runAiEdit({
 						? buildRevisePrompt({
 								...promptBase,
 								scope,
+								guide,
 								plan: previous.plan,
 								timing: previous.timing,
 								seen: Object.keys(previous.clips),
