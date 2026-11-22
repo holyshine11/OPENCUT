@@ -50,6 +50,11 @@ main() {
   get "$SETUP_DEREVERB_URL" "$dir/$TTS_DEREVERB_MODEL"
   for f in $SETUP_ASR_FILES; do get "$SETUP_ASR_URL/$f" "$dir/$TTS_WEB_ASR_MODEL/$f"; done
 
+  step "2세대 합성 엔진 (MLX, v2/.venv)"
+  [ -x "$dir/v2/.venv/bin/python" ] || uv venv -q --python "$SETUP_PYTHON" "$dir/v2/.venv"
+  # shellcheck disable=SC2086
+  uv pip install -q --python "$dir/v2/.venv/bin/python" $SETUP_QWEN_PACKAGES
+
   step "목소리 묶음"
   tag=$(gh release list -R "$SETUP_VOICES_REPO" --json tagName \
     --jq "map(select(.tagName | startswith(\"$SETUP_VOICES_TAG_PREFIX\")))[0].tagName // empty")
@@ -58,8 +63,8 @@ main() {
     echo "$tag 이미 받음"
   else
     tmp=$(mktemp -d)
-    gh release download "$tag" -R "$SETUP_VOICES_REPO" -p "$SETUP_VOICES_ASSET" -D "$tmp"
-    tar -xf "$tmp/$SETUP_VOICES_ASSET" -C "$dir"
+    gh release download "$tag" -R "$SETUP_VOICES_REPO" -p "*.tar" -D "$tmp"  # voices.tar + 2세대 모델 qwen-*.tar
+    for f in "$tmp"/*.tar; do tar -xf "$f" -C "$dir"; done
     rm -rf "$tmp"
     echo "$tag" > "$SETUP_VOICES_STAMP"
   fi
@@ -75,14 +80,19 @@ main() {
     done
   fi
   ok=1
-  for name in $(jq -r '.[].name' "$TTS_VOICES_FILE"); do
-    style=$(jq -r --arg n "$name" '.[] | select(.name == $n) | .styles_file' "$TTS_VOICES_FILE" | xargs jq -r '.[0].id // .[0].name')
+  # 이름에 띄어쓰기가 있어("송이 (1세대)") 줄 단위로 읽는다
+  while IFS= read -r name; do
+    sf=$(jq -r --arg n "$name" '.[] | select(.name == $n) | .styles_file // empty' "$TTS_VOICES_FILE")
+    style=neutral  # 2세대 목소리는 말투 목록이 없다
+    [ -z "$sf" ] || style=$(jq -r '.[0].id // .[0].name' "$sf")
     code=$(jq -n --arg text "$SETUP_CHECK_TEXT" --arg voice "$name" --arg style "$style" --arg q "$TTS_QUESTION_END" \
       --argjson speed "$TTS_SPEED" --argjson pause "$TTS_FRAGMENT_INTERVAL" \
       '{text: $text, voice: $voice, style: $style, speed: $speed, pause: $pause, question: $q, format: "wav"}' |
       curl -s -o "$dir/out.wav" -w '%{http_code}' "http://$TTS_WEB_HOST:$TTS_WEB_PORT/synth" -H 'Content-Type: application/json' -d @-)
     if [ "$code" = 200 ]; then echo "$name: 합성 성공"; else echo "$name: 합성 실패 ($code) $(cat "$dir/out.wav")" >&2; ok=; fi
-  done
+  done <<EOF
+$(jq -r '.[].name' "$TTS_VOICES_FILE")
+EOF
   if [ -n "$started" ]; then  # 확인하려고 켠 것만 끈다
     kill "$started" && wait "$started" 2>/dev/null || true  # tts-web.sh 가 끝나며 합성 서버도 끈다
   fi

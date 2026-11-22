@@ -13,9 +13,9 @@ if curl -s -o /dev/null "http://$TTS_WEB_HOST:$TTS_WEB_PORT/voices"; then
   echo "대본 읽기(TTS) 서버가 이미 켜져 있습니다 ($TTS_WEB_HOST:$TTS_WEB_PORT)"
   exit 0
 fi
-server= web=
+server= web= qwen=
 # 둘 다 뒤에서 돌리고 wait 한다 — 앞에서 돌리면 끄라는 신호가 와도 그 프로세스가 끝날 때까지 trap 이 돌지 않는다
-trap 'kill $web $server 2>/dev/null || true' EXIT
+trap 'kill $web $server $qwen 2>/dev/null || true' EXIT
 trap 'exit 143' INT TERM HUP
 if ! curl -s -o /dev/null "${TTS_API_URL%/tts}"; then
   echo "합성 서버를 켜는 중..."
@@ -25,6 +25,12 @@ if ! curl -s -o /dev/null "${TTS_API_URL%/tts}"; then
     kill -0 "$server" 2>/dev/null || { echo "합성 서버가 켜지지 않았습니다. 로그: $dir/tts-server.log" >&2; exit 1; }
     sleep 1
   done
+fi
+# 2세대 합성 서버 (설치돼 있을 때만). 모델은 첫 요청 때 읽으므로 켜지기만 기다린다
+qpy="$dir/v2/.venv/bin/python"
+if [ -x "$qpy" ] && ! curl -s -o /dev/null "${TTS_QWEN_URL%/tts}"; then
+  "$qpy" -I "$dir/v2/qwen-server.py" "$TTS_API_HOST" "$TTS_QWEN_PORT" >> "$dir/tts-qwen.log" 2>&1 &
+  qwen=$!
 fi
 "$py" "$dir/tts-web.py" &
 web=$!
