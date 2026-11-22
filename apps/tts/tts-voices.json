@@ -1,13 +1,36 @@
 [
   {
     "name": "송이",
+    "engine": "qwen",
+    "qwen_model": "models/qwen/songi",
+    "speaker": "songi",
+    "model": "qwen06-songi-e8-q8",
+    "native_speed": 1.2,
+    "cost": 0.4,
+    "post_filter": "highpass=f=60,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "end_rise_max": 6,
+    "rate_min": 4.5
+  },
+  {
+    "name": "송강",
+    "engine": "qwen",
+    "qwen_model": "models/qwen/songkang",
+    "speaker": "songkang",
+    "model": "qwen06-songkang-e10-q8",
+    "native_speed": 1.2,
+    "cost": 0.4,
+    "post_filter": "highpass=f=60,loudnorm=I=-16:TP=-1.5:LRA=11",
+    "rate_min": 4.5
+  },
+  {
+    "name": "송이 (1세대)",
     "gpt_weights": "GPT_weights_v2ProPlus/sample_vox2_narr-e5.ckpt",
     "sovits_weights": "SoVITS_weights_v2ProPlus/sample_vox3_e8_s440.pth",
     "model": "sample_vox2_narr-e5+sample_vox3_e8_s440",
     "styles_file": "tts-styles.json"
   },
   {
-    "name": "송강",
+    "name": "송강 (1세대)",
     "gpt_weights": "GPT_weights_v2ProPlus/songkang2-e15.ckpt",
     "sovits_weights": "SoVITS_weights_v2ProPlus/songkang2_e24_s528.pth",
     "model": "songkang2-e15+songkang2_e24_s528",

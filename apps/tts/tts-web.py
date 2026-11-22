@@ -9,6 +9,7 @@ env = os.environ
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "tts-web.html")
 SERVER = env["TTS_API_URL"].removesuffix("/tts")  # 합성 서버 하나가 목소리마다 가중치를 갈아 끼운다
+QWEN_URL = env.get("TTS_QWEN_URL", "")  # 2세대 합성 서버 (engine: "qwen" 목소리, v2/qwen-server.py)
 lo, hi, step = map(float, env["TTS_WEB_SPEED_RANGE"].split())
 pause_lo, pause_hi, pause_step = map(float, env["TTS_WEB_PAUSE_RANGE"].split())
 MAX_CHARS = int(env["TTS_WEB_MAX_CHARS"])
@@ -66,6 +67,9 @@ def voices():
     with open(here(env["TTS_VOICES_FILE"]), encoding="utf8") as f:
         vs = json.load(f)
     for v in vs:
+        if "styles_file" not in v:  # 2세대(qwen) 목소리는 말투가 하나다
+            v["styles"] = [{"id": "neutral", "name": "기본"}]
+            continue
         with open(here(v["styles_file"]), encoding="utf8") as f:
             v["styles"] = json.load(f)
         for s in v["styles"]:
@@ -104,7 +108,7 @@ NATIVE_ONES = ["", "한", "두", "세", "네", "다섯", "여섯", "일곱", "�
 NATIVE_TENS = ["", "열", "스물", "서른", "마흔", "쉰", "예순", "일흔", "여든", "아흔"]
 # 고유어 수사로 세는 단위 (99 까지). 나머지 단위와 단위 없는 수는 한자어 수사
 NATIVE_COUNTERS = ("시간 번째 켤레 큰술 작은술 숟가락 스푼 봉지 조각 접시 그릇 사람 가지 군데 모금 방울 꼬집 "
-                   "개 명 살 시 번 마리 권 잔 컵 병 장 대 벌 그루 송이 줄 알 포기 쪽 통 판 달 톨 줌").split()
+                   "개 명 살 시 번 마리 권 잔 컵 병 장 대 벌 그루 송이 줄 알 포기 쪽 통 판 달 톨 줌 공기").split()
 # 고유어 단위로 시작하지만 한자어로 세는 말 (10달러 → 십달러, 3개월 → 삼개월)
 SINO_EXCEPTIONS = tuple("달러 개월 개국 개년 개소 번지 시즌".split())
 # 범위(3~4인분)에서 앞 숫자에도 붙여 줄 단위
@@ -252,7 +256,9 @@ def build_body(req):
     voice = next((v for v in voices() if v["name"] == req.get("voice")), None)
     if voice is None:
         raise Bad(400, f"'{req.get('voice')}' 목소리를 찾을 수 없습니다. 페이지를 새로 고쳐 주세요.")
-    style = next((s for s in voice["styles"] if req.get("style") in (s.get("id"), s["name"])), None)
+    qwen = voice.get("engine") == "qwen"
+    # 2세대 목소리는 말투가 하나라, 1세대 말투로 저장된 편집기 설정도 그대로 받는다
+    style = next((s for s in voice["styles"] if req.get("style") in (s.get("id"), s["name"])), voice["styles"][0] if qwen else None)
     if style is None:
         raise Bad(400, f"'{req.get('style')}' 말투를 찾을 수 없습니다. 페이지를 새로 고쳐 주세요.")
     strength = req.get("strength", PERCENT)  # 없으면 예전처럼 말투를 최대로
@@ -280,7 +286,8 @@ def build_body(req):
     # 세부 설정 값(숫자)은 보내온 것만 그대로 넘긴다
     body.update({k: v for k, v in req.items() if k not in REQUEST_FIELDS and is_number(v)})
     # 물음표는 문장을 나눈 뒤에 바꾼다 (","로 바꾸면 문장 경계가 사라지므로)
-    segs = [(re.sub("[?？]", q, s), kind, pause * PAUSE_RATIO[kind]) for s, kind in segments(text)]
+    #   2세대는 실제 녹음의 물음표로 배워서 그대로 보낸다
+    segs = [(s if qwen else re.sub("[?？]", q, s), kind, pause * PAUSE_RATIO[kind]) for s, kind in segments(text)]
     return raw, voice, body, segs
 
 
@@ -327,6 +334,9 @@ def load_weights(voice):
 
 
 def synthesize(voice, body):
+    if voice.get("engine") == "qwen":
+        payload = dict(model=voice["qwen_model"], speaker=voice["speaker"], text=body["text"])
+        return call_server(urllib.request.Request(QWEN_URL, json.dumps(payload).encode(), {"Content-Type": "application/json"}))
     # 가중치를 바꾸고 합성하는 사이에 다른 요청이 목소리를 바꾸지 못하게 묶는다
     with _server_lock:
         load_weights(voice)
@@ -364,11 +374,15 @@ def speech_span(y, sr):
 _asr, _asr_lock = None, threading.Lock()
 
 
-def transcribe(y, sr):
-    """Whisper 로 받아 적기 (모델은 처음 쓸 때 한 번 읽는다)"""
+def transcribe(y, sr, voice=None):
+    """Whisper 로 받아 적기 (모델은 처음 쓸 때 한 번 읽는다). 2세대 목소리는 2세대 서버의 large-v3-turbo 로 받아 적는다
+    — small 은 문장 끝 웅얼거림을 못 받아 적어 그냥 넘겼다 (측정 2026-11-22)"""
     global _asr
     from scipy.signal import resample_poly
     y16 = resample_poly(y, 16000, sr).astype(np.float32) if sr != 16000 else y
+    if voice and voice.get("engine") == "qwen":
+        data = call_server(urllib.request.Request(QWEN_URL.removesuffix("/tts") + "/asr", write_wav(y16, 16000), {"Content-Type": "audio/wav"}))
+        return json.loads(data)["text"]
     with _asr_lock:
         if _asr is None:
             from faster_whisper import WhisperModel
@@ -414,12 +428,13 @@ def synth_segment(voice, body, text):
             log(f"  무음 결과 ({attempt + 1}) — {text[:30]}")
             continue
         rate = len(ref) / voiced
-        rate_ok = RATE_LO <= rate <= RATE_HI
+        rate_ok = voice.get("rate_min", RATE_LO) <= rate <= RATE_HI
         # 받아 적은 글도 같은 규칙으로 다듬어 비교한다 (Whisper 는 '세 시' 를 '3시' 로 적는다)
-        c = cer(ref, syllables(normalize(transcribe(y, sr)))) if ASR_CHECK and ref else 0.0
+        c = cer(ref, syllables(normalize(transcribe(y, sr, voice)))) if ASR_CHECK and ref else 0.0
         # 물음표(끝음 문자로 바뀜)·느낌표·말줄임표는 끝이 올라가도 된다
-        rise = end_rise(y, sr) if RISE_MAX and text.rstrip()[-1:] not in "…!?" else 0.0
-        rise_ok = rise <= RISE_MAX if RISE_MAX else True
+        rise_max = voice.get("end_rise_max", RISE_MAX)  # 목소리마다 다르게 둘 수 있다 (tts.env 설명)
+        rise = end_rise(y, sr) if rise_max and text.rstrip()[-1:] not in "…!?" else 0.0
+        rise_ok = rise <= rise_max if rise_max else True
         ok = rate_ok and rise_ok and c * len(ref) <= tolerance
         score = c + (0 if rate_ok else 1) + (0 if rise_ok else 0.2)
         if best is None or score < best[0]:
@@ -470,12 +485,19 @@ def dereverb(wav, agg):
         return ffmpeg(["-i", glob.glob(os.path.join(tmp, "dry", "*"))[0], "-ac", "1", "-f", "wav", "pipe:1"])
 
 
-def encode(wav, fmt, voice):
+def stretch(voice, speed):
+    """2세대 목소리의 속도 배율. 모델이 native_speed 로만 읽으므로 그 밖의 속도는 음높이를 지키며 늘이거나 줄인다 (1 = 손대지 않음)"""
+    return speed / voice["native_speed"] if voice.get("engine") == "qwen" else 1.0
+
+
+def encode(wav, fmt, voice, tempo=1.0):
     codec, opts, container, _ = FORMATS[fmt]
     if "dereverb_agg" in voice:
         wav = dereverb(wav, voice["dereverb_agg"])
     # 목소리에 post_filter 가 있으면 그것을, 없으면 TTS_POST_FILTER 를 쓴다
     filt = voice.get("post_filter", env.get("TTS_POST_FILTER", "")).strip()
+    if abs(tempo - 1) > 1e-3:
+        filt = f"atempo={tempo:.4f}" + ("," + filt if filt else "")
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, "out." + fmt)
         ffmpeg(["-i", "pipe:0"] + (["-af", filt] if filt else []) + ["-c:a", codec] + opts + ["-f", container, out], wav)
@@ -507,7 +529,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/voices":
             try:
                 # cost: 화면의 예상 시간 배율 — 방 울림 제거(dereverb)를 거치는 목소리는 약 2배 걸린다 (실측 2026-10-08 송강 37초 / 송이 22초)
-                self.send_json(200, [{"name": v["name"], "model": v.get("model", ""), "cost": 2.0 if "dereverb_agg" in v else 1.0,
+                self.send_json(200, [{"name": v["name"], "model": v.get("model", ""), "cost": v.get("cost", 2.0 if "dereverb_agg" in v else 1.0),
                                       "styles": [{"id": s.get("id", s["name"]), "name": s["name"]} for s in v["styles"]]} for v in voices()])
             except (OSError, ValueError, KeyError) as e:
                 self.send_json(500, {"error": f"목소리·감정 목록을 읽지 못했습니다: {e}"})
@@ -553,6 +575,7 @@ class Handler(BaseHTTPRequestHandler):
             if fmt not in FORMATS:
                 raise Bad(400, f"형식은 {', '.join(FORMATS)} 중 하나여야 합니다.")
             text, voice, body, segs = build_body(req)
+            tempo = stretch(voice, req["speed"])
             with _server_lock:  # 합성 서버는 한 번에 하나씩 — 요청이 겹치면 차례를 기다린다
                 parts, retries, worst, rates = [], 0, 0.0, set()
                 for s, kind, pause in segs:
@@ -560,13 +583,13 @@ class Handler(BaseHTTPRequestHandler):
                         log(f"synth 중단: 브라우저가 요청을 끊음 ({len(parts)}/{len(segs)}문장)")
                         return
                     y, sr, k, c = synth_segment(voice, body, s)
-                    parts.append((y, pause))
+                    parts.append((y, pause * tempo))  # 속도를 바꿔도 문장 사이 쉼은 화면 값 그대로 남게 미리 늘여 둔다
                     rates.add(sr)
                     retries += k
                     worst = max(worst, c)
             if len(rates) != 1:
                 raise Bad(502, f"합성 서버가 문장마다 다른 샘플링 주파수를 돌려줬습니다: {sorted(rates)}")
-            audio = encode(write_wav(assemble(parts, sr), sr), fmt, voice)
+            audio = encode(write_wav(assemble(parts, sr), sr), fmt, voice, tempo)
         except Bad as e:
             log(f"synth 실패 {e.status}: {e}")
             return self.send_json(e.status, {"error": str(e)})
