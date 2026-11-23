@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildPrompt, buildRevisePrompt, buildShortsPrompt, freshHooks } from "../style";
+import { buildBriefPrompt, buildPrompt, buildRevisePrompt, buildShortsPrompt, freshHooks } from "../style";
 
 describe("freshHooks", () => {
 	test("최근 훅과 같은 틀의 변주는 뺀다", () => {
@@ -125,12 +125,44 @@ describe("buildPrompt", () => {
 		expect(short).not.toContain("웃음 포인트를 전부");
 		expect(short).toContain("youtube.description에 쓴다");
 		const long = build({ width: 1920, height: 1080 });
-		expect(long).toContain("빠짐없이 나눠");
+		// 롱폼은 재미 8 : 정보 2. 레시피 숫자는 자막과 설명란이 맡는다
+		expect(long).toContain("롱폼은 재미 8 : 정보 2다");
+		expect(long).toContain("자막에 나눠 싣고");
 		expect(long).toContain("웃음 포인트를 전부");
+		expect(short).toContain("그 위에 드립을 얹어");
 		// 확정된 기획과 겹치는 무작위 훅·엔딩을 시키지 않고, 기획의 긴 문장은 줄이게 한다
 		expect(short).toContain("훅: 확정된 기획의 진행 방식대로");
 		expect(short).toContain("엔딩: 확정된 기획의 진행 방식대로");
 		expect(short).toContain("내레이션 길이 규칙은 기획보다 먼저다");
+	});
+});
+
+// 기획안에 변주가 없어 롱폼도 늘 쇼츠 훅("감히 OO에 OO를?")과 쇼츠 진행 순서로 나왔다
+describe("buildBriefPrompt", () => {
+	const build = ({ canvas, recent = [] }: { canvas: { width: number; height: number }; recent?: string[] }) =>
+		buildBriefPrompt({
+			clips: [{ id: "c01", name: "c01.mp4", duration: 10, times: [0, 3], sheetFile: "c01.jpg" }],
+			canvas,
+			recipe: "",
+			recent,
+		});
+
+	test("롱폼은 쇼츠 훅 대신 롱폼 오프닝을 뽑고 웃음 계획을 중심에 둔다", () => {
+		const long = build({ canvas: { width: 1920, height: 1080 } });
+		const picked = /이번 오프닝[^:]*\): (.+)/.exec(long)?.[1] ?? "";
+		expect(picked).not.toBe("");
+		expect(["도발형", "결과 먼저형", "고발형", "검증형", "숫자형", "질문형"].some((kind) => picked.startsWith(kind))).toBe(false);
+		expect(long).toContain("오프닝 상황극 → 재료");
+		expect(long).toContain("8~12개");
+		expect(long).toContain("채널 롱폼 제목 틀");
+	});
+
+	test("쇼츠는 최근 훅과 겹치지 않는 훅을 뽑는다", () => {
+		const recent = ["감히 어묵탕에 소주를 넣었습니다?", "이게 집에서 된다고요?", "남편이 또 사고를 칩니다", "꼬막 레시피, 진짜 3분이면 될까요?", "딱 7분만 갈면 됩니다"];
+		const short = build({ canvas: { width: 1080, height: 1920 }, recent });
+		expect(short).toContain("이번 오프닝(매번 다르게 만들기 위한 지정값이다. 촬영본에 영 맞지 않을 때만 가장 가까운 다른 갈래로 바꾼다): 질문형");
+		expect(short).toContain("  - 감히 어묵탕에 소주를 넣었습니다?");
+		expect(short).toContain("훅 → 과정 → 킥");
 	});
 });
 
