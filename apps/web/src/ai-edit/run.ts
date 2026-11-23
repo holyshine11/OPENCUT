@@ -266,6 +266,7 @@ export async function runAiEdit({
 					clips: promptClips,
 					canvas: FORMATS[format],
 					recipe: store.getState().recipes[projectId] ?? "",
+					recent: store.getState().recentHooks,
 				}),
 				sheets,
 				signal: abort.signal,
