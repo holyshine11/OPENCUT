@@ -191,6 +191,9 @@ function describe(block: Record<string, unknown>): string | null {
 	return null;
 }
 
+// 메시지가 끝나야 오는 줄만으로는 한 턴(1분 넘게)이 빈 화면이라, 블록이 시작될 때 바로 알린다
+const BLOCK_START: Record<string, string> = { thinking: "생각하는 중…", text: "답을 쓰는 중…" };
+
 export async function POST(request: NextRequest) {
 	const denied = forbidden(request);
 	if (denied) return denied;
@@ -243,12 +246,14 @@ export async function POST(request: NextRequest) {
 					"--effort", body.effort,
 					"--output-format", "stream-json",
 					"--verbose",
+					"--include-partial-messages",
 					// 기획안 대화만 남겨서 본 편집이 촬영본을 다시 보지 않고 이어 받는다
 					...(resumed && body.resume ? ["--resume", body.resume] : body.keep ? [] : ["--no-session-persistence"]),
 					"--allowedTools", "Read", "WebSearch",
 					"--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "Agent", "Skill",
 				],
-				{ cwd: folder, env: ENV, stdio: ["pipe", "pipe", "pipe"] },
+				// 미뤄 둔 WebSearch를 불러오느라 이미지 든 대화를 한 번 더 보내지 않게 도구를 처음부터 싣는다
+				{ cwd: folder, env: { ...ENV, ENABLE_TOOL_SEARCH: "false" }, stdio: ["pipe", "pipe", "pipe"] },
 			);
 			request.signal.addEventListener("abort", () => child.kill());
 			child.stdin.end(body.prompt);
@@ -266,7 +271,11 @@ export async function POST(request: NextRequest) {
 				for (const line of lines) {
 					const message = parseJson(line);
 					if (!message) continue;
-					if (message.type === "assistant") {
+					if (message.type === "stream_event") {
+						const event = record(message.event);
+						const text = event.type === "content_block_start" ? BLOCK_START[String(record(event.content_block).type)] : undefined;
+						if (text) send({ type: "log", text });
+					} else if (message.type === "assistant") {
 						const { content, stop_reason } = record(message.message);
 						// 출력 한도에 걸리면 claude가 알아서 이어 쓰며 수십 분을 더 돈다. 여기서 끊고 알린다
 						if (stop_reason === "max_tokens" && !errored) {
